@@ -33,15 +33,7 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
   if (event.request.url.includes("/api/") || event.request.url.includes("supabase")) {
-    event.respondWith(
-      fetch(event.request).catch(() =>
-        caches.match(event.request).then((cached) => cached || new Response(JSON.stringify({ error: "offline" }), {
-          status: 503,
-          headers: { "Content-Type": "application/json" },
-        }))
-      )
-    );
-    return;
+    return; 
   }
 
   event.respondWith(
