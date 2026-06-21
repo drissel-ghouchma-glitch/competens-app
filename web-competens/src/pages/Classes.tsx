@@ -1,5 +1,4 @@
 import { useState, useMemo, useEffect } from "react";
-import { Link } from "react-router-dom";
 import { useClasses } from "@/hooks/use-classes";
 import { useRequests } from "@/hooks/use-requests";
 import { useAuth } from "@/hooks/use-auth";
@@ -14,7 +13,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-  Building2, Plus, Users, Search, Loader2, AlertCircle, Info, Send, CheckCircle2,
+  Building2, Plus, Users, Search, Loader2, AlertCircle, Info, Send, CheckCircle2, Pencil, Trash2,
 } from "lucide-react";
 import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger,
@@ -158,6 +157,16 @@ export default function ClassesPage() {
   const handleEdit = (c: Classe) => {
     setEditId(c.id); setName(c.name); setLevelId(c.levelId); setCapacity(c.capacity);
     setSaveError(""); setOpenCreate(true);
+  };
+
+  const handleDelete = async (classId: string) => {
+    if (!window.confirm("Supprimer cette classe ? Cette action est irréversible.")) return;
+    try {
+      await deleteClass(classId);
+      toast.success("Classe supprimée.");
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Erreur lors de la suppression");
+    }
   };
 
   const resetForm = () => {
@@ -445,34 +454,50 @@ export default function ClassesPage() {
               const level = levels.find((l) => l.id === c.levelId);
               const isMyClass = myAssignedClassIds.includes(c.id);
               return (
-                <Link key={c.id} to={`/classes/${c.id}`}>
-                  <Card className="border-border/50 hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-pointer group h-full">
-                    <CardContent className="p-5">
-                      <div className="flex items-start justify-between mb-3">
-                        <div className={`w-11 h-11 rounded-xl flex items-center justify-center group-hover:bg-primary/20 transition-colors ${isMyClass ? "bg-primary/15" : "bg-primary/10"}`}>
-                          <Building2 className="w-5 h-5 text-primary" />
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                          {isMyClass && (
-                            <Badge className="text-xs bg-green-500/10 text-green-600 border-green-500/20 hover:bg-green-500/10">
-                              Ma classe
-                            </Badge>
-                          )}
-                          <Badge variant="secondary" className="font-mono text-xs">
-                            {level?.code ?? "—"}
+                <Card key={c.id} className="border-border/50 hover:shadow-lg transition-all group h-full">
+                  <CardContent className="p-5">
+                    <div className="flex items-start justify-between mb-3">
+                      <div className={`w-11 h-11 rounded-xl flex items-center justify-center ${isMyClass ? "bg-primary/15" : "bg-primary/10"}`}>
+                        <Building2 className="w-5 h-5 text-primary" />
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        {isMyClass && (
+                          <Badge className="text-xs bg-green-500/10 text-green-600 border-green-500/20 hover:bg-green-500/10">
+                            Ma classe
                           </Badge>
+                        )}
+                        <Badge variant="secondary" className="font-mono text-xs">
+                          {level?.code ?? "—"}
+                        </Badge>
+                      </div>
+                    </div>
+                    <h3 className="font-bold text-lg text-foreground">{c.name}</h3>
+                    <div className="flex items-center justify-between mt-2">
+                      <p className="text-sm text-muted-foreground flex items-center gap-2">
+                        <Users className="w-3.5 h-3.5" />
+                        {c.studentCount} / {c.capacity} élèves
+                      </p>
+                      {!isTeacherReal && (
+                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Button
+                            size="sm" variant="ghost"
+                            className="h-7 px-2 text-xs gap-1"
+                            onClick={() => handleEdit(c)}
+                          >
+                            <Pencil className="w-3 h-3" /> Modifier
+                          </Button>
+                          <Button
+                            size="sm" variant="ghost"
+                            className="h-7 px-2 text-xs gap-1 text-destructive hover:text-destructive"
+                            onClick={() => handleDelete(c.id)}
+                          >
+                            <Trash2 className="w-3 h-3" /> Supprimer
+                          </Button>
                         </div>
-                      </div>
-                      <h3 className="font-bold text-lg text-foreground">{c.name}</h3>
-                      <div className="flex flex-col gap-1 mt-2">
-                        <p className="text-sm text-muted-foreground flex items-center gap-2">
-                          <Users className="w-3.5 h-3.5" />
-                          {c.studentCount} / {c.capacity} élèves
-                        </p>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </Link>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
               );
             })}
           </div>

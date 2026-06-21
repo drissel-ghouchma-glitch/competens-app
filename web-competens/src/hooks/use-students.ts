@@ -7,6 +7,11 @@ import type { Student, Classe } from "@/types";
 type AddStudentInput = Omit<Student, "id" | "createdAt">;
 type ImportRow = { firstName: string; lastName: string; birthDate: string; gender: "M" | "F"; classId: string };
 
+export interface ImportResult {
+  succeeded: number;
+  failed: { name: string; reason: string }[];
+}
+
 export interface UseStudentsReturn {
   students: Student[];
   classes: Classe[];
@@ -14,7 +19,7 @@ export interface UseStudentsReturn {
   error: string | null;
   refetch: () => Promise<void>;
   addStudent: (data: AddStudentInput) => Promise<void>;
-  importStudents: (rows: ImportRow[]) => Promise<void>;
+  importStudents: (rows: ImportRow[]) => Promise<ImportResult>;
   deleteStudent: (id: string) => Promise<void>;
 }
 
@@ -113,21 +118,35 @@ export function useStudents(): UseStudentsReturn {
   );
 
   const importStudentsReal = useCallback(
-    async (rows: ImportRow[]) => {
-      if (!supabase || rows.length === 0) return;
-      const inserts = rows.map((r) => ({
-        first_name: r.firstName,
-        last_name: r.lastName,
-        birth_date: r.birthDate || null,
-        gender: r.gender,
-        class_id: r.classId || null,
-      }));
-      const { error: err } = await supabase.from("students").insert(inserts);
-      if (err) throw new Error(err.message);
-      // Sync counts for all affected classes
+    async (rows: ImportRow[]): Promise<ImportResult> => {
+      if (!supabase || rows.length === 0) return { succeeded: 0, failed: [] };
+
+      const result: ImportResult = { succeeded: 0, failed: [] };
+
+      // Insert one by one so a duplicate / bad date doesn't abort the whole batch
+      for (const r of rows) {
+        const { error: err } = await supabase.from("students").insert({
+          first_name: r.firstName,
+          last_name: r.lastName,
+          birth_date: r.birthDate || null,
+          gender: r.gender,
+          class_id: r.classId || null,
+        });
+        if (err) {
+          const reason = err.code === "23505"
+            ? "Élève déjà existant (doublon)"
+            : err.message;
+          result.failed.push({ name: `${r.firstName} ${r.lastName}`, reason });
+        } else {
+          result.succeeded++;
+        }
+      }
+
+      // Sync student counts for all affected classes
       const classIds = [...new Set(rows.map((r) => r.classId).filter(Boolean))];
       await Promise.all(classIds.map(syncClassStudentCount));
       await fetchFromSupabase();
+      return result;
     },
     [fetchFromSupabase]
   );
@@ -152,7 +171,10 @@ export function useStudents(): UseStudentsReturn {
   );
 
   const importStudentsDemo = useCallback(
-    async (rows: ImportRow[]) => { storeImportStudents(rows); },
+    async (rows: ImportRow[]): Promise<ImportResult> => {
+      storeImportStudents(rows);
+      return { succeeded: rows.length, failed: [] };
+    },
     [storeImportStudents]
   );
 

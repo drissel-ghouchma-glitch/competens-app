@@ -90,16 +90,36 @@ export default function StudentsPage() {
         const wb = XLSX.read(ev.target?.result, { type: "binary" });
         const ws = wb.Sheets[wb.SheetNames[0]];
         const rows = XLSX.utils.sheet_to_json<ImportRow>(ws);
-        const classMap = new Map(classes.map((c) => [c.name, c.id]));
+        const classMap = new Map(classes.map((c) => [c.name.toLowerCase(), c.id]));
+
+        const parseDate = (raw: unknown): string => {
+          if (!raw) return "";
+          // XLSX sometimes gives a JS serial number for date cells
+          if (typeof raw === "number") {
+            const d = XLSX.SSF.parse_date_code(raw);
+            if (d) return `${d.y}-${String(d.m).padStart(2, "0")}-${String(d.d).padStart(2, "0")}`;
+          }
+          const str = String(raw).trim();
+          // DD/MM/YYYY or DD-MM-YYYY
+          const dmyMatch = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+          if (dmyMatch) return `${dmyMatch[3]}-${dmyMatch[2].padStart(2, "0")}-${dmyMatch[1].padStart(2, "0")}`;
+          // Already YYYY-MM-DD
+          if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str;
+          return "";
+        };
+
         const mapped = rows.map((r) => {
           let classId = "";
+          const rawClasse = r.Classe?.toString().toLowerCase().trim() ?? "";
           for (const [cName, cId] of classMap) {
-            if (r.Classe?.toLowerCase().includes(cName.toLowerCase())) { classId = cId; break; }
+            if (rawClasse === cName || rawClasse.includes(cName) || cName.includes(rawClasse)) {
+              classId = cId; break;
+            }
           }
           return {
-            firstName: r["Prénom"] ?? "",
-            lastName: r["Nom"] ?? "",
-            birthDate: r["Date de naissance"]?.toString() ?? "",
+            firstName: r["Prénom"]?.toString().trim() ?? "",
+            lastName: r["Nom"]?.toString().trim() ?? "",
+            birthDate: parseDate(r["Date de naissance"]),
             gender: (r["Sexe"]?.toString().toUpperCase().startsWith("F") ? "F" : "M") as "M" | "F",
             classId,
           };
@@ -117,10 +137,18 @@ export default function StudentsPage() {
     setImporting(true);
     setImportError("");
     try {
-      await importStudents(importPreview);
+      const result = await importStudents(importPreview);
       setImportPreview([]);
       setOpenImport(false);
-      toast.success(`${importPreview.length} élèves importés.`);
+      if (result.failed.length === 0) {
+        toast.success(`${result.succeeded} élève(s) importé(s) avec succès.`);
+      } else if (result.succeeded === 0) {
+        toast.error(`Aucun élève importé. ${result.failed.length} erreur(s).`);
+      } else {
+        toast.warning(
+          `${result.succeeded} importé(s), ${result.failed.length} échoué(s) : ${result.failed.map((f) => f.name).join(", ")}`
+        );
+      }
     } catch (e: unknown) {
       setImportError(e instanceof Error ? e.message : "Erreur lors de l'importation");
     } finally {
