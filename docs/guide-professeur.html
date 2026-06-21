@@ -1,0 +1,1257 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Compétens — Guide du Professeur</title>
+  <style>
+    /* ─── Reset & Base ────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --blue:        #3A7AFE;
+      --blue-light:  #EBF1FF;
+      --blue-mid:    #C7D9FF;
+      --green:       #22C55E;
+      --green-light: #DCFCE7;
+      --amber:       #F59E0B;
+      --amber-light: #FEF3C7;
+      --red:         #EF4444;
+      --red-light:   #FEE2E2;
+      --gray-50:     #F8FAFC;
+      --gray-100:    #F1F5F9;
+      --gray-200:    #E2E8F0;
+      --gray-400:    #94A3B8;
+      --gray-500:    #64748B;
+      --gray-700:    #334155;
+      --gray-900:    #0F172A;
+      --text:        #1E293B;
+      --muted:       #64748B;
+    }
+
+    html { font-size: 15px; }
+
+    body {
+      font-family: 'Segoe UI', Arial, 'Helvetica Neue', sans-serif;
+      color: var(--text);
+      background: #fff;
+      line-height: 1.65;
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 2rem 2.5rem 4rem;
+    }
+
+    /* ─── Typography ──────────────────────────────────────────── */
+    h1 { font-size: 2rem;   font-weight: 800; color: var(--gray-900); line-height: 1.2; }
+    h2 { font-size: 1.4rem; font-weight: 700; color: var(--gray-900); margin-top: 2.8rem; margin-bottom: 1rem; }
+    h3 { font-size: 1.1rem; font-weight: 700; color: var(--blue);     margin-top: 1.8rem; margin-bottom: 0.6rem; }
+    h4 { font-size: 0.95rem; font-weight: 700; color: var(--gray-700); margin-top: 1.2rem; margin-bottom: 0.4rem; }
+
+    p  { margin-bottom: 0.8rem; }
+    ul, ol { padding-left: 1.5rem; margin-bottom: 0.8rem; }
+    li { margin-bottom: 0.4rem; }
+    strong { color: var(--gray-900); }
+    a  { color: var(--blue); text-decoration: none; }
+
+    /* ─── Cover Page ──────────────────────────────────────────── */
+    .cover {
+      text-align: center;
+      padding: 4rem 2rem 3rem;
+      border-bottom: 3px solid var(--blue);
+      margin-bottom: 3rem;
+    }
+    .cover-logo {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 80px; height: 80px;
+      background: var(--blue);
+      border-radius: 20px;
+      margin-bottom: 1.5rem;
+      box-shadow: 0 8px 30px rgba(58,122,254,0.35);
+    }
+    .cover-logo svg { width: 44px; height: 44px; fill: #fff; }
+    .cover h1 { font-size: 2.6rem; margin-bottom: 0.4rem; color: var(--gray-900); }
+    .cover-subtitle {
+      font-size: 1.15rem;
+      color: var(--muted);
+      margin-bottom: 2rem;
+    }
+    .cover-meta {
+      display: inline-flex;
+      gap: 2rem;
+      font-size: 0.85rem;
+      color: var(--muted);
+      border-top: 1px solid var(--gray-200);
+      padding-top: 1rem;
+      margin-top: 0.5rem;
+    }
+
+    /* ─── Table of Contents ───────────────────────────────────── */
+    .toc {
+      background: var(--gray-50);
+      border: 1px solid var(--gray-200);
+      border-radius: 12px;
+      padding: 1.5rem 2rem;
+      margin-bottom: 3rem;
+    }
+    .toc-title {
+      font-weight: 700;
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      margin-bottom: 0.8rem;
+    }
+    .toc ol { list-style: none; padding: 0; counter-reset: toc; }
+    .toc li {
+      counter-increment: toc;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.35rem 0;
+      border-bottom: 1px dashed var(--gray-200);
+      font-size: 0.92rem;
+    }
+    .toc li:last-child { border-bottom: none; }
+    .toc li::before {
+      content: counter(toc, decimal-leading-zero);
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: var(--blue);
+      min-width: 24px;
+    }
+    .toc li a { color: var(--text); font-weight: 500; }
+    .toc li a:hover { color: var(--blue); }
+    .toc-page { margin-left: auto; font-size: 0.75rem; color: var(--muted); }
+
+    /* ─── Section Headers ─────────────────────────────────────── */
+    .section-header {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding: 1rem 1.5rem;
+      background: var(--blue-light);
+      border-left: 4px solid var(--blue);
+      border-radius: 0 10px 10px 0;
+      margin-bottom: 1.5rem;
+    }
+    .section-number {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 36px; height: 36px;
+      background: var(--blue);
+      color: #fff;
+      font-weight: 800;
+      font-size: 1rem;
+      border-radius: 10px;
+    }
+    .section-header h2 {
+      margin: 0;
+      font-size: 1.25rem;
+      color: var(--gray-900);
+    }
+
+    /* ─── Steps ───────────────────────────────────────────────── */
+    .steps { counter-reset: steps; list-style: none; padding: 0; margin: 1rem 0 1.2rem; }
+    .steps li {
+      counter-increment: steps;
+      display: flex;
+      gap: 1rem;
+      padding: 0.85rem 0;
+      border-bottom: 1px solid var(--gray-100);
+    }
+    .steps li:last-child { border-bottom: none; }
+    .step-num {
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      min-width: 28px; height: 28px;
+      background: var(--blue);
+      color: #fff;
+      font-size: 0.78rem;
+      font-weight: 800;
+      border-radius: 50%;
+      margin-top: 0.05rem;
+    }
+    .step-num::before { content: counter(steps); }
+    .step-body { flex: 1; }
+    .step-body strong { display: block; margin-bottom: 0.2rem; }
+
+    /* ─── Info Boxes ──────────────────────────────────────────── */
+    .box {
+      border-radius: 10px;
+      padding: 1rem 1.25rem;
+      margin: 1.2rem 0;
+      display: flex;
+      gap: 0.85rem;
+      align-items: flex-start;
+    }
+    .box-icon { font-size: 1.2rem; line-height: 1.4; flex-shrink: 0; }
+    .box-body { flex: 1; }
+    .box-body p:last-child { margin-bottom: 0; }
+    .box-title { font-weight: 700; margin-bottom: 0.25rem; font-size: 0.9rem; }
+
+    .box-tip    { background: var(--blue-light);  border-left: 4px solid var(--blue); }
+    .box-tip .box-title { color: var(--blue); }
+
+    .box-warn   { background: var(--amber-light); border-left: 4px solid var(--amber); }
+    .box-warn .box-title { color: #92400E; }
+
+    .box-success { background: var(--green-light); border-left: 4px solid var(--green); }
+    .box-success .box-title { color: #166534; }
+
+    .box-danger { background: var(--red-light);   border-left: 4px solid var(--red); }
+    .box-danger .box-title { color: #991B1B; }
+
+    /* ─── Screen Mockups ──────────────────────────────────────── */
+    .mockup {
+      background: var(--gray-50);
+      border: 1px solid var(--gray-200);
+      border-radius: 12px;
+      overflow: hidden;
+      margin: 1.2rem 0;
+      font-size: 0.85rem;
+    }
+    .mockup-bar {
+      background: var(--blue);
+      color: #fff;
+      padding: 0.5rem 1rem;
+      font-size: 0.78rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .mockup-bar .dot { width: 8px; height: 8px; border-radius: 50%; background: rgba(255,255,255,0.5); }
+    .mockup-body { padding: 1rem 1.25rem; }
+
+    /* ─── Status Pills ────────────────────────────────────────── */
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.3rem;
+      padding: 0.18rem 0.6rem;
+      border-radius: 99px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .pill-green  { background: var(--green-light); color: #166534; }
+    .pill-amber  { background: var(--amber-light); color: #92400E; }
+    .pill-red    { background: var(--red-light);   color: #991B1B; }
+    .pill-blue   { background: var(--blue-light);  color: #1D4ED8; }
+
+    /* ─── Cards ───────────────────────────────────────────────── */
+    .card-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 0.75rem;
+      margin: 1rem 0;
+    }
+    .card {
+      background: var(--gray-50);
+      border: 1px solid var(--gray-200);
+      border-radius: 10px;
+      padding: 0.9rem 1rem;
+    }
+    .card-icon { font-size: 1.4rem; margin-bottom: 0.4rem; }
+    .card-title { font-weight: 700; font-size: 0.85rem; color: var(--gray-900); margin-bottom: 0.2rem; }
+    .card-desc  { font-size: 0.78rem; color: var(--muted); line-height: 1.4; }
+
+    /* ─── Navigation Diagram ──────────────────────────────────── */
+    .nav-diagram {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin: 1rem 0;
+    }
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.4rem 0.9rem;
+      border-radius: 8px;
+      font-size: 0.82rem;
+      font-weight: 600;
+    }
+    .nav-item.active   { background: var(--blue-light);  color: var(--blue); border: 1.5px solid var(--blue); }
+    .nav-item.inactive { background: var(--gray-100);    color: var(--muted); border: 1.5px solid var(--gray-200); }
+    .nav-item.prof     { background: var(--green-light); color: #166534; border: 1.5px solid #86EFAC; }
+
+    /* ─── Eval Grid Example ───────────────────────────────────── */
+    .eval-grid { display: grid; gap: 0.4rem; margin: 1rem 0; }
+    .eval-row {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.65rem 0.9rem;
+      border-radius: 10px;
+      border: 1.5px solid transparent;
+      font-size: 0.85rem;
+    }
+    .eval-row.acquis    { background: #DCFCE7; border-color: #86EFAC; }
+    .eval-row.en-cours  { background: #FEF3C7; border-color: #FCD34D; }
+    .eval-row.non-acquis { background: #FEE2E2; border-color: #FCA5A5; }
+    .eval-num { width: 26px; height: 26px; border-radius: 6px; background: rgba(0,0,0,0.06); display: flex; align-items: center; justify-content: center; font-size: 0.72rem; font-weight: 700; color: var(--muted); flex-shrink: 0; }
+    .eval-name { flex: 1; font-weight: 500; }
+    .eval-status { font-size: 0.78rem; font-weight: 700; }
+    .eval-status.g { color: #166534; }
+    .eval-status.a { color: #92400E; }
+    .eval-status.r { color: #991B1B; }
+
+    /* ─── Radar Diagram ───────────────────────────────────────── */
+    .radar-diagram {
+      text-align: center;
+      margin: 1.2rem 0;
+    }
+    .radar-svg-wrap {
+      display: inline-block;
+      background: var(--gray-50);
+      border: 1px solid var(--gray-200);
+      border-radius: 12px;
+      padding: 1rem;
+    }
+
+    /* ─── Alert Cards ─────────────────────────────────────────── */
+    .alert-card {
+      display: flex;
+      gap: 0.75rem;
+      padding: 0.85rem 1rem;
+      border-radius: 10px;
+      border-left: 4px solid;
+      margin-bottom: 0.5rem;
+    }
+    .alert-card.critical { background: var(--red-light);   border-color: var(--red); }
+    .alert-card.warning  { background: var(--amber-light); border-color: var(--amber); }
+    .alert-card .alert-label { font-size: 0.75rem; font-weight: 700; margin-bottom: 0.15rem; }
+    .alert-card.critical .alert-label { color: #991B1B; }
+    .alert-card.warning  .alert-label { color: #92400E; }
+    .alert-card .alert-name { font-weight: 700; font-size: 0.9rem; margin-bottom: 0.1rem; }
+    .alert-card .alert-cause { font-size: 0.82rem; color: var(--muted); }
+
+    /* ─── FAQ ─────────────────────────────────────────────────── */
+    .faq-item {
+      border: 1px solid var(--gray-200);
+      border-radius: 10px;
+      margin-bottom: 0.75rem;
+      overflow: hidden;
+    }
+    .faq-q {
+      background: var(--gray-50);
+      padding: 0.85rem 1.1rem;
+      font-weight: 700;
+      font-size: 0.92rem;
+      display: flex;
+      gap: 0.75rem;
+      align-items: flex-start;
+    }
+    .faq-q-icon { color: var(--blue); font-size: 1rem; flex-shrink: 0; }
+    .faq-a {
+      padding: 0.8rem 1.1rem 0.9rem 2.4rem;
+      font-size: 0.88rem;
+      color: var(--gray-700);
+      border-top: 1px solid var(--gray-200);
+    }
+    .faq-a p:last-child { margin-bottom: 0; }
+
+    /* ─── Dividers ────────────────────────────────────────────── */
+    .divider {
+      border: none;
+      border-top: 1px solid var(--gray-200);
+      margin: 2.5rem 0;
+    }
+    .page-footer {
+      text-align: center;
+      font-size: 0.78rem;
+      color: var(--muted);
+      margin-top: 4rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--gray-200);
+    }
+
+    /* ─── Table ───────────────────────────────────────────────── */
+    table { width: 100%; border-collapse: collapse; font-size: 0.88rem; margin: 1rem 0; }
+    th { background: var(--blue-light); color: var(--blue); font-weight: 700; text-align: left; padding: 0.6rem 0.9rem; border-bottom: 2px solid var(--blue-mid); }
+    td { padding: 0.55rem 0.9rem; border-bottom: 1px solid var(--gray-200); vertical-align: top; }
+    tr:last-child td { border-bottom: none; }
+    tr:nth-child(even) td { background: var(--gray-50); }
+
+    /* ─── Print ───────────────────────────────────────────────── */
+    @media print {
+      body { padding: 0; max-width: 100%; font-size: 11pt; }
+      .cover { padding: 2.5cm 1cm 1.5cm; }
+      .cover-logo { width: 60px; height: 60px; }
+      .cover h1 { font-size: 2rem; }
+      h2 { font-size: 1.15rem; }
+      h3 { font-size: 1rem; }
+      .section-header { break-before: page; }
+      .cover         { break-after: page; }
+      .toc           { break-after: page; }
+      .no-break      { break-inside: avoid; }
+      .mockup, .box, .card-row, .eval-grid, .faq-item { break-inside: avoid; }
+      a { color: inherit; text-decoration: none; }
+      @page { margin: 2cm 2cm 2.5cm; }
+      @page :first { margin-top: 0; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ╔══════════════════════════════════════════════════════════╗ -->
+<!-- ║  COVER PAGE                                              ║ -->
+<!-- ╚══════════════════════════════════════════════════════════╝ -->
+<div class="cover">
+  <div class="cover-logo">
+    <!-- Graduation cap icon -->
+    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+      <path d="M12 3L1 9l4 2.18V16c0 0 2.5 3 7 3s7-3 7-3v-4.82L22 9 12 3zm6 8.13L12 14 6 11.13V9l6 3 6-3v2.13zM18 15.5c-.69.87-2.94 2.5-6 2.5s-5.31-1.63-6-2.5v-2.37l6 2.87 6-2.87v2.37z"/>
+    </svg>
+  </div>
+  <h1>Compétens</h1>
+  <p class="cover-subtitle">Guide d'utilisation — Professeurs</p>
+  <div style="margin: 1.5rem 0; color: var(--muted); font-size: 0.92rem; max-width: 440px; display: inline-block; line-height: 1.6;">
+    Ce guide explique comment utiliser l'application <strong>Compétens</strong> pour gérer les évaluations quotidiennes de vos élèves, suivre leur progression et consulter les alertes.
+  </div>
+  <div class="cover-meta">
+    <span>📅 Année scolaire 2025-2026</span>
+    <span>👩‍🏫 À destination des enseignants</span>
+    <span>🌐 Version web &amp; mobile</span>
+  </div>
+</div>
+
+<!-- ╔══════════════════════════════════════════════════════════╗ -->
+<!-- ║  TABLE OF CONTENTS                                       ║ -->
+<!-- ╚══════════════════════════════════════════════════════════╝ -->
+<div class="toc">
+  <p class="toc-title">Table des matières</p>
+  <ol>
+    <li><a href="#intro">Introduction — Qu'est-ce que Compétens ?</a></li>
+    <li><a href="#inscription">Créer votre compte enseignant</a></li>
+    <li><a href="#connexion">Se connecter à l'application</a></li>
+    <li><a href="#tableau-bord">Le tableau de bord — Vue d'ensemble</a></li>
+    <li><a href="#evaluation">Réaliser une évaluation quotidienne</a></li>
+    <li><a href="#progression">Consulter la progression d'un élève</a></li>
+    <li><a href="#alertes">Comprendre et gérer les alertes</a></li>
+    <li><a href="#statistiques">Les statistiques de votre classe</a></li>
+    <li><a href="#faq">Questions fréquentes</a></li>
+  </ol>
+</div>
+
+
+<!-- ╔══════════════════════════════════════════════════════════╗ -->
+<!-- ║  1. INTRODUCTION                                         ║ -->
+<!-- ╚══════════════════════════════════════════════════════════╝ -->
+<div id="intro" class="section-header">
+  <div class="section-number">1</div>
+  <h2>Introduction — Qu'est-ce que Compétens ?</h2>
+</div>
+
+<p><strong>Compétens</strong> est une application numérique conçue pour les écoles primaires. Elle permet aux enseignants d'évaluer chaque jour les compétences de leurs élèves, de suivre leur progression dans le temps et d'être alertés rapidement lorsqu'un élève rencontre des difficultés.</p>
+
+<p>L'application fonctionne aussi bien sur un <strong>ordinateur</strong>, une <strong>tablette</strong> ou un <strong>téléphone</strong>. Elle peut même être utilisée <strong>sans connexion internet</strong> grâce au mode hors-ligne.</p>
+
+<h3>Les 12 compétences évaluées</h3>
+<p>Chaque élève est évalué sur <strong>12 compétences</strong> qui couvrent les comportements en classe :</p>
+
+<table>
+  <thead>
+    <tr><th>Code</th><th>Compétence</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><strong>C1</strong></td><td>Respect des règles et de l'ordre général</td></tr>
+    <tr><td><strong>C2</strong></td><td>Préparation et concentration</td></tr>
+    <tr><td><strong>C3</strong></td><td>Discipline et engagement durant la leçon</td></tr>
+    <tr><td><strong>C4</strong></td><td>Gestion du matériel</td></tr>
+    <tr><td><strong>C5</strong></td><td>Écoute et participation actives</td></tr>
+    <tr><td><strong>C6</strong></td><td>Persévérance et achèvement des tâches</td></tr>
+    <tr><td><strong>C7</strong></td><td>Autonomie dans le travail</td></tr>
+    <tr><td><strong>C8</strong></td><td>Coopération et travail en équipe</td></tr>
+    <tr><td><strong>C9</strong></td><td>Expression orale et communication</td></tr>
+    <tr><td><strong>C10</strong></td><td>Compréhension et restitution</td></tr>
+    <tr><td><strong>C11</strong></td><td>Créativité et initiative</td></tr>
+    <tr><td><strong>C12</strong></td><td>Progrès et évolution personnelle</td></tr>
+  </tbody>
+</table>
+
+<h3>Les trois niveaux d'acquisition</h3>
+<div class="card-row">
+  <div class="card">
+    <div class="card-icon">✅</div>
+    <div class="card-title"><span class="pill pill-green">Acquis</span></div>
+    <div class="card-desc">L'élève maîtrise cette compétence de manière régulière et autonome.</div>
+  </div>
+  <div class="card">
+    <div class="card-icon">🔄</div>
+    <div class="card-title"><span class="pill pill-amber">En cours</span></div>
+    <div class="card-desc">L'élève progresse mais a encore besoin d'aide ou de rappels.</div>
+  </div>
+  <div class="card">
+    <div class="card-icon">❌</div>
+    <div class="card-title"><span class="pill pill-red">Non acquis</span></div>
+    <div class="card-desc">L'élève n'a pas encore atteint cette compétence. Un suivi particulier est conseillé.</div>
+  </div>
+</div>
+
+<div class="box box-tip">
+  <div class="box-icon">💡</div>
+  <div class="box-body">
+    <p class="box-title">À savoir</p>
+    <p>Vous n'avez pas besoin d'évaluer toutes les compétences chaque jour. Évaluez celles qui sont pertinentes pour la séance ou la journée en cours.</p>
+  </div>
+</div>
+
+
+<!-- ╔══════════════════════════════════════════════════════════╗ -->
+<!-- ║  2. INSCRIPTION                                          ║ -->
+<!-- ╚══════════════════════════════════════════════════════════╝ -->
+<div id="inscription" class="section-header">
+  <div class="section-number">2</div>
+  <h2>Créer votre compte enseignant</h2>
+</div>
+
+<p>En tant qu'enseignant, vous pouvez créer votre compte vous-même depuis la page d'inscription. Votre compte sera activé après validation par l'administrateur de l'école.</p>
+
+<h3>Étapes d'inscription</h3>
+
+<ol class="steps">
+  <li>
+    <div class="step-num"></div>
+    <div class="step-body">
+      <strong>Ouvrez l'application dans votre navigateur</strong>
+      Saisissez l'adresse de l'application dans la barre de votre navigateur (Chrome, Firefox, Safari…). La page de connexion s'affiche.
+    </div>
+  </li>
+  <li>
+    <div class="step-num"></div>
+    <div class="step-body">
+      <strong>Cliquez sur « Créer un compte »</strong>
+      En bas de la page de connexion, cliquez sur le lien <strong>« Vous êtes enseignant ? Créer un compte »</strong>.
+    </div>
+  </li>
+  <li>
+    <div class="step-num"></div>
+    <div class="step-body">
+      <strong>Remplissez le formulaire d'inscription</strong>
+      Renseignez les champs suivants :
+      <ul style="margin-top: 0.5rem;">
+        <li><strong>Prénom</strong> — votre prénom</li>
+        <li><strong>Nom</strong> — votre nom de famille</li>
+        <li><strong>Email professionnel</strong> — l'adresse email utilisée pour votre travail</li>
+        <li><strong>Téléphone</strong> — facultatif, votre numéro de téléphone</li>
+        <li><strong>Mot de passe</strong> — choisissez un mot de passe d'au moins 6 caractères</li>
+        <li><strong>Confirmer le mot de passe</strong> — retapez le même mot de passe</li>
+      </ul>
+    </div>
+  </li>
+  <li>
+    <div class="step-num"></div>
+    <div class="step-body">
+      <strong>Cliquez sur « Soumettre ma demande »</strong>
+      Un message de confirmation apparaît : votre demande a bien été envoyée.
+    </div>
+  </li>
+  <li>
+    <div class="step-num"></div>
+    <div class="step-body">
+      <strong>Attendez la validation de l'administrateur</strong>
+      L'administrateur de l'école examine votre demande et active votre compte. Vous serez informé(e) par email lorsque votre accès est ouvert.
+    </div>
+  </li>
+</ol>
+
+<div class="mockup">
+  <div class="mockup-bar">
+    <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+    &nbsp; Compétens — Inscription enseignant
+  </div>
+  <div class="mockup-body">
+    <div style="text-align:center; margin-bottom: 1rem;">
+      <div style="display:inline-block; background: var(--blue); color:#fff; border-radius:12px; padding: 0.5rem 0.9rem; font-weight:700; font-size:0.85rem; margin-bottom: 0.4rem;">🎓 Compétens</div>
+      <p style="font-size:0.82rem; color:var(--muted); margin:0;">Inscription enseignant</p>
+    </div>
+    <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 0.5rem;">
+      <div style="background: var(--gray-100); border-radius:6px; padding: 0.4rem 0.6rem; font-size:0.78rem; color:var(--muted);">Prénom</div>
+      <div style="background: var(--gray-100); border-radius:6px; padding: 0.4rem 0.6rem; font-size:0.78rem; color:var(--muted);">Nom</div>
+    </div>
+    <div style="background: var(--gray-100); border-radius:6px; padding: 0.4rem 0.6rem; font-size:0.78rem; color:var(--muted); margin-bottom: 0.5rem;">Email professionnel</div>
+    <div style="background: var(--gray-100); border-radius:6px; padding: 0.4rem 0.6rem; font-size:0.78rem; color:var(--muted); margin-bottom: 0.5rem;">Téléphone (optionnel)</div>
+    <div style="background: var(--gray-100); border-radius:6px; padding: 0.4rem 0.6rem; font-size:0.78rem; color:var(--muted); margin-bottom: 0.5rem;">Mot de passe</div>
+    <div style="background: var(--gray-100); border-radius:6px; padding: 0.4rem 0.6rem; font-size:0.78rem; color:var(--muted); margin-bottom: 0.8rem;">Confirmer le mot de passe</div>
+    <div style="background: var(--blue); color:#fff; border-radius:8px; padding: 0.55rem; text-align:center; font-size:0.82rem; font-weight:700;">Soumettre ma demande</div>
+    <p style="text-align:center; font-size:0.78rem; color:var(--muted); margin-top: 0.6rem; margin-bottom:0;">Déjà un compte ? <span style="color:var(--blue); font-weight:600;">Se connecter</span></p>
+  </div>
+</div>
+
+<div class="box box-warn">
+  <div class="box-icon">⚠️</div>
+  <div class="box-body">
+    <p class="box-title">Important</p>
+    <p>Votre compte est <strong>en attente</strong> après l'inscription. Vous ne pourrez pas vous connecter tant que l'administrateur n'a pas approuvé votre demande. Si vous n'avez pas reçu de confirmation après 48 heures, contactez votre directeur d'école.</p>
+  </div>
+</div>
+
+
+<!-- ╔══════════════════════════════════════════════════════════╗ -->
+<!-- ║  3. CONNEXION                                            ║ -->
+<!-- ╚══════════════════════════════════════════════════════════╝ -->
+<div id="connexion" class="section-header">
+  <div class="section-number">3</div>
+  <h2>Se connecter à l'application</h2>
+</div>
+
+<p>Une fois votre compte activé par l'administrateur, vous pouvez vous connecter à tout moment.</p>
+
+<ol class="steps">
+  <li>
+    <div class="step-num"></div>
+    <div class="step-body">
+      <strong>Ouvrez l'application</strong>
+      Saisissez l'adresse de l'application dans votre navigateur. La page de connexion s'affiche automatiquement.
+    </div>
+  </li>
+  <li>
+    <div class="step-num"></div>
+    <div class="step-body">
+      <strong>Saisissez votre email et votre mot de passe</strong>
+      Utilisez l'adresse email que vous avez indiquée lors de votre inscription, et le mot de passe que vous avez choisi.
+    </div>
+  </li>
+  <li>
+    <div class="step-num"></div>
+    <div class="step-body">
+      <strong>Cliquez sur « Se connecter »</strong>
+      Si vos informations sont correctes, vous arrivez directement sur le tableau de bord.
+    </div>
+  </li>
+</ol>
+
+<div class="mockup">
+  <div class="mockup-bar">
+    <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+    &nbsp; Compétens — Connexion
+  </div>
+  <div class="mockup-body">
+    <div style="text-align:center; margin-bottom: 1rem;">
+      <div style="display:inline-block; background: var(--blue); color:#fff; border-radius:12px; padding: 0.5rem 0.9rem; font-weight:700; font-size:0.85rem; margin-bottom: 0.4rem;">🎓 Compétens</div>
+      <p style="font-size:0.82rem; color:var(--muted); margin:0;">Gestion des compétences et évaluations</p>
+    </div>
+    <div style="background: var(--gray-100); border-radius:6px; padding: 0.5rem 0.8rem; font-size:0.82rem; color:var(--muted); margin-bottom: 0.5rem;">📧 &nbsp;votre@email.com</div>
+    <div style="background: var(--gray-100); border-radius:6px; padding: 0.5rem 0.8rem; font-size:0.82rem; color:var(--muted); margin-bottom: 0.8rem;">🔒 &nbsp;••••••••</div>
+    <div style="background: var(--blue); color:#fff; border-radius:8px; padding: 0.55rem; text-align:center; font-size:0.82rem; font-weight:700; margin-bottom: 0.6rem;">Se connecter</div>
+    <div style="text-align:center; font-size:0.75rem; color:var(--muted); margin-bottom: 0.5rem;">── OU ──</div>
+    <div style="background: #fff; border: 2px solid var(--gray-200); border-radius:8px; padding: 0.5rem; text-align:center; font-size:0.82rem; font-weight:600; color:var(--muted);">🎓 Accéder en mode démo</div>
+  </div>
+</div>
+
+<h3>Mode démo</h3>
+<p>Si vous souhaitez découvrir l'application sans compte réel, cliquez sur <strong>« Accéder en mode démo »</strong>. Ce mode utilise des données fictives et ne requiert aucun identifiant. Toutes les données du mode démo sont stockées uniquement sur votre appareil et ne sont pas sauvegardées.</p>
+
+<div class="box box-tip">
+  <div class="box-icon">💡</div>
+  <div class="box-body">
+    <p class="box-title">Mot de passe oublié ?</p>
+    <p>Si vous ne vous souvenez plus de votre mot de passe, contactez l'administrateur de l'école. Il pourra réinitialiser votre accès depuis le tableau de bord d'administration.</p>
+  </div>
+</div>
+
+
+<!-- ╔══════════════════════════════════════════════════════════╗ -->
+<!-- ║  4. TABLEAU DE BORD                                      ║ -->
+<!-- ╚══════════════════════════════════════════════════════════╝ -->
+<div id="tableau-bord" class="section-header">
+  <div class="section-number">4</div>
+  <h2>Le tableau de bord — Vue d'ensemble</h2>
+</div>
+
+<p>Dès que vous êtes connecté(e), vous arrivez sur le <strong>tableau de bord</strong>. C'est la page principale de l'application. Elle vous donne une vue rapide sur l'état de vos classes.</p>
+
+<h3>Le menu de navigation</h3>
+<p>Sur ordinateur, le menu apparaît à gauche de l'écran. Sur téléphone, il est accessible via le bouton ☰ en haut ou par les icônes en bas de l'écran. Voici les sections accessibles par un professeur :</p>
+
+<div class="nav-diagram">
+  <span class="nav-item active">🏠 Dashboard</span>
+  <span class="nav-item prof">🏫 Classes</span>
+  <span class="nav-item prof">👨‍🎓 Élèves</span>
+  <span class="nav-item prof">📚 Compétences</span>
+  <span class="nav-item prof">📋 Évaluation</span>
+  <span class="nav-item prof">🔔 Alertes</span>
+</div>
+
+<h3>Les cartes de statistiques</h3>
+<p>En haut du tableau de bord, quatre cartes résument la situation globale :</p>
+
+<div class="card-row">
+  <div class="card">
+    <div class="card-icon" style="color:#3B82F6;">👨‍🎓</div>
+    <div class="card-title">Élèves</div>
+    <div class="card-desc">Nombre total d'élèves dans vos classes cette année.</div>
+  </div>
+  <div class="card">
+    <div class="card-icon" style="color:#10B981;">🏫</div>
+    <div class="card-title">Classes</div>
+    <div class="card-desc">Nombre de classes actives dans l'école.</div>
+  </div>
+  <div class="card">
+    <div class="card-icon" style="color:#8B5CF6;">👩‍🏫</div>
+    <div class="card-title">Professeurs</div>
+    <div class="card-desc">Nombre d'enseignants enregistrés dans l'établissement.</div>
+  </div>
+  <div class="card">
+    <div class="card-icon" style="color:#F59E0B;">📋</div>
+    <div class="card-title">Évaluations</div>
+    <div class="card-desc">Nombre total d'évaluations enregistrées depuis le début de l'année.</div>
+  </div>
+</div>
+
+<h3>Le graphique d'activité (7 jours)</h3>
+<p>Ce graphique en barres montre le nombre d'évaluations enregistrées chaque jour de la semaine passée. Il vous permet de voir rapidement les jours où vous avez le plus évalué et ceux où il y a eu peu d'activité.</p>
+
+<div style="background: var(--gray-50); border: 1px solid var(--gray-200); border-radius: 10px; padding: 1rem 1.5rem; margin: 1rem 0; display: flex; align-items: flex-end; gap: 8px; height: 90px;">
+  <div style="flex:1; background: #BFDBFE; border-radius:4px 4px 0 0; height: 40%;"></div>
+  <div style="flex:1; background: #93C5FD; border-radius:4px 4px 0 0; height: 55%;"></div>
+  <div style="flex:1; background: #3A7AFE; border-radius:4px 4px 0 0; height: 90%;"></div>
+  <div style="flex:1; background: #3A7AFE; border-radius:4px 4px 0 0; height: 75%;"></div>
+  <div style="flex:1; background: #93C5FD; border-radius:4px 4px 0 0; height: 35%;"></div>
+  <div style="flex:1; background: #BFDBFE; border-radius:4px 4px 0 0; height: 20%;"></div>
+  <div style="flex:1; background: #3A7AFE; border-radius:4px 4px 0 0; height: 65%;"></div>
+</div>
+<p style="text-align: center; font-size: 0.78rem; color: var(--muted); margin-top: -0.5rem;">Exemple de graphique d'activité sur 7 jours</p>
+
+<h3>Les alertes récentes</h3>
+<p>À droite du graphique, un panneau affiche les <strong>5 alertes les plus récentes</strong>. Chaque alerte indique un élève qui a des difficultés. Cliquez sur le nom d'un élève pour accéder à son profil complet.</p>
+
+<h3>Les raccourcis rapides</h3>
+<p>En bas du tableau de bord, quatre raccourcis vous permettent d'accéder directement aux sections les plus utilisées :</p>
+
+<table>
+  <thead><tr><th>Raccourci</th><th>Ce qu'il fait</th></tr></thead>
+  <tbody>
+    <tr><td>🏫 <strong>Classes</strong></td><td>Voir la liste de vos classes et leurs élèves</td></tr>
+    <tr><td>👨‍🎓 <strong>Élèves</strong></td><td>Rechercher un élève et consulter son profil</td></tr>
+    <tr><td>📈 <strong>Compétences</strong></td><td>Voir la liste des 12 compétences et leurs descriptions</td></tr>
+    <tr><td>📋 <strong>Évaluer</strong></td><td>Commencer une évaluation de classe</td></tr>
+  </tbody>
+</table>
+
+
+<!-- ╔══════════════════════════════════════════════════════════╗ -->
+<!-- ║  5. ÉVALUATION QUOTIDIENNE                               ║ -->
+<!-- ╚══════════════════════════════════════════════════════════╝ -->
+<div id="evaluation" class="section-header">
+  <div class="section-number">5</div>
+  <h2>Réaliser une évaluation quotidienne</h2>
+</div>
+
+<p>C'est la fonction principale de l'application. Chaque jour, vous pouvez noter le niveau d'acquisition de vos élèves sur une ou plusieurs compétences. L'évaluation se fait en <strong>3 étapes simples</strong>.</p>
+
+<div class="box box-tip">
+  <div class="box-icon">🕐</div>
+  <div class="box-body">
+    <p class="box-title">Combien de temps ça prend ?</p>
+    <p>Une évaluation d'une compétence pour une classe de 30 élèves prend environ <strong>2 à 3 minutes</strong>. Vous pouvez le faire en salle des professeurs, sur votre téléphone, juste après la classe.</p>
+  </div>
+</div>
+
+<p>Pour accéder à la page d'évaluation, cliquez sur <strong>« Évaluation »</strong> dans le menu de gauche (ou l'icône 📋 en bas sur téléphone).</p>
+
+<h3>Étape 1 — Choisir votre classe</h3>
+
+<p>La liste de vos classes s'affiche sous forme de boutons. <strong>Cliquez sur le nom de votre classe</strong> pour la sélectionner. Elle se colore en bleu pour indiquer qu'elle est choisie.</p>
+
+<div class="mockup">
+  <div class="mockup-bar">
+    <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+    &nbsp; Étape 1 — Choisir une classe
+  </div>
+  <div class="mockup-body">
+    <div style="font-size:0.78rem; font-weight:700; color:var(--muted); margin-bottom: 0.6rem;">① Choisir une classe</div>
+    <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+      <div style="background:var(--blue); color:#fff; border-radius:8px; padding:0.4rem 0.9rem; font-size:0.82rem; font-weight:700; display:flex; align-items:center; gap:0.4rem;">CP1-A <span style="background:rgba(255,255,255,0.25); border-radius:4px; padding:0.1rem 0.35rem; font-size:0.7rem;">CP1</span></div>
+      <div style="border:2px solid var(--gray-200); border-radius:8px; padding:0.4rem 0.9rem; font-size:0.82rem; font-weight:600; color:var(--gray-700); display:flex; align-items:center; gap:0.4rem;">CP2-A <span style="background:var(--gray-100); border-radius:4px; padding:0.1rem 0.35rem; font-size:0.7rem; color:var(--muted);">CP2</span></div>
+      <div style="border:2px solid var(--gray-200); border-radius:8px; padding:0.4rem 0.9rem; font-size:0.82rem; font-weight:600; color:var(--gray-700); display:flex; align-items:center; gap:0.4rem;">CE1-A <span style="background:var(--gray-100); border-radius:4px; padding:0.1rem 0.35rem; font-size:0.7rem; color:var(--muted);">CE1</span></div>
+    </div>
+  </div>
+</div>
+
+<h3>Étape 2 — Choisir une compétence</h3>
+
+<p>Une fois la classe sélectionnée, la liste des 12 compétences apparaît. <strong>Cliquez sur la compétence</strong> que vous souhaitez évaluer aujourd'hui.</p>
+
+<div class="mockup">
+  <div class="mockup-bar">
+    <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+    &nbsp; Étape 2 — Choisir une compétence
+  </div>
+  <div class="mockup-body">
+    <div style="font-size:0.78rem; font-weight:700; color:var(--muted); margin-bottom: 0.6rem;">② Choisir une compétence</div>
+    <div style="display:flex; gap:0.4rem; flex-wrap:wrap;">
+      <div style="border:2px solid var(--gray-200); border-radius:8px; padding:0.35rem 0.7rem; font-size:0.78rem; color:var(--muted);"><strong>C1</strong> Respect des règles…</div>
+      <div style="border:2px solid var(--gray-200); border-radius:8px; padding:0.35rem 0.7rem; font-size:0.78rem; color:var(--muted);"><strong>C2</strong> Préparation…</div>
+      <div style="background:var(--blue); color:#fff; border-radius:8px; padding:0.35rem 0.7rem; font-size:0.78rem; font-weight:700;"><strong>C3</strong> Discipline et engagement…</div>
+      <div style="border:2px solid var(--gray-200); border-radius:8px; padding:0.35rem 0.7rem; font-size:0.78rem; color:var(--muted);"><strong>C4</strong> Gestion du matériel…</div>
+      <div style="border:2px solid var(--gray-200); border-radius:8px; padding:0.35rem 0.7rem; font-size:0.78rem; color:var(--muted);"><strong>C5</strong> Écoute…</div>
+    </div>
+  </div>
+</div>
+
+<h3>Étape 3 — Évaluer chaque élève</h3>
+
+<p>La liste de vos élèves s'affiche. Chaque élève commence par défaut à <span class="pill pill-red">Non acquis</span>. <strong>Cliquez une fois sur un élève</strong> pour changer son niveau. À chaque clic, le niveau change dans cet ordre :</p>
+
+<div style="display: flex; align-items: center; gap: 0.5rem; margin: 1rem 0; flex-wrap: wrap; font-size: 0.88rem;">
+  <span class="pill pill-red">❌ Non acquis</span>
+  <span style="font-size: 1.2rem; color: var(--muted);">→</span>
+  <span class="pill pill-amber">🔄 En cours</span>
+  <span style="font-size: 1.2rem; color: var(--muted);">→</span>
+  <span class="pill pill-green">✅ Acquis</span>
+  <span style="font-size: 1.2rem; color: var(--muted);">→</span>
+  <span class="pill pill-red">❌ Non acquis</span>
+  <span style="font-size: 0.8rem; color: var(--muted);">… et ainsi de suite</span>
+</div>
+
+<p>Voici un exemple de grille d'évaluation remplie :</p>
+
+<div class="eval-grid">
+  <div class="eval-row acquis">
+    <div class="eval-num">1</div>
+    <span class="eval-name">Fatou Ndiaye</span>
+    <span class="eval-status g">✅ Acquis</span>
+  </div>
+  <div class="eval-row en-cours">
+    <div class="eval-num">2</div>
+    <span class="eval-name">Moussa Diop</span>
+    <span class="eval-status a">🔄 En cours</span>
+  </div>
+  <div class="eval-row non-acquis">
+    <div class="eval-num">3</div>
+    <span class="eval-name">Aïssatou Sow</span>
+    <span class="eval-status r">❌ Non acquis</span>
+  </div>
+  <div class="eval-row acquis">
+    <div class="eval-num">4</div>
+    <span class="eval-name">Ibrahima Fall</span>
+    <span class="eval-status g">✅ Acquis</span>
+  </div>
+  <div class="eval-row en-cours">
+    <div class="eval-num">5</div>
+    <span class="eval-name">Mariama Ba</span>
+    <span class="eval-status a">🔄 En cours</span>
+  </div>
+</div>
+
+<h3>Enregistrer l'évaluation</h3>
+
+<p>Quand vous avez noté tous vos élèves, cliquez sur le bouton <strong>« Enregistrer »</strong> en bas de la liste. Le bouton affiche le nombre d'évaluations à sauvegarder, par exemple : <em>Enregistrer (12 évaluations)</em>.</p>
+
+<div class="box box-success">
+  <div class="box-icon">✅</div>
+  <div class="box-body">
+    <p class="box-title">Après l'enregistrement</p>
+    <p>L'évaluation est sauvegardée immédiatement. La grille se remet à zéro pour vous permettre d'évaluer une autre compétence si besoin.</p>
+  </div>
+</div>
+
+<div class="box box-warn">
+  <div class="box-icon">⚠️</div>
+  <div class="box-body">
+    <p class="box-title">N'oubliez pas d'enregistrer !</p>
+    <p>Si vous fermez l'onglet ou quittez la page sans cliquer sur « Enregistrer », les évaluations saisies seront perdues. Pensez toujours à sauvegarder avant de partir.</p>
+  </div>
+</div>
+
+<h3>Évaluer plusieurs compétences le même jour</h3>
+<p>Vous pouvez répéter la procédure autant de fois que nécessaire. Après avoir enregistré une compétence, choisissez simplement une nouvelle compétence à l'étape 2 et recommencez.</p>
+
+
+<!-- ╔══════════════════════════════════════════════════════════╗ -->
+<!-- ║  6. PROGRESSION D'UN ÉLÈVE                               ║ -->
+<!-- ╚══════════════════════════════════════════════════════════╝ -->
+<div id="progression" class="section-header">
+  <div class="section-number">6</div>
+  <h2>Consulter la progression d'un élève</h2>
+</div>
+
+<p>Vous pouvez consulter le profil détaillé de n'importe quel élève pour voir comment il progresse sur chacune des 12 compétences.</p>
+
+<h3>Accéder au profil d'un élève</h3>
+
+<ol class="steps">
+  <li>
+    <div class="step-num"></div>
+    <div class="step-body">
+      <strong>Cliquez sur « Élèves » dans le menu</strong>
+      La liste de tous vos élèves s'affiche. Vous pouvez rechercher un élève par son nom en utilisant la barre de recherche.
+    </div>
+  </li>
+  <li>
+    <div class="step-num"></div>
+    <div class="step-body">
+      <strong>Cliquez sur le nom ou la carte de l'élève</strong>
+      Vous arrivez sur la page de profil de cet élève.
+    </div>
+  </li>
+</ol>
+
+<p>Vous pouvez aussi accéder au profil d'un élève directement depuis une alerte sur le tableau de bord ou la page Alertes.</p>
+
+<h3>Ce que contient le profil élève</h3>
+
+<h4>L'en-tête du profil</h4>
+<p>En haut de la page, vous trouvez les informations générales de l'élève :</p>
+<ul>
+  <li>Nom et prénom</li>
+  <li>Classe et niveau (CP1, CE2, etc.)</li>
+  <li>Sexe et âge</li>
+  <li>Le nombre d'alertes actives (si applicable)</li>
+</ul>
+
+<h4>Le radar des compétences</h4>
+<p>Le graphique en forme d'étoile (appelé <strong>radar</strong>) montre le <strong>taux d'acquisition</strong> de l'élève sur chacune des 12 compétences. Plus la forme est étendue vers l'extérieur, meilleur est le niveau global. Les zones rétrécies indiquent les compétences à renforcer.</p>
+
+<div class="radar-diagram">
+  <div class="radar-svg-wrap">
+    <svg viewBox="0 0 200 200" width="200" height="200" xmlns="http://www.w3.org/2000/svg">
+      <!-- Background grid circles -->
+      <circle cx="100" cy="100" r="80" fill="none" stroke="#E2E8F0" stroke-width="1"/>
+      <circle cx="100" cy="100" r="60" fill="none" stroke="#E2E8F0" stroke-width="1"/>
+      <circle cx="100" cy="100" r="40" fill="none" stroke="#E2E8F0" stroke-width="1"/>
+      <circle cx="100" cy="100" r="20" fill="none" stroke="#E2E8F0" stroke-width="1"/>
+      <!-- Axes -->
+      <line x1="100" y1="20" x2="100" y2="180" stroke="#E2E8F0" stroke-width="1"/>
+      <line x1="20" y1="100" x2="180" y2="100" stroke="#E2E8F0" stroke-width="1"/>
+      <line x1="43" y1="43" x2="157" y2="157" stroke="#E2E8F0" stroke-width="1"/>
+      <line x1="157" y1="43" x2="43" y2="157" stroke="#E2E8F0" stroke-width="1"/>
+      <!-- Data shape -->
+      <polygon points="100,32 148,60 163,110 140,158 100,168 60,158 37,110 52,60"
+        fill="rgba(58,122,254,0.2)" stroke="#3A7AFE" stroke-width="2"/>
+      <!-- Center dot -->
+      <circle cx="100" cy="100" r="3" fill="#3A7AFE"/>
+      <!-- Labels -->
+      <text x="100" y="14" text-anchor="middle" font-size="9" fill="#64748B">C1</text>
+      <text x="172" y="60" text-anchor="start"  font-size="9" fill="#64748B">C3</text>
+      <text x="172" y="105" text-anchor="start" font-size="9" fill="#64748B">C5</text>
+      <text x="100" y="192" text-anchor="middle" font-size="9" fill="#64748B">C7</text>
+      <text x="28" y="165" text-anchor="end"   font-size="9" fill="#64748B">C9</text>
+      <text x="28" y="60"  text-anchor="end"   font-size="9" fill="#64748B">C11</text>
+    </svg>
+    <p style="font-size:0.75rem; color:var(--muted); margin-top: 0.3rem; margin-bottom:0;">Exemple de radar des compétences</p>
+  </div>
+</div>
+
+<h4>Le résumé par compétence</h4>
+<p>À droite du radar, un résumé liste chaque compétence avec :</p>
+<ul>
+  <li>Une barre de progression indiquant le taux d'acquisition (de 0 % à 100 %)</li>
+  <li>L'icône de statut : ✅ Acquis, 🔄 En cours, ou ❌ Non acquis</li>
+  <li>Le pourcentage exact</li>
+</ul>
+
+<h4>Le détail par compétence</h4>
+<p>En bas de page, chaque compétence est présentée dans une petite carte avec son code, son titre et sa barre de progression. Les compétences en difficulté (taux inférieur à 40 %) apparaissent en rouge, celles en progression (40 à 70 %) en orange, et celles acquises (plus de 70 %) en vert.</p>
+
+<div class="box box-tip">
+  <div class="box-icon">💡</div>
+  <div class="box-body">
+    <p class="box-title">Comment interpréter le taux d'acquisition ?</p>
+    <p>Le taux d'acquisition est calculé à partir de toutes les évaluations enregistrées pour cet élève sur cette compétence. Par exemple, si vous avez évalué un élève 10 fois sur C5 et qu'il a obtenu « Acquis » 7 fois, son taux est de 70 %.</p>
+  </div>
+</div>
+
+
+<!-- ╔══════════════════════════════════════════════════════════╗ -->
+<!-- ║  7. ALERTES                                              ║ -->
+<!-- ╚══════════════════════════════════════════════════════════╝ -->
+<div id="alertes" class="section-header">
+  <div class="section-number">7</div>
+  <h2>Comprendre et gérer les alertes</h2>
+</div>
+
+<p>Les <strong>alertes</strong> sont des signaux automatiques générés lorsqu'un élève accumule plusieurs résultats « Non acquis » sur plusieurs semaines. Elles vous aident à repérer rapidement les élèves en difficulté.</p>
+
+<h3>Les deux niveaux d'alerte</h3>
+
+<div class="alert-card warning">
+  <div>
+    <div class="alert-label">🟠 ALERTE LÉGÈRE</div>
+    <div class="alert-name">Exemple : Moussa Diop</div>
+    <div class="alert-cause">Plusieurs compétences non acquises sur les 4 dernières semaines</div>
+  </div>
+</div>
+
+<div class="alert-card critical">
+  <div>
+    <div class="alert-label">🔴 ALERTE IMPORTANTE (CRITIQUE)</div>
+    <div class="alert-name">Exemple : Aïssatou Sow</div>
+    <div class="alert-cause">Plusieurs compétences non acquises sur les 4 dernières semaines</div>
+  </div>
+</div>
+
+<table style="margin-top: 1rem;">
+  <thead><tr><th>Type</th><th>Ce que ça signifie</th><th>Action recommandée</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><span class="pill pill-amber">🟠 Légère</span></td>
+      <td>L'élève a des difficultés sur quelques compétences. Surveiller de près.</td>
+      <td>Renforcer le suivi en classe, proposer un soutien ciblé.</td>
+    </tr>
+    <tr>
+      <td><span class="pill pill-red">🔴 Critique</span></td>
+      <td>L'élève est en grande difficulté sur plusieurs compétences. Situation urgente.</td>
+      <td>Contacter les parents, envisager un accompagnement renforcé.</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3>La page Alertes</h3>
+<p>Cliquez sur <strong>« Alertes »</strong> dans le menu pour voir toutes les alertes en cours. La page se divise en plusieurs sections :</p>
+
+<ul>
+  <li><strong>Résumé en haut</strong> : nombre d'alertes critiques, légères, et résolues</li>
+  <li><strong>Notifications</strong> : messages non lus liés aux alertes récentes</li>
+  <li><strong>Alertes actives</strong> : liste de toutes les alertes non résolues</li>
+  <li><strong>Historique résolu</strong> : alertes passées que vous avez marquées comme résolues</li>
+</ul>
+
+<h3>Que faire face à une alerte ?</h3>
+
+<ol class="steps">
+  <li>
+    <div class="step-num"></div>
+    <div class="step-body">
+      <strong>Lisez la cause de l'alerte</strong>
+      Chaque alerte précise la raison (ex. : « Plusieurs compétences non acquises sur les 4 dernières semaines »).
+    </div>
+  </li>
+  <li>
+    <div class="step-num"></div>
+    <div class="step-body">
+      <strong>Cliquez sur « Profil » pour voir la progression détaillée</strong>
+      Vous accédez au profil de l'élève avec le radar et le détail par compétence pour comprendre où sont les difficultés.
+    </div>
+  </li>
+  <li>
+    <div class="step-num"></div>
+    <div class="step-body">
+      <strong>Prenez les mesures nécessaires</strong>
+      Adaptez votre enseignement, contactez les parents si nécessaire, ou signalez à la direction.
+    </div>
+  </li>
+  <li>
+    <div class="step-num"></div>
+    <div class="step-body">
+      <strong>Marquez l'alerte comme résolue</strong>
+      Une fois le problème pris en charge, cliquez sur le bouton <strong>« Résoudre »</strong> à droite de l'alerte. Elle passe dans l'historique et ne compte plus dans les alertes actives.
+    </div>
+  </li>
+</ol>
+
+<div class="box box-tip">
+  <div class="box-icon">🔔</div>
+  <div class="box-body">
+    <p class="box-title">Le badge rouge dans le menu</p>
+    <p>Sur téléphone, un petit badge rouge avec un nombre apparaît sur l'icône Alertes lorsque vous avez des notifications non lues. Cela vous permet de savoir immédiatement s'il y a quelque chose d'important à consulter.</p>
+  </div>
+</div>
+
+<h3>Notifications</h3>
+<p>Les notifications sont des messages automatiques liés aux alertes. Elles apparaissent en haut de la page Alertes. Cliquez sur <strong>« Lu »</strong> pour marquer une notification comme lue et la retirer de la liste.</p>
+
+
+<!-- ╔══════════════════════════════════════════════════════════╗ -->
+<!-- ║  8. STATISTIQUES DE LA CLASSE                            ║ -->
+<!-- ╚══════════════════════════════════════════════════════════╝ -->
+<div id="statistiques" class="section-header">
+  <div class="section-number">8</div>
+  <h2>Les statistiques de votre classe</h2>
+</div>
+
+<p>Compétens vous offre plusieurs façons de visualiser la progression globale de votre classe, pas seulement celle d'un élève individuel.</p>
+
+<h3>Vue d'ensemble depuis le tableau de bord</h3>
+<p>Le graphique d'activité sur 7 jours du tableau de bord vous montre votre rythme d'évaluation. Un rythme régulier (évaluations tous les jours ou tous les deux jours) donne des statistiques plus fiables et permet de détecter les difficultés plus tôt.</p>
+
+<h3>La liste des compétences</h3>
+<p>Depuis la section <strong>« Compétences »</strong> du menu, vous pouvez consulter les 12 compétences avec :</p>
+<ul>
+  <li>Le <strong>code</strong> de la compétence (C1 à C12)</li>
+  <li>Le <strong>titre</strong> et la <strong>description</strong> détaillée</li>
+  <li>Les <strong>conseils pédagogiques</strong> pour aider les élèves en difficulté</li>
+</ul>
+
+<div class="box box-tip">
+  <div class="box-icon">📖</div>
+  <div class="box-body">
+    <p class="box-title">Les conseils pédagogiques</p>
+    <p>Chaque compétence dispose de conseils pratiques pour l'enseignant. Par exemple, pour <strong>C5 — Écoute et participation actives</strong>, le conseil est : « Utiliser des bâtons de parole, encourager la reformulation, valoriser les questions posées. » Ces conseils peuvent vous aider à adapter vos pratiques.</p>
+  </div>
+</div>
+
+<h3>Suivre plusieurs élèves en difficulté</h3>
+<p>La page Alertes vous donne une vue consolidée de tous les élèves en difficulté dans vos classes. Vous pouvez voir d'un seul coup d'œil :</p>
+<ul>
+  <li>Combien d'élèves sont en alerte critique</li>
+  <li>Combien sont en alerte légère</li>
+  <li>Combien d'alertes ont déjà été traitées</li>
+</ul>
+
+<h3>Conseils pour de bonnes statistiques</h3>
+<table>
+  <thead><tr><th>Bonne pratique</th><th>Pourquoi c'est important</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>Évaluer régulièrement, même brièvement</td>
+      <td>Des données fréquentes donnent une image plus fidèle de la progression.</td>
+    </tr>
+    <tr>
+      <td>Évaluer toutes les compétences au moins une fois par semaine</td>
+      <td>Cela permet au système de détecter les difficultés sur l'ensemble des compétences.</td>
+    </tr>
+    <tr>
+      <td>Résoudre les alertes après avoir agi</td>
+      <td>Garder un historique propre vous aide à suivre l'évolution des élèves dans le temps.</td>
+    </tr>
+    <tr>
+      <td>Consulter le profil élève avant un entretien avec les parents</td>
+      <td>Vous avez des données précises et objectives à partager.</td>
+    </tr>
+  </tbody>
+</table>
+
+
+<!-- ╔══════════════════════════════════════════════════════════╗ -->
+<!-- ║  9. QUESTIONS FRÉQUENTES                                 ║ -->
+<!-- ╚══════════════════════════════════════════════════════════╝ -->
+<div id="faq" class="section-header">
+  <div class="section-number">9</div>
+  <h2>Questions fréquentes</h2>
+</div>
+
+<div class="faq-item">
+  <div class="faq-q">
+    <span class="faq-q-icon">❓</span>
+    Je viens de m'inscrire mais je n'arrive pas à me connecter. Que faire ?
+  </div>
+  <div class="faq-a">
+    <p>Votre compte est en attente de validation. L'administrateur de votre école doit d'abord approuver votre demande d'inscription. Ce processus peut prendre de quelques heures à 48 heures. Si vous n'avez pas de nouvelles après ce délai, contactez votre directeur d'école directement.</p>
+  </div>
+</div>
+
+<div class="faq-item">
+  <div class="faq-q">
+    <span class="faq-q-icon">❓</span>
+    J'ai enregistré une évaluation par erreur. Puis-je la corriger ?
+  </div>
+  <div class="faq-a">
+    <p>Oui. Revenez sur la page <strong>Évaluation</strong>, sélectionnez la même classe et la même compétence. Les statuts que vous avez enregistrés aujourd'hui s'affichent déjà. Cliquez sur l'élève pour modifier son niveau, puis cliquez à nouveau sur <strong>Enregistrer</strong>. La nouvelle évaluation remplace l'ancienne pour la date du jour.</p>
+  </div>
+</div>
+
+<div class="faq-item">
+  <div class="faq-q">
+    <span class="faq-q-icon">❓</span>
+    L'application ne s'affiche pas correctement sur mon téléphone. Que faire ?
+  </div>
+  <div class="faq-a">
+    <p>Essayez les solutions suivantes :</p>
+    <ul>
+      <li>Actualisez la page (tirez vers le bas sur téléphone, ou appuyez sur F5 sur ordinateur).</li>
+      <li>Vérifiez votre connexion internet.</li>
+      <li>Essayez avec un autre navigateur (Chrome est recommandé).</li>
+      <li>Videz le cache de votre navigateur.</li>
+    </ul>
+    <p>Si le problème persiste, signalez-le à l'administrateur.</p>
+  </div>
+</div>
+
+<div class="faq-item">
+  <div class="faq-q">
+    <span class="faq-q-icon">❓</span>
+    Puis-je utiliser Compétens sans internet ?
+  </div>
+  <div class="faq-a">
+    <p>Oui, partiellement. Compétens est une <strong>Progressive Web App (PWA)</strong>. Si vous avez déjà chargé l'application au moins une fois avec internet, vous pouvez continuer à consulter les données et à saisir des évaluations en mode hors-ligne. Les données seront synchronisées automatiquement lors de votre prochaine connexion internet.</p>
+  </div>
+</div>
+
+<div class="faq-item">
+  <div class="faq-q">
+    <span class="faq-q-icon">❓</span>
+    Comment installer l'application sur mon téléphone comme une vraie application ?
+  </div>
+  <div class="faq-a">
+    <p>Sur Android avec Chrome : ouvrez l'application dans Chrome, appuyez sur les trois points ⋮ en haut à droite, puis sur « Ajouter à l'écran d'accueil ».</p>
+    <p>Sur iPhone avec Safari : appuyez sur l'icône de partage 🔗 en bas de l'écran, puis sur « Sur l'écran d'accueil ».</p>
+    <p>L'application apparaîtra ensuite comme une icône sur votre téléphone, comme n'importe quelle autre application.</p>
+  </div>
+</div>
+
+<div class="faq-item">
+  <div class="faq-q">
+    <span class="faq-q-icon">❓</span>
+    Je vois des alertes pour des élèves qui ne sont pas dans ma classe. Est-ce normal ?
+  </div>
+  <div class="faq-a">
+    <p>Non, vous ne devriez voir que les élèves de vos propres classes. Si vous constatez des données d'autres classes, signalez-le à l'administrateur. Il pourrait s'agir d'un problème de configuration des droits d'accès.</p>
+  </div>
+</div>
+
+<div class="faq-item">
+  <div class="faq-q">
+    <span class="faq-q-icon">❓</span>
+    Comment changer mon mot de passe ?
+  </div>
+  <div class="faq-a">
+    <p>La réinitialisation du mot de passe se fait via l'administrateur de l'école. Contactez-le et il pourra réinitialiser votre accès depuis le tableau de bord d'administration. Choisissez un mot de passe d'au moins 6 caractères, difficile à deviner.</p>
+  </div>
+</div>
+
+<div class="faq-item">
+  <div class="faq-q">
+    <span class="faq-q-icon">❓</span>
+    Qu'est-ce que le « mode démo » ?
+  </div>
+  <div class="faq-a">
+    <p>Le mode démo vous permet de découvrir toutes les fonctionnalités de l'application avec des données fictives, sans avoir besoin d'un compte. C'est idéal pour se former ou montrer l'application à un collègue. <strong>Attention :</strong> les données saisies en mode démo ne sont pas sauvegardées sur le serveur et seront perdues si vous videz le cache ou changez d'appareil.</p>
+  </div>
+</div>
+
+<div class="faq-item">
+  <div class="faq-q">
+    <span class="faq-q-icon">❓</span>
+    Comment me déconnecter de l'application ?
+  </div>
+  <div class="faq-a">
+    <p>Sur ordinateur, cliquez sur l'icône 🚪 (déconnexion) en bas du menu de gauche. Sur téléphone, ouvrez le menu ☰ en haut à gauche, descendez jusqu'en bas et appuyez sur « Déconnexion ». Vous serez redirigé(e) vers la page de connexion.</p>
+  </div>
+</div>
+
+<div class="faq-item">
+  <div class="faq-q">
+    <span class="faq-q-icon">❓</span>
+    Le taux d'acquisition d'un élève ne semble pas correct. Pourquoi ?
+  </div>
+  <div class="faq-a">
+    <p>Le taux d'acquisition est calculé sur <strong>toutes les évaluations</strong> enregistrées depuis le début de l'année. Si vous venez juste de commencer à évaluer un élève, le taux peut paraître faible car il n'y a pas encore assez de données. Plus vous évaluez régulièrement, plus le taux sera représentatif de la réalité.</p>
+  </div>
+</div>
+
+<!-- ─── Footer ──────────────────────────────────────────────── -->
+<hr class="divider" />
+
+<div class="box box-tip" style="margin-top: 1.5rem;">
+  <div class="box-icon">📞</div>
+  <div class="box-body">
+    <p class="box-title">Besoin d'aide supplémentaire ?</p>
+    <p>Si vous rencontrez un problème non couvert par ce guide, contactez l'administrateur de votre école ou votre directeur pédagogique. Notez la description exacte du problème et, si possible, faites une capture d'écran pour faciliter le diagnostic.</p>
+  </div>
+</div>
+
+<div class="page-footer">
+  <p><strong>Compétens</strong> — Application de suivi des compétences scolaires &nbsp;|&nbsp; Guide du Professeur</p>
+  <p style="margin-top: 0.3rem;">Année scolaire 2025-2026 &nbsp;·&nbsp; Version 1.0 &nbsp;·&nbsp; Tous droits réservés</p>
+</div>
+
+</body>
+</html>
