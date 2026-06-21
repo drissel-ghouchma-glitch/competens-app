@@ -1,32 +1,39 @@
 import { useState } from "react";
-import { useAppStore } from "@/stores/app-store";
+import { useLevels } from "@/hooks/use-levels";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { GraduationCap, Plus, Edit, Archive, ArrowUpRight } from "lucide-react";
+import { GraduationCap, Plus, Edit, Archive, ArrowUpRight, Loader2 } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import type { Level } from "@/types";
 
 export default function LevelsPage() {
-  const levels = useAppStore((s) => s.levels);
-  const addLevel = useAppStore((s) => s.addLevel);
-  const updateLevel = useAppStore((s) => s.updateLevel);
-  const archiveLevel = useAppStore((s) => s.archiveLevel);
+  const { levels, loading, error, addLevel, updateLevel, archiveLevel } = useLevels();
 
   const [open, setOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [editId, setEditId] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
 
-  const handleSubmit = () => {
-    if (editId) {
-      updateLevel(editId, { name, code });
-    } else {
-      addLevel({ name, code, isArchived: false });
+  const handleSubmit = async () => {
+    setSaving(true);
+    setSaveError(null);
+    try {
+      if (editId) {
+        await updateLevel(editId, { name, code });
+      } else {
+        await addLevel({ name, code, isArchived: false });
+      }
+      resetForm();
+    } catch (e: unknown) {
+      setSaveError(e instanceof Error ? e.message : "Erreur lors de l'enregistrement");
+    } finally {
+      setSaving(false);
     }
-    resetForm();
   };
 
   const handleEdit = (l: Level) => {
@@ -41,6 +48,7 @@ export default function LevelsPage() {
     setEditId(null);
     setName("");
     setCode("");
+    setSaveError(null);
   };
 
   const activeLevels = levels.filter((l) => !l.isArchived);
@@ -73,7 +81,9 @@ export default function LevelsPage() {
                 <Label>Nom</Label>
                 <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Cours Préparatoire 1" />
               </div>
-              <Button onClick={handleSubmit} className="w-full" disabled={!name || !code}>
+              {saveError && <p className="text-sm text-destructive">{saveError}</p>}
+              <Button onClick={handleSubmit} className="w-full" disabled={!name || !code || saving}>
+                {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
                 {editId ? "Enregistrer" : "Ajouter"}
               </Button>
             </div>
@@ -81,39 +91,58 @@ export default function LevelsPage() {
         </Dialog>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
-        {activeLevels.map((level) => (
-          <Card key={level.id} className="border-border/50 hover:shadow-md hover:-translate-y-0.5 transition-all group cursor-pointer">
-            <CardContent className="p-4 text-center">
-              <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-3 group-hover:bg-primary/20 transition-colors">
-                <GraduationCap className="w-6 h-6 text-primary" />
-              </div>
-              <h3 className="font-bold text-lg text-foreground font-mono">{level.code}</h3>
-              <p className="text-xs text-muted-foreground mt-1">{level.name}</p>
-              <div className="flex items-center justify-center gap-1 mt-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleEdit(level)}>
-                  <Edit className="w-3.5 h-3.5" />
-                </Button>
-                <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => archiveLevel(level.id)}>
-                  <Archive className="w-3.5 h-3.5" />
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      {archivedLevels.length > 0 && (
-        <div>
-          <h2 className="text-sm font-semibold text-muted-foreground mb-3">Archivés</h2>
-          <div className="flex flex-wrap gap-2">
-            {archivedLevels.map((l) => (
-              <Badge key={l.id} variant="secondary" className="gap-1 cursor-pointer" onClick={() => archiveLevel(l.id)}>
-                {l.code} <ArrowUpRight className="w-3 h-3" />
-              </Badge>
-            ))}
-          </div>
+      {error && (
+        <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+          {error}
         </div>
+      )}
+
+      {loading ? (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+            {activeLevels.map((level) => (
+              <Card key={level.id} className="border-border/50 hover:shadow-md hover:-translate-y-0.5 transition-all group cursor-pointer">
+                <CardContent className="p-4 text-center">
+                  <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-3 group-hover:bg-primary/20 transition-colors">
+                    <GraduationCap className="w-6 h-6 text-primary" />
+                  </div>
+                  <h3 className="font-bold text-lg text-foreground font-mono">{level.code}</h3>
+                  <p className="text-xs text-muted-foreground mt-1">{level.name}</p>
+                  <div className="flex items-center justify-center gap-1 mt-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleEdit(level)}>
+                      <Edit className="w-3.5 h-3.5" />
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => archiveLevel(level.id)}>
+                      <Archive className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+            {activeLevels.length === 0 && (
+              <div className="col-span-full text-center py-10 text-muted-foreground text-sm">
+                Aucun niveau. Commencez par en ajouter un.
+              </div>
+            )}
+          </div>
+
+          {archivedLevels.length > 0 && (
+            <div>
+              <h2 className="text-sm font-semibold text-muted-foreground mb-3">Archivés</h2>
+              <div className="flex flex-wrap gap-2">
+                {archivedLevels.map((l) => (
+                  <Badge key={l.id} variant="secondary" className="gap-1 cursor-pointer" onClick={() => archiveLevel(l.id)}>
+                    {l.code} <ArrowUpRight className="w-3 h-3" />
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
