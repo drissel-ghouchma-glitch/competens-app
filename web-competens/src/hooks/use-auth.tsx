@@ -167,18 +167,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (error) throw new Error(error.message);
 
     if (data.user) {
-      const { error: profileError } = await supabase.from("profiles").insert({
-        id: data.user.id,
-        email,
-        full_name: fullName,
-        role: "professeur",
-        phone: phone ?? null,
-        status: "pending",
-      });
-      if (profileError) throw new Error(profileError.message);
-
-      // Sign out immediately — needs admin approval before first real login
-      await supabase.auth.signOut();
+      try {
+        // upsert handles the case where a DB trigger already created the row
+        // with status:'active' — we forcefully override it to 'pending'
+        const { error: profileError } = await supabase.from("profiles").upsert({
+          id: data.user.id,
+          email,
+          full_name: fullName,
+          role: "professeur",
+          phone: phone ?? null,
+          status: "pending",
+        }, { onConflict: "id" });
+        if (profileError) throw new Error(profileError.message);
+      } finally {
+        // Always sign out — admin must approve before first login
+        await supabase.auth.signOut();
+      }
     }
   }, []);
 
@@ -194,16 +198,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (error) throw new Error(error.message);
 
     if (data.user) {
-      const { error: profileError } = await supabase.from("profiles").insert({
-        id: data.user.id,
-        email,
-        full_name: fullName,
-        role: "parent",
-        phone: phone ?? null,
-        status: "pending",
-      });
-      if (profileError) throw new Error(profileError.message);
-      await supabase.auth.signOut();
+      try {
+        // upsert overrides any trigger-created row that defaulted to 'active'
+        const { error: profileError } = await supabase.from("profiles").upsert({
+          id: data.user.id,
+          email,
+          full_name: fullName,
+          role: "parent",
+          phone: phone ?? null,
+          status: "pending",
+        }, { onConflict: "id" });
+        if (profileError) throw new Error(profileError.message);
+      } finally {
+        // Always sign out — admin must approve before first login
+        await supabase.auth.signOut();
+      }
     }
   }, []);
 
