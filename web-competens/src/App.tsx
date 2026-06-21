@@ -20,6 +20,8 @@ import Evaluation from "./pages/Evaluation";
 import Alerts from "./pages/Alerts";
 import PendingTeachers from "./pages/admin/PendingTeachers";
 import AdminRequests from "./pages/admin/AdminRequests";
+import UserManagement from "./pages/admin/UserManagement";
+import ParentDashboard from "./pages/parent/ParentDashboard";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient({
@@ -51,6 +53,8 @@ const App = () => (
               <Route path="/alerts" element={<Alerts />} />
               <Route path="/admin/pending-teachers" element={<PendingTeachers />} />
               <Route path="/admin/requests" element={<AdminRequests />} />
+              <Route path="/admin/users" element={<UserManagement />} />
+              <Route path="/parent" element={<ParentDashboard />} />
             </Route>
             <Route path="/" element={<Navigate to="/login" replace />} />
             <Route path="*" element={<NotFound />} />

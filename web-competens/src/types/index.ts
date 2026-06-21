@@ -1,4 +1,4 @@
-export type Role = "admin" | "directeur" | "professeur";
+export type Role = "admin" | "directeur" | "professeur" | "parent";
 export type UserStatus = "active" | "pending" | "suspended";
 
 export interface User {
@@ -148,6 +148,13 @@ export interface DashboardStats {
   totalEvaluations: number;
   weeklyActivity: { date: string; count: number }[];
   recentAlerts: Alert[];
+}
+
+export interface ParentStudentLink {
+  id: string;
+  parentId: string;
+  studentId: string;
+  createdAt: string;
 }
 
 export interface ImportRow {

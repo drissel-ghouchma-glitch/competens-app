@@ -14,6 +14,7 @@ function homeRouteForRole(role: Role): string {
   switch (role) {
     case "admin":     return "/admin/pending-teachers";
     case "directeur": return "/dashboard";
+    case "parent":    return "/parent";
     case "professeur":
     default:          return "/evaluation";
   }
@@ -154,7 +155,7 @@ export default function LoginPage() {
           Mode démo — données simulées localement. Aucune connexion réelle requise.
         </p>
         <p className="text-center text-sm text-muted-foreground mt-3">
-          Vous êtes enseignant ?{" "}
+          Enseignant ou parent ?{" "}
           <Link to="/register" className="text-primary font-medium hover:underline">
             Créer un compte
           </Link>

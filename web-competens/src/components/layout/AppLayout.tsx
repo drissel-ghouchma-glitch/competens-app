@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, GraduationCap, Building2, Users, UserCog,
   BookOpen, ClipboardCheck, Bell, Moon, Sun, Menu, X,
-  LogOut, School, UserCheck, ClipboardList,
+  LogOut, School, UserCheck, ClipboardList, Home, ShieldCheck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -27,6 +27,9 @@ const navItems = [
   { to: "/alerts", icon: Bell, label: "Alertes", roles: ["admin", "directeur", "professeur"] },
   { to: "/admin/pending-teachers", icon: UserCheck, label: "Inscriptions", roles: ["admin"] },
   { to: "/admin/requests", icon: ClipboardList, label: "Demandes", roles: ["admin"], badge: true },
+  { to: "/admin/users", icon: ShieldCheck, label: "Utilisateurs", roles: ["admin"] },
+  // Parent
+  { to: "/parent", icon: Home, label: "Mes enfants", roles: ["parent"] },
 ];
 
 const mobileNavItems = [
@@ -35,6 +38,10 @@ const mobileNavItems = [
   { to: "/students", icon: Users, label: "Élèves" },
   { to: "/evaluation", icon: ClipboardCheck, label: "Évaluer" },
   { to: "/alerts", icon: Bell, label: "Alertes" },
+];
+
+const parentMobileNavItems = [
+  { to: "/parent", icon: Home, label: "Enfants" },
 ];
 
 export default function AppLayout() {
@@ -254,7 +261,7 @@ export default function AppLayout() {
       {/* Mobile Bottom Nav */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-card/90 backdrop-blur-xl border-t border-border">
         <div className="flex items-center justify-around h-16 px-2">
-          {mobileNavItems.map((item) => (
+          {(role === "parent" ? parentMobileNavItems : mobileNavItems).map((item) => (
             <NavLink
               key={item.to}
               to={item.to}

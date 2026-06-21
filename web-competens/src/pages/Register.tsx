@@ -5,17 +5,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { GraduationCap, UserPlus, AlertCircle, CheckCircle2 } from "lucide-react";
+import { GraduationCap, UserPlus, AlertCircle, CheckCircle2, Users } from "lucide-react";
+import { cn } from "@/lib/utils";
+
+type RegisterMode = "professeur" | "parent";
 
 export default function RegisterPage() {
-  const { registerTeacher } = useAuth();
+  const { registerTeacher, registerParent } = useAuth();
+  const [mode, setMode] = useState<RegisterMode>("professeur");
   const [form, setForm] = useState({
-    firstName: "",
-    lastName: "",
-    email: "",
-    phone: "",
-    password: "",
-    confirmPassword: "",
+    firstName: "", lastName: "", email: "", phone: "", password: "", confirmPassword: "",
   });
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
@@ -27,25 +26,17 @@ export default function RegisterPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-
-    if (form.password !== form.confirmPassword) {
-      setError("Les mots de passe ne correspondent pas.");
-      return;
-    }
-    if (form.password.length < 6) {
-      setError("Le mot de passe doit contenir au moins 6 caractères.");
-      return;
-    }
-
+    if (form.password !== form.confirmPassword) { setError("Les mots de passe ne correspondent pas."); return; }
+    if (form.password.length < 6) { setError("Le mot de passe doit contenir au moins 6 caractères."); return; }
     setIsLoading(true);
     try {
-      await registerTeacher({
-        email: form.email,
-        password: form.password,
-        firstName: form.firstName,
-        lastName: form.lastName,
+      const payload = {
+        email: form.email, password: form.password,
+        firstName: form.firstName, lastName: form.lastName,
         phone: form.phone || undefined,
-      });
+      };
+      if (mode === "professeur") await registerTeacher(payload);
+      else await registerParent(payload);
       setSuccess(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erreur lors de l'inscription.");
@@ -63,12 +54,10 @@ export default function RegisterPage() {
           </div>
           <h2 className="text-xl font-bold text-foreground">Demande envoyée !</h2>
           <p className="text-muted-foreground text-sm">
-            Votre compte a été créé et est en attente de validation par l'administrateur.
-            Vous recevrez une confirmation dès que votre accès sera activé.
+            Votre compte {mode === "parent" ? "parent" : "enseignant"} a été créé et est en attente de validation
+            par l'administrateur. Vous serez contacté(e) dès que votre accès sera activé.
           </p>
-          <Link to="/login">
-            <Button className="w-full mt-4">Retour à la connexion</Button>
-          </Link>
+          <Link to="/login"><Button className="w-full mt-4">Retour à la connexion</Button></Link>
         </div>
       </div>
     );
@@ -82,17 +71,47 @@ export default function RegisterPage() {
             <GraduationCap className="w-8 h-8 text-primary-foreground" />
           </div>
           <h1 className="text-2xl font-bold text-foreground tracking-tight">Compétens</h1>
-          <p className="text-sm text-muted-foreground mt-1">Inscription enseignant</p>
+          <p className="text-sm text-muted-foreground mt-1">Créer un compte</p>
+        </div>
+
+        {/* Role toggle */}
+        <div className="flex rounded-xl border border-border bg-muted/40 p-1 mb-4 gap-1">
+          <button
+            type="button"
+            onClick={() => setMode("professeur")}
+            className={cn(
+              "flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium transition-all",
+              mode === "professeur"
+                ? "bg-background shadow-sm text-foreground"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <GraduationCap className="w-4 h-4" /> Enseignant
+          </button>
+          <button
+            type="button"
+            onClick={() => setMode("parent")}
+            className={cn(
+              "flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium transition-all",
+              mode === "parent"
+                ? "bg-background shadow-sm text-foreground"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <Users className="w-4 h-4" /> Parent
+          </button>
         </div>
 
         <Card className="shadow-xl border-border/50">
           <CardHeader className="pb-4">
             <CardTitle className="text-lg flex items-center gap-2">
               <UserPlus className="w-5 h-5 text-primary" />
-              Créer un compte enseignant
+              {mode === "parent" ? "Créer un compte parent" : "Créer un compte enseignant"}
             </CardTitle>
             <CardDescription>
-              Votre compte sera activé après validation par l'administrateur.
+              {mode === "parent"
+                ? "Votre compte sera validé par l'administrateur. Vous serez ensuite lié(e) aux dossiers de vos enfants."
+                : "Votre compte sera activé après validation par l'administrateur."}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -102,94 +121,40 @@ export default function RegisterPage() {
                 {error}
               </div>
             )}
-
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-2">
                   <Label htmlFor="firstName">Prénom</Label>
-                  <Input
-                    id="firstName"
-                    placeholder="Prénom"
-                    value={form.firstName}
-                    onChange={set("firstName")}
-                    required
-                    className="h-11"
-                  />
+                  <Input id="firstName" placeholder="Prénom" value={form.firstName} onChange={set("firstName")} required className="h-11" />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="lastName">Nom</Label>
-                  <Input
-                    id="lastName"
-                    placeholder="Nom de famille"
-                    value={form.lastName}
-                    onChange={set("lastName")}
-                    required
-                    className="h-11"
-                  />
+                  <Input id="lastName" placeholder="Nom" value={form.lastName} onChange={set("lastName")} required className="h-11" />
                 </div>
               </div>
-
               <div className="space-y-2">
-                <Label htmlFor="email">Email professionnel</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="votre@ecole.sn"
-                  value={form.email}
-                  onChange={set("email")}
-                  required
-                  className="h-11"
-                />
+                <Label htmlFor="email">Email</Label>
+                <Input id="email" type="email" placeholder="votre@email.com" value={form.email} onChange={set("email")} required className="h-11" />
               </div>
-
               <div className="space-y-2">
                 <Label htmlFor="phone">Téléphone (optionnel)</Label>
-                <Input
-                  id="phone"
-                  type="tel"
-                  placeholder="+221 77 000 00 00"
-                  value={form.phone}
-                  onChange={set("phone")}
-                  className="h-11"
-                />
+                <Input id="phone" type="tel" placeholder="+212 6 00 00 00 00" value={form.phone} onChange={set("phone")} className="h-11" />
               </div>
-
               <div className="space-y-2">
                 <Label htmlFor="password">Mot de passe</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  placeholder="••••••••"
-                  value={form.password}
-                  onChange={set("password")}
-                  required
-                  className="h-11"
-                />
+                <Input id="password" type="password" placeholder="••••••••" value={form.password} onChange={set("password")} required className="h-11" />
               </div>
-
               <div className="space-y-2">
                 <Label htmlFor="confirmPassword">Confirmer le mot de passe</Label>
-                <Input
-                  id="confirmPassword"
-                  type="password"
-                  placeholder="••••••••"
-                  value={form.confirmPassword}
-                  onChange={set("confirmPassword")}
-                  required
-                  className="h-11"
-                />
+                <Input id="confirmPassword" type="password" placeholder="••••••••" value={form.confirmPassword} onChange={set("confirmPassword")} required className="h-11" />
               </div>
-
               <Button type="submit" className="w-full h-11 font-semibold" disabled={isLoading}>
                 {isLoading ? "Envoi en cours..." : "Soumettre ma demande"}
               </Button>
             </form>
-
             <p className="text-center text-sm text-muted-foreground mt-4">
               Déjà un compte ?{" "}
-              <Link to="/login" className="text-primary font-medium hover:underline">
-                Se connecter
-              </Link>
+              <Link to="/login" className="text-primary font-medium hover:underline">Se connecter</Link>
             </p>
           </CardContent>
         </Card>

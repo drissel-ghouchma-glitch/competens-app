@@ -10,6 +10,8 @@ interface RegisterTeacherInput {
   phone?: string;
 }
 
+type RegisterParentInput = RegisterTeacherInput;
+
 interface AuthContextType {
   user: User | null;
   isLoading: boolean;
@@ -17,6 +19,9 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<Role>;
   register: (email: string, password: string, fullName: string, role: Role) => Promise<void>;
   registerTeacher: (input: RegisterTeacherInput) => Promise<void>;
+  registerParent: (input: RegisterParentInput) => Promise<void>;
+  /** Admin: update any user's role or status */
+  adminUpdateProfile: (userId: string, data: { role?: Role; status?: UserStatus; fullName?: string; phone?: string }) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -177,6 +182,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const registerParent = useCallback(async ({ email, password, firstName, lastName, phone }: RegisterParentInput) => {
+    if (!supabase) throw new Error("Service d'authentification indisponible.");
+    const fullName = `${firstName} ${lastName}`.trim();
+
+    const { error, data } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { data: { full_name: fullName, role: "parent" } },
+    });
+    if (error) throw new Error(error.message);
+
+    if (data.user) {
+      const { error: profileError } = await supabase.from("profiles").insert({
+        id: data.user.id,
+        email,
+        full_name: fullName,
+        role: "parent",
+        phone: phone ?? null,
+        status: "pending",
+      });
+      if (profileError) throw new Error(profileError.message);
+      await supabase.auth.signOut();
+    }
+  }, []);
+
+  const adminUpdateProfile = useCallback(async (userId: string, data: { role?: Role; status?: UserStatus; fullName?: string; phone?: string }) => {
+    if (!supabase) throw new Error("Supabase non disponible");
+    const update: Record<string, unknown> = {};
+    if (data.role !== undefined) update.role = data.role;
+    if (data.status !== undefined) update.status = data.status;
+    if (data.fullName !== undefined) update.full_name = data.fullName;
+    if (data.phone !== undefined) update.phone = data.phone;
+    const { error } = await supabase.from("profiles").update(update).eq("id", userId);
+    if (error) throw new Error(error.message);
+  }, []);
+
   const logout = useCallback(async () => {
     if (supabase) {
       const { error } = await supabase.auth.signOut();
@@ -186,7 +227,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, register, registerTeacher, logout }}>
+    <AuthContext.Provider value={{ user, isLoading, login, register, registerTeacher, registerParent, adminUpdateProfile, logout }}>
       {children}
     </AuthContext.Provider>
   );
