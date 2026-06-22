@@ -1,31 +1,36 @@
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
-import { useAppStore } from "@/stores/app-store";
+import { useAlerts } from "@/hooks/use-alerts";
+import { useStudents } from "@/hooks/use-students";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Bell, CheckCheck, ArrowRight, Filter } from "lucide-react";
+import { Bell, CheckCheck, ArrowRight, Loader2, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export default function AlertsPage() {
-  const alerts = useAppStore((s) => s.alerts);
-  const students = useAppStore((s) => s.students);
-  const notifications = useAppStore((s) => s.notifications);
-  const markAlertResolved = useAppStore((s) => s.markAlertResolved);
-  const markNotificationRead = useAppStore((s) => s.markNotificationRead);
+  const { alerts, notifications, loading, error, markAlertResolved, markNotificationRead } = useAlerts();
+  const { students } = useStudents();
 
   const sortedAlerts = useMemo(() =>
     [...alerts].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
     [alerts]
   );
 
-  const unreadNotifications = notifications.filter((n) => !n.read);
-
-  const activeAlerts = sortedAlerts.filter((a) => !a.resolved);
-  const resolvedAlerts = sortedAlerts.filter((a) => a.resolved);
+  const unreadNotifications = useMemo(() => notifications.filter((n) => !n.read), [notifications]);
+  const activeAlerts   = useMemo(() => sortedAlerts.filter((a) => !a.resolved),  [sortedAlerts]);
+  const resolvedAlerts = useMemo(() => sortedAlerts.filter((a) => a.resolved),   [sortedAlerts]);
 
   const criticalCount = activeAlerts.filter((a) => a.level === "critical").length;
-  const warningCount = activeAlerts.filter((a) => a.level === "warning").length;
+  const warningCount  = activeAlerts.filter((a) => a.level === "warning").length;
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -37,6 +42,12 @@ export default function AlertsPage() {
           </p>
         </div>
       </div>
+
+      {error && (
+        <div className="flex items-center gap-2 p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
+          <AlertCircle className="w-4 h-4 shrink-0" /> {error}
+        </div>
+      )}
 
       {/* Summary */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
@@ -173,7 +184,7 @@ export default function AlertsPage() {
                   <span className="font-medium">
                     {student?.firstName} {student?.lastName}
                   </span>
-                  <span className="text-muted-foreground">— {a.cause.slice(0, 60)}...</span>
+                  <span className="text-muted-foreground">— {a.cause.slice(0, 60)}</span>
                   <span className="text-xs text-muted-foreground ml-auto shrink-0">
                     {a.resolvedAt ? new Date(a.resolvedAt).toLocaleDateString("fr-FR") : ""}
                   </span>
