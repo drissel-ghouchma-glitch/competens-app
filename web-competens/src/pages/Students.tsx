@@ -10,20 +10,22 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, Upload, UserPlus, Users, ChevronRight, AlertCircle, Loader2, Info, Send } from "lucide-react";
+import { Search, Upload, UserPlus, Users, ChevronRight, AlertCircle, Loader2, Info, Send, Archive } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import * as XLSX from "xlsx";
 import type { ImportRow } from "@/types";
 import { toast } from "sonner";
 
 export default function StudentsPage() {
-  const { students, classes, loading, error, addStudent, importStudents } = useStudents();
+  const { students, classes, loading, error, addStudent, importStudents, archiveStudent } = useStudents();
   const { submitRequest } = useRequests();
   const { user } = useAuth();
   const isDemo = useDemoStore((s) => s.isDemoMode);
 
-  // Teacher in real mode → request flow; admin/directeur or demo → direct insert
   const isTeacherReal = !isDemo && user?.role === "professeur";
+  const canManage = user?.role === "admin" || user?.role === "directeur";
+
+  const [archiving, setArchiving] = useState<string | null>(null);
 
   const [search, setSearch] = useState("");
   const [classFilter, setClassFilter] = useState("all");
@@ -153,6 +155,19 @@ export default function StudentsPage() {
       setImportError(e instanceof Error ? e.message : "Erreur lors de l'importation");
     } finally {
       setImporting(false);
+    }
+  };
+
+  const handleArchive = async (s: { id: string; firstName: string; lastName: string }) => {
+    if (!window.confirm(`Archiver l'élève "${s.firstName} ${s.lastName}" ? Son historique d'évaluations sera conservé.`)) return;
+    setArchiving(s.id);
+    try {
+      await archiveStudent(s.id);
+      toast.success(`${s.firstName} ${s.lastName} archivé(e).`);
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Erreur lors de l'archivage");
+    } finally {
+      setArchiving(null);
     }
   };
 
@@ -334,22 +349,37 @@ export default function StudentsPage() {
             {filteredStudents.map((s) => {
               const cls = classes.find((c) => c.id === s.classId);
               return (
-                <Link key={s.id} to={`/students/${s.id}`}>
-                  <Card className="border-border/50 hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-pointer group h-full">
-                    <CardContent className="p-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-11 h-11 rounded-xl bg-primary/10 flex items-center justify-center text-primary font-bold text-sm shrink-0">
-                          {s.firstName[0]}{s.lastName[0]}
+                <div key={s.id} className="relative group">
+                  <Link to={`/students/${s.id}`}>
+                    <Card className="border-border/50 hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-pointer h-full">
+                      <CardContent className="p-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-11 h-11 rounded-xl bg-primary/10 flex items-center justify-center text-primary font-bold text-sm shrink-0">
+                            {s.firstName[0]}{s.lastName[0]}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <h3 className="font-semibold text-foreground truncate">{s.firstName} {s.lastName}</h3>
+                            <p className="text-xs text-muted-foreground">{cls?.name ?? "—"}</p>
+                          </div>
+                          <ChevronRight className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 shrink-0" />
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <h3 className="font-semibold text-foreground truncate">{s.firstName} {s.lastName}</h3>
-                          <p className="text-xs text-muted-foreground">{cls?.name ?? "—"}</p>
-                        </div>
-                        <ChevronRight className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 shrink-0" />
-                      </div>
-                    </CardContent>
-                  </Card>
-                </Link>
+                      </CardContent>
+                    </Card>
+                  </Link>
+                  {canManage && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="absolute top-2 right-2 h-7 w-7 z-10 opacity-0 group-hover:opacity-100 text-destructive hover:text-destructive hover:bg-destructive/10"
+                      disabled={archiving === s.id}
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleArchive(s); }}
+                    >
+                      {archiving === s.id
+                        ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        : <Archive className="w-3.5 h-3.5" />}
+                    </Button>
+                  )}
+                </div>
               );
             })}
           </div>

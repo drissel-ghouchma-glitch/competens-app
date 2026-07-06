@@ -4,6 +4,10 @@ import { useAppStore } from "@/stores/app-store";
 import { supabase } from "@/lib/supabase";
 import type { Teacher, Classe } from "@/types";
 
+// No SQL migration needed for teacher archiving: uses the existing profiles.status field.
+// Archiving sets status = 'suspended', which hides the teacher from the active list
+// while keeping all evaluation rows and profile(full_name) joins intact.
+
 function splitFullName(fullName: string): { firstName: string; lastName: string } {
   const parts = (fullName ?? "").trim().split(" ");
   if (parts.length === 1) return { firstName: parts[0], lastName: "" };
@@ -23,6 +27,7 @@ export interface UseTeachersReturn {
     id: string,
     data: { firstName?: string; lastName?: string; phone?: string; assignedClassIds?: string[] }
   ) => Promise<void>;
+  archiveTeacher: (id: string) => Promise<void>;
 }
 
 export function useTeachers(): UseTeachersReturn {
@@ -33,6 +38,7 @@ export function useTeachers(): UseTeachersReturn {
   const storeClasses = useAppStore((s) => s.classes);
   const storeTeacherClassAssignments = useAppStore((s) => s.teacherClassAssignments);
   const storeUpdateTeacher = useAppStore((s) => s.updateTeacher);
+  const storeDeleteTeacher = useAppStore((s) => s.deleteTeacher);
   const storeAssignTeacherToClass = useAppStore((s) => s.assignTeacherToClass);
   const storeUnassignTeacherFromClass = useAppStore((s) => s.unassignTeacherFromClass);
 
@@ -157,6 +163,30 @@ export function useTeachers(): UseTeachersReturn {
     [sbTeachers, fetchFromSupabase]
   );
 
+  // ── Real archive ──────────────────────────────────────────
+
+  // Suspending sets status = 'suspended': hides from active list, blocks login,
+  // but keeps all evaluation rows and profile joins intact for timeline charts.
+  const archiveTeacherReal = useCallback(
+    async (id: string) => {
+      if (!supabase) throw new Error("Supabase non disponible");
+      // Remove class assignments so classes appear unassigned
+      const { error: delErr } = await supabase
+        .from("teacher_class_assignments")
+        .delete()
+        .eq("teacher_id", id);
+      if (delErr) throw new Error(delErr.message);
+      // Suspend the profile
+      const { error: err } = await supabase
+        .from("profiles")
+        .update({ status: "suspended" })
+        .eq("id", id);
+      if (err) throw new Error(err.message);
+      await fetchFromSupabase();
+    },
+    [fetchFromSupabase]
+  );
+
   // ── Demo update ───────────────────────────────────────────
 
   const updateTeacherDemo = useCallback(
@@ -175,6 +205,11 @@ export function useTeachers(): UseTeachersReturn {
     [storeUpdateTeacher, storeTeacherClassAssignments, storeAssignTeacherToClass, storeUnassignTeacherFromClass]
   );
 
+  const archiveTeacherDemo = useCallback(
+    async (id: string) => { storeDeleteTeacher(id); },
+    [storeDeleteTeacher]
+  );
+
   // Build demo assignments map
   const demoAssignmentsMap: Record<string, string[]> = {};
   for (const a of storeTeacherClassAssignments) {
@@ -191,5 +226,6 @@ export function useTeachers(): UseTeachersReturn {
     canAddManually: isDemo,
     refetch: fetchFromSupabase,
     updateTeacher: isDemo ? updateTeacherDemo : updateTeacherReal,
+    archiveTeacher: isDemo ? archiveTeacherDemo : archiveTeacherReal,
   };
 }

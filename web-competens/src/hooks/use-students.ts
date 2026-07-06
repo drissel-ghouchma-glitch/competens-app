@@ -1,3 +1,6 @@
+// SQL migration required before archiveStudent works in real mode:
+//   ALTER TABLE students ADD COLUMN IF NOT EXISTS is_archived BOOLEAN NOT NULL DEFAULT FALSE;
+
 import { useState, useEffect, useCallback } from "react";
 import { useDemoStore } from "@/stores/demo";
 import { useAppStore } from "@/stores/app-store";
@@ -20,15 +23,17 @@ export interface UseStudentsReturn {
   refetch: () => Promise<void>;
   addStudent: (data: AddStudentInput) => Promise<void>;
   importStudents: (rows: ImportRow[]) => Promise<ImportResult>;
-  deleteStudent: (id: string) => Promise<void>;
+  archiveStudent: (id: string) => Promise<void>;
 }
 
+// Counts only non-archived students for the class student_count column.
 async function syncClassStudentCount(classId: string) {
   if (!supabase || !classId) return;
   const { count } = await supabase
     .from("students")
     .select("*", { count: "exact", head: true })
-    .eq("class_id", classId);
+    .eq("class_id", classId)
+    .eq("is_archived", false);
   await supabase
     .from("classes")
     .update({ student_count: count ?? 0 })
@@ -38,7 +43,6 @@ async function syncClassStudentCount(classId: string) {
 export function useStudents(): UseStudentsReturn {
   const isDemo = useDemoStore((s) => s.isDemoMode);
 
-  // Always call store hooks (React rules of hooks)
   const storeStudents = useAppStore((s) => s.students);
   const storeClasses = useAppStore((s) => s.classes);
   const storeAddStudent = useAppStore((s) => s.addStudent);
@@ -56,7 +60,7 @@ export function useStudents(): UseStudentsReturn {
     setError(null);
     try {
       const [studentsRes, classesRes] = await Promise.all([
-        supabase.from("students").select("*").order("last_name"),
+        supabase.from("students").select("*").eq("is_archived", false).order("last_name"),
         supabase.from("classes").select("*").eq("is_archived", false).order("name"),
       ]);
 
@@ -123,7 +127,6 @@ export function useStudents(): UseStudentsReturn {
 
       const result: ImportResult = { succeeded: 0, failed: [] };
 
-      // Insert one by one so a duplicate / bad date doesn't abort the whole batch
       for (const r of rows) {
         const { error: err } = await supabase.from("students").insert({
           first_name: r.firstName,
@@ -142,7 +145,6 @@ export function useStudents(): UseStudentsReturn {
         }
       }
 
-      // Sync student counts for all affected classes
       const classIds = [...new Set(rows.map((r) => r.classId).filter(Boolean))];
       await Promise.all(classIds.map(syncClassStudentCount));
       await fetchFromSupabase();
@@ -151,11 +153,15 @@ export function useStudents(): UseStudentsReturn {
     [fetchFromSupabase]
   );
 
-  const deleteStudentReal = useCallback(
+  // Soft delete: marks as archived so evaluation history is preserved.
+  const archiveStudentReal = useCallback(
     async (id: string) => {
-      if (!supabase) return;
+      if (!supabase) throw new Error("Supabase non disponible");
       const student = sbStudents.find((s) => s.id === id);
-      const { error: err } = await supabase.from("students").delete().eq("id", id);
+      const { error: err } = await supabase
+        .from("students")
+        .update({ is_archived: true })
+        .eq("id", id);
       if (err) throw new Error(err.message);
       if (student?.classId) await syncClassStudentCount(student.classId);
       await fetchFromSupabase();
@@ -163,7 +169,7 @@ export function useStudents(): UseStudentsReturn {
     [sbStudents, fetchFromSupabase]
   );
 
-  // ── Demo CRUD wrappers (async to unify the interface) ────
+  // ── Demo wrappers ────────────────────────────────────────
 
   const addStudentDemo = useCallback(
     async (data: AddStudentInput) => { storeAddStudent(data); },
@@ -178,7 +184,7 @@ export function useStudents(): UseStudentsReturn {
     [storeImportStudents]
   );
 
-  const deleteStudentDemo = useCallback(
+  const archiveStudentDemo = useCallback(
     async (id: string) => { storeDeleteStudent(id); },
     [storeDeleteStudent]
   );
@@ -191,6 +197,6 @@ export function useStudents(): UseStudentsReturn {
     refetch: fetchFromSupabase,
     addStudent: isDemo ? addStudentDemo : addStudentReal,
     importStudents: isDemo ? importStudentsDemo : importStudentsReal,
-    deleteStudent: isDemo ? deleteStudentDemo : deleteStudentReal,
+    archiveStudent: isDemo ? archiveStudentDemo : archiveStudentReal,
   };
 }

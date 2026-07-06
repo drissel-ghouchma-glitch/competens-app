@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { useTeachers } from "@/hooks/use-teachers";
+import { useAuth } from "@/hooks/use-auth";
 import { useAppStore } from "@/stores/app-store";
 import { useDemoStore } from "@/stores/demo";
 import { Card, CardContent } from "@/components/ui/card";
@@ -10,19 +11,23 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
-  UserCog, Plus, Mail, Phone, Edit, Building2, Search, Info, Loader2,
+  UserCog, Plus, Mail, Phone, Edit, Archive, Building2, Search, Info, Loader2,
 } from "lucide-react";
+import { toast } from "sonner";
 import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog";
 import type { Teacher } from "@/types";
 
 export default function TeachersPage() {
-  const { teachers, classes, teacherAssignedClassIds, loading, error, canAddManually, updateTeacher } = useTeachers();
+  const { teachers, classes, teacherAssignedClassIds, loading, error, canAddManually, updateTeacher, archiveTeacher } = useTeachers();
+  const { user } = useAuth();
 
   // Demo-only store actions
   const storeAddTeacher = useAppStore((s) => s.addTeacher);
   const isDemo = useDemoStore((s) => s.isDemoMode);
+
+  const canManage = user?.role === "admin" || user?.role === "directeur";
 
   const [open, setOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
@@ -34,6 +39,20 @@ export default function TeachersPage() {
   const [search, setSearch] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
+  const [archiving, setArchiving] = useState<string | null>(null);
+
+  const handleArchive = async (t: Teacher) => {
+    if (!window.confirm(`Archiver le professeur "${t.firstName} ${t.lastName}" ? Son compte sera désactivé mais son historique d'évaluations sera conservé.`)) return;
+    setArchiving(t.id);
+    try {
+      await archiveTeacher(t.id);
+      toast.success(`${t.firstName} ${t.lastName} archivé(e).`);
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Erreur lors de l'archivage");
+    } finally {
+      setArchiving(null);
+    }
+  };
 
   const filteredTeachers = useMemo(() => {
     if (!search) return teachers;
@@ -207,14 +226,29 @@ export default function TeachersPage() {
                         )}
                       </div>
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 opacity-0 group-hover:opacity-100"
-                      onClick={() => handleEdit(t)}
-                    >
-                      <Edit className="w-3.5 h-3.5" />
-                    </Button>
+                    <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        onClick={() => handleEdit(t)}
+                      >
+                        <Edit className="w-3.5 h-3.5" />
+                      </Button>
+                      {canManage && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
+                          disabled={archiving === t.id}
+                          onClick={() => handleArchive(t)}
+                        >
+                          {archiving === t.id
+                            ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            : <Archive className="w-3.5 h-3.5" />}
+                        </Button>
+                      )}
+                    </div>
                   </div>
 
                   {assignedClasses.length > 0 ? (
