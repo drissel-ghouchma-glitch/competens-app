@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/lib/supabase";
 import { statusToScore, scoreToStatus, buildTimeline, type TimelinePoint } from "@/lib/eval-utils";
-import type { Student, Competency, Alert, EvaluationStatus } from "@/types";
+import type { Student, Competency, Alert, EvaluationStatus, AttendanceStatus } from "@/types";
 
 export type { TimelinePoint };
 
@@ -47,6 +47,10 @@ export interface ParentChild extends Student {
   stats: ParentChildStat[];
   alerts: Alert[];
   timeline: TimelinePoint[];
+  /** Attendance status for today — null if not recorded yet */
+  todayAttendance: AttendanceStatus | null;
+  /** Dates when the child was absent, most recent first */
+  absenceHistory: string[];
 }
 
 export interface UseParentReturn {
@@ -85,8 +89,10 @@ export function useParent(): UseParentReturn {
         return;
       }
 
-      // 2. Fetch everything in parallel — evaluations now include teacher names
-      const [studentsRes, compRes, evalsRes, alertsRes] = await Promise.all([
+      const todayDate = new Date().toISOString().split("T")[0];
+
+      // 2. Fetch everything in parallel — evaluations include teacher names, plus attendance
+      const [studentsRes, compRes, evalsRes, alertsRes, attRes] = await Promise.all([
         supabase.from("students").select("*").in("id", studentIds),
         supabase.from("competencies").select("*").order("order"),
         supabase
@@ -98,6 +104,11 @@ export function useParent(): UseParentReturn {
           .select("*")
           .in("student_id", studentIds)
           .eq("resolved", false),
+        supabase
+          .from("attendance")
+          .select("student_id, date, status")
+          .in("student_id", studentIds)
+          .order("date", { ascending: false }),
       ]);
 
       if (studentsRes.error) throw studentsRes.error;
@@ -124,6 +135,18 @@ export function useParent(): UseParentReturn {
         date: e.date,
       }));
 
+      // Build attendance maps
+      const todayAttMap = new Map<string, AttendanceStatus>();
+      const absenceMap  = new Map<string, string[]>();
+      for (const a of (attRes.data ?? [])) {
+        if (a.date === todayDate) todayAttMap.set(a.student_id, a.status as AttendanceStatus);
+        if (a.status === "absent") {
+          const list = absenceMap.get(a.student_id) ?? [];
+          list.push(a.date);
+          absenceMap.set(a.student_id, list);
+        }
+      }
+
       const alertsMap = new Map<string, Alert[]>();
       for (const a of (alertsRes.data ?? [])) {
         const alert: Alert = {
@@ -141,6 +164,8 @@ export function useParent(): UseParentReturn {
         stats: computeStats(evals, comps, s.id),
         alerts: alertsMap.get(s.id) ?? [],
         timeline: buildTimeline(evals.filter((e) => e.studentId === s.id)),
+        todayAttendance: todayAttMap.get(s.id) ?? null,
+        absenceHistory: absenceMap.get(s.id) ?? [],
       }));
 
       setCompetencies(comps);

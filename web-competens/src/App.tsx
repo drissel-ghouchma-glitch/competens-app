@@ -18,6 +18,7 @@ import Teachers from "./pages/Teachers";
 import Competencies from "./pages/Competencies";
 import Evaluation from "./pages/Evaluation";
 import Alerts from "./pages/Alerts";
+import Attendance from "./pages/Attendance";
 import PendingTeachers from "./pages/admin/PendingTeachers";
 import AdminRequests from "./pages/admin/AdminRequests";
 import UserManagement from "./pages/admin/UserManagement";
@@ -50,6 +51,7 @@ const App = () => (
               <Route path="/teachers" element={<Teachers />} />
               <Route path="/competencies" element={<Competencies />} />
               <Route path="/evaluation" element={<Evaluation />} />
+              <Route path="/attendance" element={<Attendance />} />
               <Route path="/alerts" element={<Alerts />} />
               <Route path="/admin/pending-teachers" element={<PendingTeachers />} />
               <Route path="/admin/requests" element={<AdminRequests />} />

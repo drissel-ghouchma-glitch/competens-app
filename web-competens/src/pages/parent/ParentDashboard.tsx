@@ -6,7 +6,7 @@ import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   GraduationCap, User, Calendar, Bell, TrendingUp,
-  CheckCircle, Clock, XCircle, Loader2, Users,
+  CheckCircle, Clock, XCircle, Loader2, Users, CalendarCheck,
 } from "lucide-react";
 import {
   ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar,
@@ -100,6 +100,74 @@ function TimelineChart({ timeline }: { timeline: TimelinePoint[] }) {
           <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm inline-block" style={{ background: "hsl(38 92% 50%)" }} /> En cours</span>
           <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm inline-block" style={{ background: "hsl(4 77% 55%)" }} /> Non acquis</span>
         </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ── Attendance section ─────────────────────────────────────────
+
+function AttendanceSummary({ todayAttendance, absenceHistory }: {
+  todayAttendance: string | null;
+  absenceHistory: string[];
+}) {
+  const isPresent  = todayAttendance === "present";
+  const isAbsent   = todayAttendance === "absent";
+  const isUnknown  = todayAttendance === null;
+
+  return (
+    <Card className="border-border/50">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base font-semibold flex items-center gap-2">
+          <CalendarCheck className="w-4 h-4 text-primary" />
+          Présence aujourd'hui
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {/* Today's status badge */}
+        <div className={`flex items-center gap-3 px-4 py-3 rounded-xl border ${
+          isPresent ? "bg-green-500/8 border-green-500/25" :
+          isAbsent  ? "bg-red-500/8 border-red-500/25" :
+                      "bg-muted/30 border-border"
+        }`}>
+          {isPresent && <CheckCircle className="w-6 h-6 text-green-500 shrink-0" />}
+          {isAbsent  && <XCircle     className="w-6 h-6 text-red-500   shrink-0" />}
+          {isUnknown && <Clock       className="w-6 h-6 text-muted-foreground shrink-0" />}
+          <div>
+            <p className={`font-semibold text-sm ${
+              isPresent ? "text-green-700 dark:text-green-400" :
+              isAbsent  ? "text-red-700 dark:text-red-400" :
+                          "text-muted-foreground"
+            }`}>
+              {isPresent ? "Présent(e)" : isAbsent ? "Absent(e)" : "Non enregistré"}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {new Date().toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" })}
+            </p>
+          </div>
+        </div>
+
+        {/* Absence history */}
+        {absenceHistory.length > 0 && (
+          <div>
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+              Absences récentes ({absenceHistory.length})
+            </p>
+            <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+              {absenceHistory.slice(0, 15).map((date) => (
+                <div key={date} className="flex items-center gap-2 text-sm">
+                  <XCircle className="w-3.5 h-3.5 text-red-500 shrink-0" />
+                  <span className="text-muted-foreground">
+                    {new Date(date + "T00:00:00").toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "long", year: "numeric" })}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {absenceHistory.length === 0 && todayAttendance !== null && (
+          <p className="text-xs text-muted-foreground text-center py-1">Aucune absence enregistrée.</p>
+        )}
       </CardContent>
     </Card>
   );
@@ -240,6 +308,12 @@ function ChildAnalytics({ child }: { child: ParentChild }) {
 
       {/* Timeline */}
       <TimelineChart timeline={child.timeline} />
+
+      {/* Attendance */}
+      <AttendanceSummary
+        todayAttendance={child.todayAttendance}
+        absenceHistory={child.absenceHistory}
+      />
     </div>
   );
 }

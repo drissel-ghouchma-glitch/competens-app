@@ -4,6 +4,7 @@ import type {
   SchoolYear, Level, Classe, Student, Teacher,
   Competency, Evaluation, EvaluationStatus,
   Alert, Notification, TeacherClassAssignment, DailyEvaluationInput,
+  AttendanceRecord, DailyAttendanceInput, AttendanceStatus,
 } from "@/types";
 import { generateDemoData } from "./seed-data";
 
@@ -32,6 +33,7 @@ interface AppStore {
   alerts: Alert[];
   notifications: Notification[];
   teacherClassAssignments: TeacherClassAssignment[];
+  attendance: AttendanceRecord[];
 
   initDemoData: () => void;
 
@@ -65,6 +67,7 @@ interface AppStore {
   deleteCompetency: (id: string) => void;
 
   saveDailyEvaluation: (classId: string, competencyId: string, evaluations: DailyEvaluationInput[]) => void;
+  saveDemoAttendance: (classId: string, date: string, inputs: DailyAttendanceInput[], teacherId: string) => void;
   markAlertResolved: (id: string) => void;
   markNotificationRead: (id: string) => void;
 
@@ -88,6 +91,7 @@ export const useAppStore = create<AppStore>()(
       alerts: [],
       notifications: [],
       teacherClassAssignments: [],
+      attendance: [],
 
       initDemoData() {
         if (get().initialized) return;
@@ -232,6 +236,23 @@ export const useAppStore = create<AppStore>()(
             return match ? { ...e, status: match.status } : e;
           });
           return { evaluations: [...updated, ...newEvals] };
+        });
+      },
+      saveDemoAttendance(classId, date, inputs, teacherId) {
+        set((s) => {
+          const next = s.attendance.filter(
+            (a) => !(a.classId === classId && a.date === date && inputs.some((i) => i.studentId === a.studentId))
+          );
+          const newRecords: AttendanceRecord[] = inputs.map((i) => ({
+            id: generateUUID(),
+            studentId: i.studentId,
+            classId,
+            teacherId,
+            date,
+            status: i.status as AttendanceStatus,
+            createdAt: new Date().toISOString(),
+          }));
+          return { attendance: [...next, ...newRecords] };
         });
       },
       markAlertResolved(id) {

@@ -157,6 +157,23 @@ export interface ParentStudentLink {
   createdAt: string;
 }
 
+export type AttendanceStatus = "present" | "absent";
+
+export interface AttendanceRecord {
+  id: string;
+  studentId: string;
+  classId: string;
+  teacherId: string;
+  date: string; // YYYY-MM-DD
+  status: AttendanceStatus;
+  createdAt: string;
+}
+
+export interface DailyAttendanceInput {
+  studentId: string;
+  status: AttendanceStatus;
+}
+
 export interface ImportRow {
   Nom: string;
   Prénom: string;

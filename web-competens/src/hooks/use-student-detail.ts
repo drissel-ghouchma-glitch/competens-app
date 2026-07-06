@@ -4,7 +4,7 @@ import { useAppStore } from "@/stores/app-store";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/lib/supabase";
 import { statusToScore, scoreToStatus, buildTimeline, type TimelinePoint } from "@/lib/eval-utils";
-import type { Student, Classe, Level, Competency, Alert, EvaluationStatus } from "@/types";
+import type { Student, Classe, Level, Competency, Alert, EvaluationStatus, AttendanceRecord, AttendanceStatus } from "@/types";
 
 export type { TimelinePoint };
 
@@ -59,6 +59,8 @@ export interface UseStudentDetailReturn {
   alerts: Alert[];
   /** Chronological evolution — for admin/directeur and parents */
   timeline: TimelinePoint[];
+  /** Attendance history for this student, most recent first */
+  attendanceHistory: AttendanceRecord[];
   /** Classes list for the edit dropdown (admin only) */
   classes: Classe[];
   loading: boolean;
@@ -80,6 +82,7 @@ export function useStudentDetail(studentId: string | undefined): UseStudentDetai
   const storeEvaluations = useAppStore((s) => s.evaluations);
   const storeTeachers = useAppStore((s) => s.teachers);
   const storeAlerts = useAppStore((s) => s.alerts);
+  const storeAttendance = useAppStore((s) => s.attendance);
   const storeUpdateStudent = useAppStore((s) => s.updateStudent);
 
   const demoStudent = useMemo(
@@ -132,6 +135,10 @@ export function useStudentDetail(studentId: string | undefined): UseStudentDetai
     () => studentId ? buildTimeline(demoRawEvals.filter((e) => e.studentId === studentId)) : [],
     [demoRawEvals, studentId]
   );
+  const demoAttendanceHistory = useMemo(
+    () => storeAttendance.filter((a) => a.studentId === studentId).sort((a, b) => b.date.localeCompare(a.date)),
+    [storeAttendance, studentId]
+  );
 
   // ── Supabase state ───────────────────────────────────────
   const [sbStudent, setSbStudent] = useState<Student | null>(null);
@@ -142,6 +149,7 @@ export function useStudentDetail(studentId: string | undefined): UseStudentDetai
   const [sbClasses, setSbClasses] = useState<Classe[]>([]);
   const [sbMyEvals, setSbMyEvals] = useState<RawEval[]>([]);
   const [sbAllEvals, setSbAllEvals] = useState<RawEval[]>([]);
+  const [sbAttendanceHistory, setSbAttendanceHistory] = useState<AttendanceRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -194,11 +202,12 @@ export function useStudentDetail(studentId: string | undefined): UseStudentDetai
       };
       setSbStudent(student);
 
-      // 2. Classes + competencies + alerts
-      const [classesRes, compRes, alertsRes] = await Promise.all([
+      // 2. Classes + competencies + alerts + attendance
+      const [classesRes, compRes, alertsRes, attRes] = await Promise.all([
         supabase.from("classes").select("*, levels(*)").eq("is_archived", false).order("name"),
         supabase.from("competencies").select("*").order("order"),
         supabase.from("alerts").select("*").eq("student_id", studentId).order("created_at", { ascending: false }),
+        supabase.from("attendance").select("*").eq("student_id", studentId).order("date", { ascending: false }),
       ]);
 
       if (classesRes.error) throw classesRes.error;
@@ -231,6 +240,12 @@ export function useStudentDetail(studentId: string | undefined): UseStudentDetai
         resolvedAt: a.resolved_at ?? undefined, createdAt: a.created_at,
       }));
       setSbAlerts(alerts);
+
+      setSbAttendanceHistory((attRes.data ?? []).map((a) => ({
+        id: a.id, studentId: a.student_id, classId: a.class_id,
+        teacherId: a.teacher_id ?? "", date: a.date,
+        status: a.status as AttendanceStatus, createdAt: a.created_at,
+      })));
 
       // 3. Evaluations — always fetch all for timeline; filter by teacher for myStats
       const evalsBase = supabase
@@ -299,6 +314,7 @@ export function useStudentDetail(studentId: string | undefined): UseStudentDetai
     globalStats: isDemo ? demoGlobalStats : sbGlobalStats,
     alerts: isDemo ? demoAlerts : sbAlerts,
     timeline: isDemo ? demoTimeline : sbTimeline,
+    attendanceHistory: isDemo ? demoAttendanceHistory : sbAttendanceHistory,
     classes: isDemo ? storeClasses : sbClasses,
     loading,
     error,

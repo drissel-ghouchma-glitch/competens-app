@@ -12,13 +12,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   Calendar, User, GraduationCap, TrendingUp, Bell,
   CheckCircle, Clock, XCircle, Edit, Save, X, Loader2,
-  BarChart2, Eye,
+  BarChart2, Eye, CalendarCheck,
 } from "lucide-react";
 import {
   ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar,
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell,
 } from "recharts";
 import type { CompetencyStat, TimelinePoint } from "@/hooks/use-student-detail";
+import type { AttendanceRecord } from "@/types";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -219,6 +220,55 @@ function SkillGrid({ stats }: { stats: CompetencyStat[] }) {
   );
 }
 
+// ── Attendance History ────────────────────────────────────────────────────────
+
+function AttendanceHistoryCard({ history }: { history: AttendanceRecord[] }) {
+  if (history.length === 0) return null;
+  const absences = history.filter((r) => r.status === "absent");
+  return (
+    <Card className="border-border/50">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base font-semibold flex items-center gap-2">
+          <CalendarCheck className="w-4 h-4 text-primary" />
+          Historique de présence
+          {absences.length > 0 && (
+            <Badge className="ml-1 bg-red-500/10 text-red-600 border-red-500/20 text-xs">
+              {absences.length} absence{absences.length > 1 ? "s" : ""}
+            </Badge>
+          )}
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="divide-y divide-border">
+          {history.slice(0, 30).map((r) => {
+            const isPresent = r.status === "present";
+            const dateLabel = new Date(r.date + "T00:00:00").toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "long", year: "numeric" });
+            return (
+              <div key={r.id} className="flex items-center justify-between py-2.5">
+                <span className="text-sm text-muted-foreground">{dateLabel}</span>
+                <Badge
+                  className={isPresent
+                    ? "bg-green-500/10 text-green-700 border-green-500/20"
+                    : "bg-red-500/10 text-red-700 border-red-500/20"}
+                >
+                  {isPresent
+                    ? <><CheckCircle className="w-3 h-3 mr-1 inline" />Présent(e)</>
+                    : <><XCircle className="w-3 h-3 mr-1 inline" />Absent(e)</>}
+                </Badge>
+              </div>
+            );
+          })}
+        </div>
+        {history.length > 30 && (
+          <p className="text-xs text-muted-foreground mt-3 text-center">
+            Affichage des 30 derniers enregistrements sur {history.length}.
+          </p>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function StudentDetailPage() {
@@ -228,7 +278,7 @@ export default function StudentDetailPage() {
 
   const {
     student, classe, level, competencies,
-    myStats, globalStats, alerts, timeline, classes,
+    myStats, globalStats, alerts, timeline, attendanceHistory, classes,
     loading, error, updateStudent,
   } = useStudentDetail(id);
 
@@ -501,6 +551,8 @@ export default function StudentDetailPage() {
       <SkillGrid stats={displayStats} />
 
       <TimelineChart timeline={timeline} />
+
+      <AttendanceHistoryCard history={attendanceHistory} />
     </div>
   );
 }
