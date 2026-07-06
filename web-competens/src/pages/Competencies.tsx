@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { BookOpen, Plus, Edit, Lightbulb, ChevronDown, ChevronUp, Search, Loader2, AlertCircle, Info, Send } from "lucide-react";
+import { BookOpen, Plus, Edit, Trash2, Lightbulb, ChevronDown, ChevronUp, Search, Loader2, AlertCircle, Info, Send } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
@@ -16,11 +16,12 @@ import { toast } from "sonner";
 import type { Competency } from "@/types";
 
 export default function CompetenciesPage() {
-  const { competencies, loading, error, addCompetency, updateCompetency } = useCompetencies();
+  const { competencies, loading, error, addCompetency, updateCompetency, deleteCompetency } = useCompetencies();
   const { submitRequest } = useRequests();
   const { user } = useAuth();
   const isDemo = useDemoStore((s) => s.isDemoMode);
   const isTeacherReal = !isDemo && user?.role === "professeur";
+  const canDelete = user?.role === "admin" || user?.role === "directeur";
 
   const [open, setOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
@@ -32,6 +33,7 @@ export default function CompetenciesPage() {
   const [search, setSearch] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
+  const [deleting, setDeleting] = useState<string | null>(null);
 
   const sorted = useMemo(() => {
     let list = [...competencies].sort((a, b) => a.order - b.order);
@@ -94,6 +96,19 @@ export default function CompetenciesPage() {
 
   const toggleExpand = (id: string) => {
     setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  const handleDelete = async (c: Competency) => {
+    if (!window.confirm(`Supprimer la compétence "${c.code} — ${c.title}" ? Cette action est irréversible.`)) return;
+    setDeleting(c.id);
+    try {
+      await deleteCompetency(c.id);
+      toast.success(`Compétence "${c.code}" supprimée.`);
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Erreur lors de la suppression");
+    } finally {
+      setDeleting(null);
+    }
   };
 
   return (
@@ -220,6 +235,19 @@ export default function CompetenciesPage() {
                   >
                     <Edit className="w-4 h-4" />
                   </Button>
+                  {canDelete && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                      disabled={deleting === c.id}
+                      onClick={(e) => { e.stopPropagation(); handleDelete(c); }}
+                    >
+                      {deleting === c.id
+                        ? <Loader2 className="w-4 h-4 animate-spin" />
+                        : <Trash2 className="w-4 h-4" />}
+                    </Button>
+                  )}
                   {expanded[c.id] ? (
                     <ChevronUp className="w-5 h-5 text-muted-foreground" />
                   ) : (

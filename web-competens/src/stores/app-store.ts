@@ -62,6 +62,7 @@ interface AppStore {
 
   addCompetency: (c: Omit<Competency, "id" | "createdAt">) => void;
   updateCompetency: (id: string, data: Partial<Competency>) => void;
+  deleteCompetency: (id: string) => void;
 
   saveDailyEvaluation: (classId: string, competencyId: string, evaluations: DailyEvaluationInput[]) => void;
   markAlertResolved: (id: string) => void;
@@ -198,6 +199,12 @@ export const useAppStore = create<AppStore>()(
       updateCompetency(id, data) {
         set((s) => ({ competencies: s.competencies.map((c) => c.id === id ? { ...c, ...data } : c) }));
       },
+      deleteCompetency(id) {
+        set((s) => ({
+          competencies: s.competencies.filter((c) => c.id !== id),
+          evaluations: s.evaluations.filter((e) => e.competencyId !== id),
+        }));
+      },
 
       saveDailyEvaluation(classId, competencyId, evals) {
         const now = new Date().toISOString();
@@ -238,18 +245,17 @@ export const useAppStore = create<AppStore>()(
         const { evaluations, competencies } = get();
         const studentEvals = evaluations.filter((e) => e.studentId === studentId);
         return competencies.map((comp) => {
-          const compEvals = studentEvals.filter((e) => e.competencyId === comp.id);
-          const total = compEvals.length;
-          const acquired = compEvals.filter((e) => e.status === "acquis").length;
-          const last = compEvals.length > 0 ? compEvals[compEvals.length - 1].status : "non_acquis";
-          return {
-            competencyId: comp.id,
-            competencyCode: comp.code,
-            competencyTitle: comp.title,
-            acquisitionRate: total > 0 ? Math.round((acquired / total) * 100) : 0,
-            totalEvaluations: total,
-            lastStatus: last,
-          };
+          const ce = studentEvals.filter((e) => e.competencyId === comp.id);
+          if (ce.length === 0) {
+            return { competencyId: comp.id, competencyCode: comp.code, competencyTitle: comp.title, acquisitionRate: 100, totalEvaluations: 0, lastStatus: "acquis" as EvaluationStatus };
+          }
+          const avg = ce.reduce((sum, e) => {
+            const score = e.status === "acquis" ? 100 : e.status === "en_cours" ? 70 : 25;
+            return sum + score;
+          }, 0) / ce.length;
+          const rate = Math.round(avg);
+          const lastStatus: EvaluationStatus = rate > 90 ? "acquis" : rate >= 50 ? "en_cours" : "non_acquis";
+          return { competencyId: comp.id, competencyCode: comp.code, competencyTitle: comp.title, acquisitionRate: rate, totalEvaluations: ce.length, lastStatus };
         });
       },
     }),

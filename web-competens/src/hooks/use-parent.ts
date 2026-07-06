@@ -1,7 +1,10 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/lib/supabase";
+import { statusToScore, scoreToStatus, buildTimeline, type TimelinePoint } from "@/lib/eval-utils";
 import type { Student, Competency, Alert, EvaluationStatus } from "@/types";
+
+export type { TimelinePoint };
 
 export interface ParentChildStat {
   competencyId: string;
@@ -15,6 +18,7 @@ export interface ParentChildStat {
 interface RawEval {
   studentId: string;
   competencyId: string;
+  teacherName: string;
   status: EvaluationStatus;
   date: string;
 }
@@ -23,17 +27,18 @@ function computeStats(evals: RawEval[], competencies: Competency[], studentId: s
   const studentEvals = evals.filter((e) => e.studentId === studentId);
   return competencies.map((comp) => {
     const ce = studentEvals.filter((e) => e.competencyId === comp.id);
-    const total = ce.length;
-    const acquired = ce.filter((e) => e.status === "acquis").length;
-    const sorted = [...ce].sort((a, b) => a.date.localeCompare(b.date));
-    const last: EvaluationStatus = sorted.length > 0 ? sorted[sorted.length - 1].status : "non_acquis";
+    if (ce.length === 0) {
+      return { competencyId: comp.id, competencyCode: comp.code, competencyTitle: comp.title, acquisitionRate: 100, totalEvaluations: 0, lastStatus: "acquis" as EvaluationStatus };
+    }
+    const avg = ce.reduce((sum, e) => sum + statusToScore(e.status), 0) / ce.length;
+    const rate = Math.round(avg);
     return {
       competencyId: comp.id,
       competencyCode: comp.code,
       competencyTitle: comp.title,
-      acquisitionRate: total > 0 ? Math.round((acquired / total) * 100) : 0,
-      totalEvaluations: total,
-      lastStatus: last,
+      acquisitionRate: rate,
+      totalEvaluations: ce.length,
+      lastStatus: scoreToStatus(rate),
     };
   });
 }
@@ -41,6 +46,7 @@ function computeStats(evals: RawEval[], competencies: Competency[], studentId: s
 export interface ParentChild extends Student {
   stats: ParentChildStat[];
   alerts: Alert[];
+  timeline: TimelinePoint[];
 }
 
 export interface UseParentReturn {
@@ -56,7 +62,6 @@ export function useParent(): UseParentReturn {
 
   const [children, setChildren] = useState<ParentChild[]>([]);
   const [competencies, setCompetencies] = useState<Competency[]>([]);
-  const [allEvals, setAllEvals] = useState<RawEval[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -80,13 +85,13 @@ export function useParent(): UseParentReturn {
         return;
       }
 
-      // 2. Fetch students, competencies, evaluations, alerts in parallel
+      // 2. Fetch everything in parallel — evaluations now include teacher names
       const [studentsRes, compRes, evalsRes, alertsRes] = await Promise.all([
         supabase.from("students").select("*").in("id", studentIds),
         supabase.from("competencies").select("*").order("order"),
         supabase
           .from("evaluations")
-          .select("student_id, competency_id, status, date")
+          .select("student_id, competency_id, status, date, profiles(full_name)")
           .in("student_id", studentIds),
         supabase
           .from("alerts")
@@ -99,13 +104,9 @@ export function useParent(): UseParentReturn {
       if (compRes.error) throw compRes.error;
 
       const students: Student[] = (studentsRes.data ?? []).map((s) => ({
-        id: s.id,
-        firstName: s.first_name,
-        lastName: s.last_name,
-        birthDate: s.birth_date ?? "",
-        gender: (s.gender ?? "M") as "M" | "F",
-        classId: s.class_id ?? "",
-        photoUrl: s.photo_url ?? undefined,
+        id: s.id, firstName: s.first_name, lastName: s.last_name,
+        birthDate: s.birth_date ?? "", gender: (s.gender ?? "M") as "M" | "F",
+        classId: s.class_id ?? "", photoUrl: s.photo_url ?? undefined,
         createdAt: s.created_at,
       }));
 
@@ -118,6 +119,7 @@ export function useParent(): UseParentReturn {
       const evals: RawEval[] = (evalsRes.data ?? []).map((e) => ({
         studentId: e.student_id,
         competencyId: e.competency_id,
+        teacherName: (e.profiles as { full_name?: string } | null)?.full_name ?? "",
         status: e.status as EvaluationStatus,
         date: e.date,
       }));
@@ -138,9 +140,9 @@ export function useParent(): UseParentReturn {
         ...s,
         stats: computeStats(evals, comps, s.id),
         alerts: alertsMap.get(s.id) ?? [],
+        timeline: buildTimeline(evals.filter((e) => e.studentId === s.id)),
       }));
 
-      setAllEvals(evals);
       setCompetencies(comps);
       setChildren(enriched);
     } catch (e: unknown) {

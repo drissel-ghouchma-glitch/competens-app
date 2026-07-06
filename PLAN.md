@@ -1,4 +1,19 @@
 # Compétens – Application scolaire PWA de gestion des compétences
+alter policy "competencies: admin write"
+
+
+on "public"."competencies"
+
+
+to public
+
+
+using (
+
+7
+   (current_user_role() = 'admin'::text)
+
+);
 
 ## Fonctionnalités du MVP
 

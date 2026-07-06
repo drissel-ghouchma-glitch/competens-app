@@ -9,9 +9,10 @@ import {
   CheckCircle, Clock, XCircle, Loader2, Users,
 } from "lucide-react";
 import {
-  ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis,
-  PolarRadiusAxis, Radar,
+  ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell,
 } from "recharts";
+import type { TimelinePoint } from "@/hooks/use-parent";
 
 // ── Helpers ────────────────────────────────────────────────────
 
@@ -35,6 +36,73 @@ function acqColor(rate: number) {
   if (rate >= 70) return "hsl(122 39% 49% / 0.15)";
   if (rate >= 40) return "hsl(25 100% 62% / 0.15)";
   return "hsl(4 77% 55% / 0.15)";
+}
+
+// ── Timeline BarChart (shared helper) ─────────────────────────
+
+function barColor(rate: number) {
+  if (rate > 90) return "hsl(122 39% 49%)";
+  if (rate >= 50) return "hsl(38 92% 50%)";
+  return "hsl(4 77% 55%)";
+}
+
+function TimelineTooltipContent({ active, payload }: { active?: boolean; payload?: Array<{ payload: TimelinePoint }> }) {
+  if (!active || !payload?.length) return null;
+  const d = payload[0].payload;
+  const dateLabel = new Date(d.date + "T00:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
+  return (
+    <div className="rounded-xl border bg-popover shadow-lg p-3 text-sm min-w-[160px]">
+      <p className="font-semibold text-foreground mb-1">{dateLabel}</p>
+      <p className="font-bold" style={{ color: barColor(d.rate) }}>{d.rate}%</p>
+      <p className="text-xs text-muted-foreground mt-0.5">{d.count} évaluation(s)</p>
+      {d.teachers.length > 0 && (
+        <div className="mt-2 pt-2 border-t border-border">
+          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1">Enseignant(s)</p>
+          {d.teachers.map((t) => <p key={t} className="text-xs text-foreground">{t}</p>)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TimelineChart({ timeline }: { timeline: TimelinePoint[] }) {
+  if (timeline.length === 0) return null;
+  const data = timeline.map((p) => ({
+    ...p,
+    label: new Date(p.date + "T00:00:00").toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" }),
+  }));
+  return (
+    <Card className="border-border/50">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base font-semibold flex items-center gap-2">
+          <TrendingUp className="w-4 h-4 text-primary" />
+          Évolution temporelle
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="h-[220px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={data} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+              <XAxis dataKey="label" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
+              <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} unit="%" />
+              <Tooltip content={<TimelineTooltipContent />} />
+              <Bar dataKey="rate" radius={[4, 4, 0, 0]}>
+                {data.map((entry, i) => (
+                  <Cell key={i} fill={barColor(entry.rate)} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+        <div className="flex items-center gap-4 mt-3 text-xs text-muted-foreground justify-center flex-wrap">
+          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm inline-block" style={{ background: "hsl(122 39% 49%)" }} /> Acquis</span>
+          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm inline-block" style={{ background: "hsl(38 92% 50%)" }} /> En cours</span>
+          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm inline-block" style={{ background: "hsl(4 77% 55%)" }} /> Non acquis</span>
+        </div>
+      </CardContent>
+    </Card>
+  );
 }
 
 // ── Child Analytics (read-only) ────────────────────────────────
@@ -169,6 +237,9 @@ function ChildAnalytics({ child }: { child: ParentChild }) {
           </CardContent>
         </Card>
       )}
+
+      {/* Timeline */}
+      <TimelineChart timeline={child.timeline} />
     </div>
   );
 }

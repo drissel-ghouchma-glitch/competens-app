@@ -15,10 +15,10 @@ import {
   BarChart2, Eye,
 } from "lucide-react";
 import {
-  ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis,
-  PolarRadiusAxis, Radar,
+  ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell,
 } from "recharts";
-import type { CompetencyStat } from "@/hooks/use-student-detail";
+import type { CompetencyStat, TimelinePoint } from "@/hooks/use-student-detail";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -42,6 +42,83 @@ function acquisitionColor(rate: number) {
   if (rate >= 70) return "hsl(122 39% 49% / 0.15)";
   if (rate >= 40) return "hsl(25 100% 62% / 0.15)";
   return "hsl(4 77% 55% / 0.15)";
+}
+
+// ── Timeline BarChart ─────────────────────────────────────────────────────────
+
+function barColor(rate: number) {
+  if (rate > 90) return "hsl(122 39% 49%)";
+  if (rate >= 50) return "hsl(38 92% 50%)";
+  return "hsl(4 77% 55%)";
+}
+
+function TimelineTooltip({ active, payload }: { active?: boolean; payload?: Array<{ payload: TimelinePoint }> }) {
+  if (!active || !payload?.length) return null;
+  const d = payload[0].payload;
+  const dateLabel = new Date(d.date + "T00:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
+  return (
+    <div className="rounded-xl border bg-popover shadow-lg p-3 text-sm min-w-[160px]">
+      <p className="font-semibold text-foreground mb-1">{dateLabel}</p>
+      <p className="font-bold" style={{ color: barColor(d.rate) }}>{d.rate}%</p>
+      <p className="text-xs text-muted-foreground mt-0.5">{d.count} évaluation(s)</p>
+      {d.teachers.length > 0 && (
+        <div className="mt-2 pt-2 border-t border-border">
+          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1">Enseignant(s)</p>
+          {d.teachers.map((t) => (
+            <p key={t} className="text-xs text-foreground">{t}</p>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TimelineChart({ timeline }: { timeline: TimelinePoint[] }) {
+  if (timeline.length === 0) {
+    return (
+      <Card className="border-border/50">
+        <CardContent className="p-8 text-center text-muted-foreground text-sm">
+          Aucune évaluation enregistrée — le graphique apparaîtra après la première session d'évaluation.
+        </CardContent>
+      </Card>
+    );
+  }
+  const data = timeline.map((p) => ({
+    ...p,
+    label: new Date(p.date + "T00:00:00").toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" }),
+  }));
+  return (
+    <Card className="border-border/50">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base font-semibold flex items-center gap-2">
+          <BarChart2 className="w-4 h-4 text-primary" />
+          Évolution temporelle des évaluations
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="h-[260px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={data} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+              <XAxis dataKey="label" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
+              <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} unit="%" />
+              <Tooltip content={<TimelineTooltip />} />
+              <Bar dataKey="rate" radius={[4, 4, 0, 0]}>
+                {data.map((entry, i) => (
+                  <Cell key={i} fill={barColor(entry.rate)} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+        <div className="flex items-center gap-4 mt-3 text-xs text-muted-foreground justify-center">
+          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm inline-block" style={{ background: "hsl(122 39% 49%)" }} /> Acquis (&gt;90%)</span>
+          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm inline-block" style={{ background: "hsl(38 92% 50%)" }} /> En cours (50–90%)</span>
+          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm inline-block" style={{ background: "hsl(4 77% 55%)" }} /> Non acquis (&lt;50%)</span>
+        </div>
+      </CardContent>
+    </Card>
+  );
 }
 
 // ── Stats panels (shared between roles) ──────────────────────────────────────
@@ -151,7 +228,7 @@ export default function StudentDetailPage() {
 
   const {
     student, classe, level, competencies,
-    myStats, globalStats, alerts, classes,
+    myStats, globalStats, alerts, timeline, classes,
     loading, error, updateStudent,
   } = useStudentDetail(id);
 
@@ -422,6 +499,8 @@ export default function StudentDetailPage() {
       </div>
 
       <SkillGrid stats={displayStats} />
+
+      <TimelineChart timeline={timeline} />
     </div>
   );
 }

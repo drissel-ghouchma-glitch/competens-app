@@ -1,0 +1,868 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Compétens — Rapport Technique Complet</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --blue:        #3A7AFE;
+      --blue-light:  #EBF1FF;
+      --blue-dark:   #1D4ED8;
+      --green:       #22C55E;
+      --green-light: #DCFCE7;
+      --amber:       #F59E0B;
+      --amber-light: #FEF3C7;
+      --red:         #EF4444;
+      --red-light:   #FEE2E2;
+      --purple:      #8B5CF6;
+      --purple-light:#EDE9FE;
+      --gray-50:     #F8FAFC;
+      --gray-100:    #F1F5F9;
+      --gray-200:    #E2E8F0;
+      --gray-400:    #94A3B8;
+      --gray-500:    #64748B;
+      --gray-700:    #334155;
+      --gray-900:    #0F172A;
+      --text:        #1E293B;
+      --muted:       #64748B;
+    }
+    html { font-size: 15px; scroll-behavior: smooth; }
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      color: var(--text);
+      background: #fff;
+      line-height: 1.7;
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 2rem 2.5rem 5rem;
+    }
+    h1 { font-size: 2.2rem; font-weight: 800; color: var(--gray-900); }
+    h2 { font-size: 1.4rem; font-weight: 700; color: var(--gray-900); margin: 2.8rem 0 1rem; }
+    h3 { font-size: 1.05rem; font-weight: 700; color: var(--blue); margin: 1.6rem 0 0.5rem; }
+    h4 { font-size: 0.95rem; font-weight: 700; color: var(--gray-700); margin: 1rem 0 0.3rem; }
+    p  { margin-bottom: 0.75rem; }
+    ul, ol { padding-left: 1.4rem; margin-bottom: 0.8rem; }
+    li { margin-bottom: 0.3rem; }
+    strong { color: var(--gray-900); }
+    code {
+      font-family: 'Consolas', 'Courier New', monospace;
+      background: var(--gray-100);
+      border: 1px solid var(--gray-200);
+      border-radius: 4px;
+      padding: 0.1rem 0.4rem;
+      font-size: 0.85em;
+      color: #be185d;
+    }
+    pre {
+      background: var(--gray-900);
+      color: #e2e8f0;
+      border-radius: 10px;
+      padding: 1.2rem 1.5rem;
+      overflow-x: auto;
+      font-size: 0.85rem;
+      margin: 1rem 0;
+      line-height: 1.6;
+    }
+    pre code { background: none; border: none; padding: 0; color: inherit; font-size: inherit; }
+    a { color: var(--blue); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* Cover */
+    .cover {
+      text-align: center;
+      padding: 3.5rem 2rem 2.5rem;
+      border-bottom: 3px solid var(--blue);
+      margin-bottom: 2.5rem;
+    }
+    .cover-logo {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 72px; height: 72px; background: var(--blue);
+      border-radius: 18px; margin-bottom: 1.2rem;
+      box-shadow: 0 8px 30px rgba(58,122,254,.3);
+    }
+    .cover-logo svg { width: 40px; height: 40px; fill: #fff; }
+    .cover h1 { font-size: 2.4rem; margin-bottom: 0.3rem; }
+    .cover-sub { font-size: 1.1rem; color: var(--muted); margin-bottom: 1.5rem; }
+    .cover-meta {
+      display: inline-flex; gap: 2rem; flex-wrap: wrap; justify-content: center;
+      font-size: 0.82rem; color: var(--muted);
+      border-top: 1px solid var(--gray-200); padding-top: 1rem;
+    }
+
+    /* TOC */
+    .toc {
+      background: var(--gray-50); border: 1px solid var(--gray-200);
+      border-radius: 12px; padding: 1.5rem 2rem; margin-bottom: 2.5rem;
+    }
+    .toc-title { font-weight: 700; font-size: 0.78rem; text-transform: uppercase;
+      letter-spacing: .08em; color: var(--muted); margin-bottom: 0.7rem; }
+    .toc ol { list-style: none; padding: 0; columns: 2; gap: 1rem; }
+    .toc li { padding: 0.28rem 0; font-size: 0.88rem; border-bottom: 1px dashed var(--gray-200); break-inside: avoid; }
+    .toc li:last-child { border: none; }
+    .toc li a { color: var(--text); font-weight: 500; }
+    .toc li a:hover { color: var(--blue); }
+    .toc-num { color: var(--blue); font-weight: 700; margin-right: 0.4rem; font-size: 0.75rem; }
+
+    /* Section header */
+    .sh {
+      display: flex; align-items: center; gap: 1rem;
+      padding: 0.9rem 1.4rem; background: var(--blue-light);
+      border-left: 4px solid var(--blue); border-radius: 0 10px 10px 0;
+      margin-bottom: 1.3rem;
+    }
+    .sh-num {
+      min-width: 34px; height: 34px; background: var(--blue); color: #fff;
+      font-weight: 800; font-size: 0.95rem; border-radius: 9px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .sh h2 { margin: 0; font-size: 1.2rem; }
+
+    /* Boxes */
+    .box { border-radius: 10px; padding: 0.9rem 1.15rem; margin: 1.1rem 0;
+      display: flex; gap: 0.8rem; align-items: flex-start; }
+    .box-icon { font-size: 1.15rem; line-height: 1.4; flex-shrink: 0; }
+    .box-body { flex: 1; }
+    .box-body p:last-child { margin: 0; }
+    .box-title { font-weight: 700; margin-bottom: 0.2rem; font-size: 0.88rem; }
+    .box-tip    { background: var(--blue-light);   border-left: 4px solid var(--blue);   }
+    .box-tip  .box-title   { color: var(--blue); }
+    .box-warn   { background: var(--amber-light);  border-left: 4px solid var(--amber);  }
+    .box-warn .box-title   { color: #92400E; }
+    .box-success { background: var(--green-light); border-left: 4px solid var(--green);  }
+    .box-success .box-title { color: #166534; }
+    .box-danger { background: var(--red-light);    border-left: 4px solid var(--red);    }
+    .box-danger .box-title { color: #991B1B; }
+    .box-purple { background: var(--purple-light); border-left: 4px solid var(--purple); }
+    .box-purple .box-title { color: #5b21b6; }
+
+    /* Badge pill */
+    .pill { display: inline-flex; align-items: center; gap: 0.25rem;
+      padding: 0.15rem 0.55rem; border-radius: 99px;
+      font-size: 0.75rem; font-weight: 700; white-space: nowrap; }
+    .pill-blue   { background: var(--blue-light);   color: var(--blue-dark); }
+    .pill-green  { background: var(--green-light);  color: #166534; }
+    .pill-amber  { background: var(--amber-light);  color: #92400E; }
+    .pill-red    { background: var(--red-light);    color: #991B1B; }
+    .pill-purple { background: var(--purple-light); color: #5b21b6; }
+    .pill-gray   { background: var(--gray-100);     color: var(--gray-700); }
+
+    /* Tables */
+    table { width: 100%; border-collapse: collapse; font-size: 0.85rem; margin: 1rem 0; }
+    th { background: var(--blue-light); color: var(--blue-dark); font-weight: 700;
+      text-align: left; padding: 0.55rem 0.85rem; border-bottom: 2px solid #c7d9ff; }
+    td { padding: 0.5rem 0.85rem; border-bottom: 1px solid var(--gray-200); vertical-align: top; }
+    tr:last-child td { border: none; }
+    tr:nth-child(even) td { background: var(--gray-50); }
+
+    /* File tree */
+    .tree { background: var(--gray-900); color: #94a3b8; border-radius: 10px;
+      padding: 1.2rem 1.5rem; font-family: 'Consolas', monospace;
+      font-size: 0.82rem; line-height: 1.8; margin: 1rem 0; overflow-x: auto; }
+    .tree .dir  { color: #60a5fa; font-weight: 700; }
+    .tree .file { color: #e2e8f0; }
+    .tree .note { color: #6b7280; font-style: italic; margin-left: 0.5rem; }
+
+    /* Priority bar */
+    .prio-list { list-style: none; padding: 0; margin: 1rem 0; }
+    .prio-item { display: flex; align-items: flex-start; gap: 0.75rem;
+      padding: 0.6rem 0; border-bottom: 1px solid var(--gray-100); }
+    .prio-item:last-child { border: none; }
+    .prio-rank { min-width: 28px; height: 28px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.75rem; font-weight: 800; color: #fff; flex-shrink: 0; }
+    .rank-crit { background: var(--red); }
+    .rank-high { background: var(--amber); }
+    .rank-mid  { background: var(--blue); }
+    .rank-low  { background: var(--gray-400); }
+    .prio-body strong { display: block; font-size: 0.88rem; margin-bottom: 0.1rem; }
+    .prio-body span { font-size: 0.8rem; color: var(--muted); }
+
+    /* Steps */
+    .steps { list-style: none; padding: 0; counter-reset: s; margin: 0.8rem 0; }
+    .steps li { counter-increment: s; display: flex; gap: 0.9rem;
+      padding: 0.7rem 0; border-bottom: 1px solid var(--gray-100); }
+    .steps li:last-child { border: none; }
+    .s-num { min-width: 26px; height: 26px; background: var(--blue); color: #fff;
+      font-size: 0.75rem; font-weight: 800; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 0.05rem; }
+    .s-num::before { content: counter(s); }
+    .s-body { flex: 1; }
+    .s-body strong { display: block; margin-bottom: 0.15rem; }
+
+    /* Divider */
+    hr.div { border: none; border-top: 1px solid var(--gray-200); margin: 2.5rem 0; }
+
+    /* Footer */
+    .footer { text-align: center; font-size: 0.77rem; color: var(--muted);
+      margin-top: 4rem; padding-top: 1rem; border-top: 1px solid var(--gray-200); }
+
+    @media print {
+      body { padding: 0; max-width: 100%; font-size: 11pt; }
+      .sh { break-before: page; }
+      .cover { break-after: page; }
+      .toc  { break-after: page; }
+      pre, .tree { break-inside: avoid; }
+      @page { margin: 2cm; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- COVER -->
+<div class="cover">
+  <div class="cover-logo">
+    <svg viewBox="0 0 24 24"><path d="M12 3L1 9l4 2.18V16c0 0 2.5 3 7 3s7-3 7-3v-4.82L22 9 12 3zm6 8.13L12 14 6 11.13V9l6 3 6-3v2.13zM18 15.5c-.69.87-2.94 2.5-6 2.5s-5.31-1.63-6-2.5v-2.37l6 2.87 6-2.87v2.37z"/></svg>
+  </div>
+  <h1>Compétens</h1>
+  <p class="cover-sub">Rapport Technique Complet — Guide du Développeur</p>
+  <div class="cover-meta">
+    <span>📅 Juin 2026</span>
+    <span>🔖 Version 1.0</span>
+    <span>🧑‍💻 Destiné aux développeurs</span>
+    <span>🌐 React + Supabase + Vercel</span>
+  </div>
+</div>
+
+<!-- TOC -->
+<div class="toc">
+  <p class="toc-title">Table des matières</p>
+  <ol>
+    <li><span class="toc-num">01</span><a href="#s1">Vue d'ensemble du projet</a></li>
+    <li><span class="toc-num">02</span><a href="#s2">Stack technique &amp; dépendances</a></li>
+    <li><span class="toc-num">03</span><a href="#s3">Architecture des dossiers</a></li>
+    <li><span class="toc-num">04</span><a href="#s4">Rôle de chaque fichier</a></li>
+    <li><span class="toc-num">05</span><a href="#s5">Priorité des fichiers (du + au - important)</a></li>
+    <li><span class="toc-num">06</span><a href="#s6">Base de données Supabase — 12 tables</a></li>
+    <li><span class="toc-num">07</span><a href="#s7">Déploiement actuel — GitHub + Vercel</a></li>
+    <li><span class="toc-num">08</span><a href="#s8">Acheter un domaine &amp; déployer dessus</a></li>
+    <li><span class="toc-num">09</span><a href="#s9">Alternatives à Supabase (serveur local)</a></li>
+    <li><span class="toc-num">10</span><a href="#s10">Améliorations recommandées</a></li>
+    <li><span class="toc-num">11</span><a href="#s11">Idées de nouvelles fonctionnalités</a></li>
+    <li><span class="toc-num">12</span><a href="#s12">Ce qu'il faut apprendre pour continuer</a></li>
+  </ol>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<div id="s1" class="sh"><div class="sh-num">1</div><h2>Vue d'ensemble du projet</h2></div>
+
+<p><strong>Compétens</strong> est une application web de gestion scolaire destinée aux écoles primaires. Elle permet de suivre la progression des élèves sur un ensemble de compétences comportementales et académiques, à travers des évaluations quotidiennes.</p>
+
+<h3>Ce que fait l'application</h3>
+<table>
+  <thead><tr><th>Rôle</th><th>Ce qu'il peut faire</th></tr></thead>
+  <tbody>
+    <tr><td><span class="pill pill-red">Admin</span></td><td>Tout gérer : années scolaires, niveaux, classes, élèves, professeurs, compétences, alertes, utilisateurs, demandes en attente</td></tr>
+    <tr><td><span class="pill pill-blue">Directeur</span></td><td>Voir les tableaux de bord globaux, consulter les élèves et alertes, accès en lecture étendu</td></tr>
+    <tr><td><span class="pill pill-green">Professeur</span></td><td>Évaluer ses élèves quotidiennement, consulter la progression de ses classes, voir les alertes</td></tr>
+    <tr><td><span class="pill pill-amber">Parent</span></td><td>Consulter en lecture seule la progression de son/ses enfants liés par l'admin</td></tr>
+  </tbody>
+</table>
+
+<h3>Flux principal</h3>
+<ol class="steps">
+  <li><div class="s-num"></div><div class="s-body"><strong>Inscription</strong> — Professeur ou parent s'inscrit → compte en attente (status: pending)</div></li>
+  <li><div class="s-num"></div><div class="s-body"><strong>Approbation</strong> — Admin approuve depuis /admin/pending-teachers → status passe à active</div></li>
+  <li><div class="s-num"></div><div class="s-body"><strong>Assignation</strong> — Admin (ou professeur via demande) assigne des classes au professeur</div></li>
+  <li><div class="s-num"></div><div class="s-body"><strong>Évaluation</strong> — Professeur évalue ses élèves chaque jour (Non acquis / En cours / Acquis)</div></li>
+  <li><div class="s-num"></div><div class="s-body"><strong>Alertes</strong> — Le système génère des alertes pour les élèves en difficulté</div></li>
+  <li><div class="s-num"></div><div class="s-body"><strong>Consultation</strong> — Admin/directeur voient les statistiques globales, parents voient leurs enfants</div></li>
+</ol>
+
+<div class="box box-tip">
+  <div class="box-icon">💡</div>
+  <div class="box-body">
+    <p class="box-title">Mode démo</p>
+    <p>L'application possède un mode démo complet avec données fictives (Zustand + localStorage), sans aucune connexion à Supabase. Utile pour présenter l'application sans compte.</p>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<div id="s2" class="sh"><div class="sh-num">2</div><h2>Stack technique &amp; dépendances</h2></div>
+
+<h3>Technologies principales</h3>
+<table>
+  <thead><tr><th>Technologie</th><th>Version</th><th>Rôle</th></tr></thead>
+  <tbody>
+    <tr><td><strong>React</strong></td><td>18.3</td><td>Framework UI — composants, state, rendu</td></tr>
+    <tr><td><strong>TypeScript</strong></td><td>5.8</td><td>Typage statique — sécurité du code</td></tr>
+    <tr><td><strong>Vite</strong></td><td>8.0</td><td>Build tool ultra-rapide (remplace Webpack/CRA)</td></tr>
+    <tr><td><strong>React Router v6</strong></td><td>6.30</td><td>Navigation entre pages (SPA routing)</td></tr>
+    <tr><td><strong>Tailwind CSS</strong></td><td>3.4</td><td>CSS utilitaire — styles inline via classes</td></tr>
+    <tr><td><strong>Shadcn UI</strong></td><td>—</td><td>Composants UI accessibles (Dialog, Badge, Button…) basés sur Radix</td></tr>
+    <tr><td><strong>Radix UI</strong></td><td>—</td><td>Primitives accessibles sous Shadcn</td></tr>
+    <tr><td><strong>Zustand</strong></td><td>5.0</td><td>State management léger — uniquement pour le mode démo</td></tr>
+    <tr><td><strong>Supabase JS</strong></td><td>2.107</td><td>Client pour la base de données PostgreSQL distante</td></tr>
+    <tr><td><strong>TanStack Query</strong></td><td>5.83</td><td>Cache et gestion d'état serveur (installé mais peu utilisé directement)</td></tr>
+    <tr><td><strong>Recharts</strong></td><td>2.15</td><td>Graphiques (RadarChart, BarChart) pour les statistiques</td></tr>
+    <tr><td><strong>Sonner</strong></td><td>1.7</td><td>Notifications toast (succès, erreur, warning)</td></tr>
+    <tr><td><strong>XLSX</strong></td><td>0.18</td><td>Lecture des fichiers Excel pour l'import d'élèves</td></tr>
+    <tr><td><strong>Lucide React</strong></td><td>0.462</td><td>Bibliothèque d'icônes SVG</td></tr>
+    <tr><td><strong>date-fns</strong></td><td>3.6</td><td>Manipulation de dates</td></tr>
+    <tr><td><strong>Vitest</strong></td><td>4.1</td><td>Framework de tests unitaires</td></tr>
+  </tbody>
+</table>
+
+<h3>Infrastructure</h3>
+<table>
+  <thead><tr><th>Service</th><th>Rôle</th><th>Niveau</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Supabase</strong></td><td>Base de données PostgreSQL + Auth + RLS + API REST auto-générée</td><td>Gratuit (500 MB, 50k auth users)</td></tr>
+    <tr><td><strong>GitHub</strong></td><td>Hébergement du code source, versioning</td><td>Gratuit</td></tr>
+    <tr><td><strong>Vercel</strong></td><td>Déploiement automatique du frontend</td><td>Gratuit (Hobby)</td></tr>
+  </tbody>
+</table>
+
+<div class="box box-warn">
+  <div class="box-icon">⚠️</div>
+  <div class="box-body">
+    <p class="box-title">Variables d'environnement requises</p>
+    <p>Le projet nécessite deux variables dans un fichier <code>.env</code> à la racine de <code>web-competens/</code> :</p>
+    <pre><code>VITE_SUPABASE_URL=https://xxxx.supabase.co
+VITE_SUPABASE_ANON_KEY=eyJxxxx...</code></pre>
+    <p>Ces clés se trouvent dans le Dashboard Supabase → Settings → API. Sans elles, l'application fonctionne uniquement en mode démo.</p>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<div id="s3" class="sh"><div class="sh-num">3</div><h2>Architecture des dossiers</h2></div>
+
+<div class="tree">
+<span class="dir">app-competens/</span>                     ← Racine du dépôt git
+├── <span class="dir">web-competens/</span>                 ← Application React (dossier principal)
+│   ├── <span class="file">package.json</span>              <span class="note">← dépendances npm</span>
+│   ├── <span class="file">vite.config.ts</span>            <span class="note">← config du build</span>
+│   ├── <span class="file">tsconfig.json</span>             <span class="note">← config TypeScript</span>
+│   ├── <span class="file">tailwind.config.ts</span>        <span class="note">← config Tailwind CSS</span>
+│   ├── <span class="file">.env</span>                      <span class="note">← variables Supabase (ne PAS commiter)</span>
+│   └── <span class="dir">src/</span>
+│       ├── <span class="file">main.tsx</span>              <span class="note">← point d'entrée React</span>
+│       ├── <span class="file">App.tsx</span>               <span class="note">← routes de l'application</span>
+│       ├── <span class="dir">pages/</span>                <span class="note">← une page = une route</span>
+│       │   ├── <span class="file">Dashboard.tsx</span>
+│       │   ├── <span class="file">Students.tsx</span>
+│       │   ├── <span class="file">StudentDetail.tsx</span>
+│       │   ├── <span class="file">Classes.tsx</span>
+│       │   ├── <span class="file">Evaluation.tsx</span>
+│       │   ├── <span class="file">Competencies.tsx</span>
+│       │   ├── <span class="file">Teachers.tsx</span>
+│       │   ├── <span class="file">SchoolYears.tsx</span>
+│       │   ├── <span class="file">Levels.tsx</span>
+│       │   ├── <span class="file">Alerts.tsx</span>
+│       │   ├── <span class="file">Login.tsx</span>
+│       │   ├── <span class="file">Register.tsx</span>
+│       │   ├── <span class="dir">admin/</span>
+│       │   │   ├── <span class="file">PendingTeachers.tsx</span>
+│       │   │   ├── <span class="file">AdminRequests.tsx</span>
+│       │   │   └── <span class="file">UserManagement.tsx</span>
+│       │   └── <span class="dir">parent/</span>
+│       │       └── <span class="file">ParentDashboard.tsx</span>
+│       ├── <span class="dir">hooks/</span>                <span class="note">← logique métier + Supabase</span>
+│       │   ├── <span class="file">use-auth.tsx</span>
+│       │   ├── <span class="file">use-dashboard.ts</span>
+│       │   ├── <span class="file">use-students.ts</span>
+│       │   ├── <span class="file">use-classes.ts</span>
+│       │   ├── <span class="file">use-evaluation.ts</span>
+│       │   ├── <span class="file">use-competencies.ts</span>
+│       │   ├── <span class="file">use-teachers.ts</span>
+│       │   ├── <span class="file">use-school-years.ts</span>
+│       │   ├── <span class="file">use-levels.ts</span>
+│       │   ├── <span class="file">use-student-detail.ts</span>
+│       │   ├── <span class="file">use-alerts.ts</span>
+│       │   ├── <span class="file">use-requests.ts</span>
+│       │   ├── <span class="file">use-admin.ts</span>
+│       │   ├── <span class="file">use-parent.ts</span>
+│       │   ├── <span class="file">use-toast.ts</span>
+│       │   └── <span class="file">use-mobile.tsx</span>
+│       ├── <span class="dir">stores/</span>               <span class="note">← état local (mode démo uniquement)</span>
+│       │   ├── <span class="file">app-store.ts</span>      <span class="note">← store Zustand principal (démo)</span>
+│       │   ├── <span class="file">demo.ts</span>           <span class="note">← flag isDemoMode</span>
+│       │   └── <span class="file">seed-data.ts</span>      <span class="note">← données fictives pour le démo</span>
+│       ├── <span class="dir">components/</span>
+│       │   ├── <span class="dir">layout/</span>
+│       │   │   └── <span class="file">AppLayout.tsx</span>     <span class="note">← sidebar, nav mobile, auth guard</span>
+│       │   └── <span class="dir">ui/</span>               <span class="note">← 45 composants Shadcn (Button, Dialog…)</span>
+│       ├── <span class="dir">types/</span>
+│       │   └── <span class="file">index.ts</span>          <span class="note">← toutes les interfaces TypeScript</span>
+│       └── <span class="dir">lib/</span>
+│           ├── <span class="file">supabase.ts</span>       <span class="note">← client Supabase sécurisé</span>
+│           ├── <span class="file">utils.ts</span>          <span class="note">← fonction cn() (fusion classes Tailwind)</span>
+│           └── <span class="file">register-sw.ts</span>    <span class="note">← enregistrement Service Worker (PWA)</span>
+├── <span class="dir">supabase/</span>
+│   ├── <span class="file">schema.sql</span>            <span class="note">← tables + triggers + RLS policies</span>
+│   ├── <span class="file">seed.sql</span>              <span class="note">← données initiales (niveaux, compétences)</span>
+│   ├── <span class="file">requests-schema.sql</span>   <span class="note">← table admin_requests</span>
+│   ├── <span class="file">migration_parent_role.sql</span> <span class="note">← table parent_student + contraintes</span>
+│   └── <span class="file">fix-rls-classes.sql</span>   <span class="note">← correctif policies RLS des classes</span>
+└── <span class="dir">docs/</span>
+    ├── <span class="file">guide-professeur.html</span>
+    └── <span class="file">rapport-technique.html</span>  <span class="note">← ce fichier</span>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<div id="s4" class="sh"><div class="sh-num">4</div><h2>Rôle de chaque fichier important</h2></div>
+
+<h3>Fichiers racine <code>src/</code></h3>
+<table>
+  <thead><tr><th>Fichier</th><th>Rôle</th></tr></thead>
+  <tbody>
+    <tr><td><code>main.tsx</code></td><td>Point d'entrée — monte React dans le DOM, importe les styles CSS globaux</td></tr>
+    <tr><td><code>App.tsx</code></td><td>Définit toutes les routes (React Router). C'est ici qu'on ajoute de nouvelles pages. Entoure tout avec <code>AuthProvider</code> et <code>QueryClientProvider</code></td></tr>
+  </tbody>
+</table>
+
+<h3>Hooks <code>src/hooks/</code> — le cœur du projet</h3>
+<p>Chaque hook suit le même patron : vérifier <code>isDemoMode</code>, retourner soit les données du store Zustand (démo), soit les données Supabase (réel).</p>
+<table>
+  <thead><tr><th>Hook</th><th>Tables Supabase</th><th>Ce qu'il fait</th></tr></thead>
+  <tbody>
+    <tr><td><code>use-auth.tsx</code></td><td>profiles</td><td>Login, logout, register (prof/parent), adminUpdateProfile. Expose le contexte React <code>useAuth()</code></td></tr>
+    <tr><td><code>use-dashboard.ts</code></td><td>students, classes, profiles, evaluations, school_years, alerts</td><td>Compte les totaux, calcule le graphique 7 jours, récupère les alertes récentes</td></tr>
+    <tr><td><code>use-students.ts</code></td><td>students, classes</td><td>CRUD élèves + import Excel (boucle individuelle avec rapport d'erreurs)</td></tr>
+    <tr><td><code>use-classes.ts</code></td><td>classes, levels, profiles, school_years, teacher_class_assignments</td><td>CRUD classes, fetch des classes par prof, assignation</td></tr>
+    <tr><td><code>use-evaluation.ts</code></td><td>classes, levels, competencies, students, evaluations, teacher_class_assignments</td><td>Récupère les données pour évaluer, enregistre les évaluations du jour (upsert)</td></tr>
+    <tr><td><code>use-competencies.ts</code></td><td>competencies</td><td>Liste, ajout, modification des compétences</td></tr>
+    <tr><td><code>use-teachers.ts</code></td><td>profiles, classes, teacher_class_assignments</td><td>Liste des profs actifs avec leurs classes assignées</td></tr>
+    <tr><td><code>use-school-years.ts</code></td><td>school_years</td><td>CRUD années scolaires, activation/désactivation</td></tr>
+    <tr><td><code>use-levels.ts</code></td><td>levels</td><td>CRUD niveaux scolaires (CP1, CE2…)</td></tr>
+    <tr><td><code>use-student-detail.ts</code></td><td>students, classes, levels, competencies, evaluations, alerts</td><td>Stats détaillées d'un élève : myStats (prof) vs globalStats (admin). Calcul taux d'acquisition</td></tr>
+    <tr><td><code>use-alerts.ts</code></td><td>alerts, notifications</td><td>Liste alertes + notifications, résoudre alerte, marquer notif comme lue</td></tr>
+    <tr><td><code>use-requests.ts</code></td><td>admin_requests, profiles, students, classes, competencies, teacher_class_assignments</td><td>Soumettre/approuver/rejeter les demandes (ajout élève, classe, compétence)</td></tr>
+    <tr><td><code>use-admin.ts</code></td><td>profiles, students, parent_student</td><td>Lister/modifier les utilisateurs, gérer les liens parent-enfant</td></tr>
+    <tr><td><code>use-parent.ts</code></td><td>parent_student, students, competencies, evaluations, alerts</td><td>Dashboard parent : récupère les enfants liés et leurs statistiques</td></tr>
+    <tr><td><code>use-mobile.tsx</code></td><td>—</td><td>Détecte si l'écran est mobile (hook utilitaire)</td></tr>
+    <tr><td><code>use-toast.ts</code></td><td>—</td><td>Hook Shadcn pour les toasts (peu utilisé — le projet préfère sonner)</td></tr>
+  </tbody>
+</table>
+
+<h3>Pages <code>src/pages/</code></h3>
+<table>
+  <thead><tr><th>Page</th><th>Route</th><th>Rôles autorisés</th><th>Hook principal</th></tr></thead>
+  <tbody>
+    <tr><td><code>Login.tsx</code></td><td>/login</td><td>Public</td><td>useAuth</td></tr>
+    <tr><td><code>Register.tsx</code></td><td>/register</td><td>Public</td><td>useAuth</td></tr>
+    <tr><td><code>Dashboard.tsx</code></td><td>/dashboard</td><td>Tous</td><td>useDashboard</td></tr>
+    <tr><td><code>Evaluation.tsx</code></td><td>/evaluation</td><td>Prof, Admin, Dir</td><td>useEvaluation</td></tr>
+    <tr><td><code>Students.tsx</code></td><td>/students</td><td>Tous</td><td>useStudents</td></tr>
+    <tr><td><code>StudentDetail.tsx</code></td><td>/students/:id</td><td>Tous (vue filtrée par rôle)</td><td>useStudentDetail</td></tr>
+    <tr><td><code>Classes.tsx</code></td><td>/classes</td><td>Tous</td><td>useClasses</td></tr>
+    <tr><td><code>Competencies.tsx</code></td><td>/competencies</td><td>Tous</td><td>useCompetencies</td></tr>
+    <tr><td><code>Teachers.tsx</code></td><td>/teachers</td><td>Admin, Dir</td><td>useTeachers</td></tr>
+    <tr><td><code>Alerts.tsx</code></td><td>/alerts</td><td>Tous</td><td>useAlerts, useStudents</td></tr>
+    <tr><td><code>SchoolYears.tsx</code></td><td>/school-years</td><td>Admin</td><td>useSchoolYears</td></tr>
+    <tr><td><code>Levels.tsx</code></td><td>/levels</td><td>Admin</td><td>useLevels</td></tr>
+    <tr><td><code>PendingTeachers.tsx</code></td><td>/admin/pending-teachers</td><td>Admin</td><td>Supabase direct</td></tr>
+    <tr><td><code>AdminRequests.tsx</code></td><td>/admin/requests</td><td>Admin</td><td>useRequests</td></tr>
+    <tr><td><code>UserManagement.tsx</code></td><td>/admin/users</td><td>Admin</td><td>useAdmin</td></tr>
+    <tr><td><code>ParentDashboard.tsx</code></td><td>/parent</td><td>Parent</td><td>useParent</td></tr>
+  </tbody>
+</table>
+
+<h3>Stores <code>src/stores/</code> — mode démo uniquement</h3>
+<table>
+  <thead><tr><th>Fichier</th><th>Rôle</th></tr></thead>
+  <tbody>
+    <tr><td><code>demo.ts</code></td><td>Flag booléen <code>isDemoMode</code> + fonctions enable/disable. Persiste dans localStorage</td></tr>
+    <tr><td><code>app-store.ts</code></td><td>Store Zustand complet avec toutes les données (students, classes, evaluations…). Utilisé SEULEMENT si isDemoMode=true</td></tr>
+    <tr><td><code>seed-data.ts</code></td><td>Données fictives initiales injectées dans le store au lancement du mode démo</td></tr>
+  </tbody>
+</table>
+
+<h3>Layout <code>src/components/layout/AppLayout.tsx</code></h3>
+<p>Composant central qui contient : sidebar desktop, menu mobile (header + bottom nav), garde d'authentification (redirige vers /login si non connecté), basculement dark/dark mode, badge notifications. Toutes les pages passent par ce composant via <code>&lt;Outlet /&gt;</code>.</p>
+
+<h3>Types <code>src/types/index.ts</code></h3>
+<p>Définit toutes les interfaces TypeScript : <code>User</code>, <code>Student</code>, <code>Classe</code>, <code>Level</code>, <code>SchoolYear</code>, <code>Competency</code>, <code>Evaluation</code>, <code>Alert</code>, <code>Notification</code>, <code>Teacher</code>, <code>ParentStudentLink</code>, <code>Role</code>, <code>UserStatus</code>, etc. À modifier en premier si on ajoute une nouvelle entité.</p>
+
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<div id="s5" class="sh"><div class="sh-num">5</div><h2>Priorité des fichiers (du plus au moins important)</h2></div>
+
+<ul class="prio-list">
+  <li class="prio-item"><div class="prio-rank rank-crit">1</div><div class="prio-body"><strong>src/App.tsx</strong><span>Toutes les routes. Modifier ici pour ajouter/supprimer des pages.</span></div></li>
+  <li class="prio-item"><div class="prio-rank rank-crit">2</div><div class="prio-body"><strong>src/hooks/use-auth.tsx</strong><span>Authentification, rôles, inscription. Toute la sécurité d'accès passe par là.</span></div></li>
+  <li class="prio-item"><div class="prio-rank rank-crit">3</div><div class="prio-body"><strong>src/types/index.ts</strong><span>Toutes les interfaces. La source de vérité des données dans le frontend.</span></div></li>
+  <li class="prio-item"><div class="prio-rank rank-crit">4</div><div class="prio-body"><strong>supabase/schema.sql</strong><span>Structure complète de la base de données. À exécuter dans Supabase SQL Editor pour initialiser.</span></div></li>
+  <li class="prio-item"><div class="prio-rank rank-crit">5</div><div class="prio-body"><strong>src/components/layout/AppLayout.tsx</strong><span>Navigation, sidebar, guard auth. Toucher avec prudence — affecte toute l'app.</span></div></li>
+  <li class="prio-item"><div class="prio-rank rank-high">6</div><div class="prio-body"><strong>src/hooks/use-evaluation.ts</strong><span>Cœur fonctionnel — enregistrement des évaluations quotidiennes.</span></div></li>
+  <li class="prio-item"><div class="prio-rank rank-high">7</div><div class="prio-body"><strong>src/hooks/use-student-detail.ts</strong><span>Calcul des statistiques par élève (taux d'acquisition, stats par rôle).</span></div></li>
+  <li class="prio-item"><div class="prio-rank rank-high">8</div><div class="prio-body"><strong>src/hooks/use-requests.ts</strong><span>Workflow de demandes (prof → admin). Logique d'approbation complexe.</span></div></li>
+  <li class="prio-item"><div class="prio-rank rank-high">9</div><div class="prio-body"><strong>src/lib/supabase.ts</strong><span>Client Supabase. Contient les clés d'accès (via variables d'environnement).</span></div></li>
+  <li class="prio-item"><div class="prio-rank rank-high">10</div><div class="prio-body"><strong>src/stores/app-store.ts</strong><span>State management du mode démo. Ne pas modifier sans comprendre Zustand.</span></div></li>
+  <li class="prio-item"><div class="prio-rank rank-mid">11</div><div class="prio-body"><strong>src/pages/Evaluation.tsx</strong><span>Interface d'évaluation — page la plus utilisée quotidiennement.</span></div></li>
+  <li class="prio-item"><div class="prio-rank rank-mid">12</div><div class="prio-body"><strong>src/pages/StudentDetail.tsx</strong><span>Profil élève avec radar chart et stats — page la plus complexe visuellement.</span></div></li>
+  <li class="prio-item"><div class="prio-rank rank-mid">13</div><div class="prio-body"><strong>src/pages/admin/PendingTeachers.tsx</strong><span>Approbation des inscriptions. Logique d'assignation des classes et enfants.</span></div></li>
+  <li class="prio-item"><div class="prio-rank rank-low">14</div><div class="prio-body"><strong>src/pages/Dashboard.tsx, Alerts.tsx, Classes.tsx…</strong><span>Pages métier importantes mais moins complexes.</span></div></li>
+  <li class="prio-item"><div class="prio-rank rank-low">15</div><div class="prio-body"><strong>src/components/ui/* (45 fichiers)</strong><span>Composants Shadcn auto-générés. Rarement modifiés.</span></div></li>
+</ul>
+
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<div id="s6" class="sh"><div class="sh-num">6</div><h2>Base de données Supabase — 12 tables</h2></div>
+
+<table>
+  <thead><tr><th>Table</th><th>Colonnes principales</th><th>Rôle</th><th>RLS</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><strong>profiles</strong></td>
+      <td>id, email, full_name, role, status, phone, avatar_url</td>
+      <td>Utilisateurs (étend auth.users). Trigger auto-crée la ligne à l'inscription.</td>
+      <td>✅ Lecture par tous actifs, écriture admin</td>
+    </tr>
+    <tr>
+      <td><strong>school_years</strong></td>
+      <td>id, name, start_date, end_date, is_active, is_closed</td>
+      <td>Années scolaires. Une seule active à la fois.</td>
+      <td>✅ Lecture tous, écriture admin</td>
+    </tr>
+    <tr>
+      <td><strong>levels</strong></td>
+      <td>id, name, code, is_archived</td>
+      <td>Niveaux scolaires (CP1, CP2, CE1, CE2, CM1, CM2…)</td>
+      <td>✅ Lecture tous, écriture admin</td>
+    </tr>
+    <tr>
+      <td><strong>classes</strong></td>
+      <td>id, name, level_id, teacher_id, school_year_id, capacity, student_count, is_archived</td>
+      <td>Classes de l'école. student_count est synchronisé à chaque ajout/suppression d'élève.</td>
+      <td>✅ Lecture conditionnelle (prof = ses classes)</td>
+    </tr>
+    <tr>
+      <td><strong>students</strong></td>
+      <td>id, first_name, last_name, birth_date, gender, class_id, photo_url</td>
+      <td>Élèves. Importable via Excel (colonnes : Nom, Prénom, Date de naissance, Sexe, Classe).</td>
+      <td>✅ Lecture par profs assignés, parents liés</td>
+    </tr>
+    <tr>
+      <td><strong>competencies</strong></td>
+      <td>id, code, title, description, advice, order_index</td>
+      <td>Compétences évaluées (C1 à C12 par défaut, extensible).</td>
+      <td>✅ Lecture tous, écriture admin</td>
+    </tr>
+    <tr>
+      <td><strong>evaluations</strong></td>
+      <td>id, student_id, competency_id, teacher_id, status, date</td>
+      <td>Évaluations quotidiennes. status = non_acquis | en_cours | acquis. UNIQUE sur (student_id, competency_id, teacher_id, date).</td>
+      <td>✅ Prof écrit/lit les siennes, admin lit tout</td>
+    </tr>
+    <tr>
+      <td><strong>alerts</strong></td>
+      <td>id, student_id, level, cause, date, resolved, resolved_at</td>
+      <td>Alertes sur les élèves (warning | critical). Créées manuellement ou via logique métier.</td>
+      <td>✅ Lecture tous actifs, écriture admin/prof</td>
+    </tr>
+    <tr>
+      <td><strong>notifications</strong></td>
+      <td>id, user_id, title, message, read, type, related_id</td>
+      <td>Notifications personnelles par utilisateur. type = alert | info | evaluation.</td>
+      <td>✅ Chaque utilisateur voit uniquement les siennes</td>
+    </tr>
+    <tr>
+      <td><strong>teacher_class_assignments</strong></td>
+      <td>id, teacher_id, class_id, assigned_at</td>
+      <td>Table de jointure Prof ↔ Classe. Un prof peut avoir plusieurs classes, une classe peut avoir plusieurs profs.</td>
+      <td>✅ Prof lit ses propres assignations</td>
+    </tr>
+    <tr>
+      <td><strong>parent_student</strong></td>
+      <td>id, parent_id, student_id, created_at</td>
+      <td>Lien Parent ↔ Élève. Créé par l'admin lors de l'approbation d'un parent.</td>
+      <td>✅ Parent lit ses propres liens</td>
+    </tr>
+    <tr>
+      <td><strong>admin_requests</strong></td>
+      <td>id, teacher_id, type, payload, status, reviewed_by, created_at</td>
+      <td>Demandes des profs (add_student, assign_class, add_competency). type détermine ce que contient payload (JSON).</td>
+      <td>✅ Prof voit les siennes, admin voit tout</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="box box-tip">
+  <div class="box-icon">🔒</div>
+  <div class="box-body">
+    <p class="box-title">RLS — Row Level Security</p>
+    <p>Toutes les tables ont RLS activé. Cela signifie que même si quelqu'un obtient la clé <code>anon</code>, il ne peut accéder qu'aux lignes autorisées par sa session. C'est la sécurité au niveau de la base de données, indépendante du code frontend.</p>
+  </div>
+</div>
+
+<h3>Trigger important</h3>
+<p>La fonction <code>handle_new_user()</code> s'exécute automatiquement après chaque inscription Supabase Auth. Elle crée la ligne dans <code>profiles</code> avec <code>status = 'pending'</code> pour les professeurs. Le code frontend utilise ensuite <code>upsert</code> pour s'assurer que le statut est bien <code>'pending'</code> même si le trigger a déjà créé la ligne.</p>
+
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<div id="s7" class="sh"><div class="sh-num">7</div><h2>Déploiement actuel — GitHub + Vercel (gratuit)</h2></div>
+
+<h3>Comment ça fonctionne</h3>
+
+<div style="background:var(--gray-50); border:1px solid var(--gray-200); border-radius:10px; padding:1.2rem 1.5rem; margin:1rem 0; font-size:0.88rem;">
+  <div style="display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap; font-size:0.85rem;">
+    <span style="background:#24292e; color:#fff; padding:0.3rem 0.7rem; border-radius:6px; font-weight:700;">📁 Local</span>
+    <span style="color:var(--muted);">→ git push →</span>
+    <span style="background:#24292e; color:#fff; padding:0.3rem 0.7rem; border-radius:6px; font-weight:700;">🐙 GitHub</span>
+    <span style="color:var(--muted);">→ webhook automatique →</span>
+    <span style="background:#000; color:#fff; padding:0.3rem 0.7rem; border-radius:6px; font-weight:700;">▲ Vercel</span>
+    <span style="color:var(--muted);">→ build + deploy →</span>
+    <span style="background:var(--blue); color:#fff; padding:0.3rem 0.7rem; border-radius:6px; font-weight:700;">🌐 URL publique</span>
+  </div>
+</div>
+
+<ol class="steps">
+  <li><div class="s-num"></div><div class="s-body"><strong>Code poussé sur GitHub (branche main)</strong> — Vercel détecte le push automatiquement via un webhook.</div></li>
+  <li><div class="s-num"></div><div class="s-body"><strong>Vercel lance le build</strong> — Exécute <code>npm run build</code> (Vite compile TypeScript + React → fichiers HTML/JS/CSS statiques dans <code>dist/</code>).</div></li>
+  <li><div class="s-num"></div><div class="s-body"><strong>Déploiement sur CDN Vercel</strong> — Les fichiers statiques sont distribués sur le réseau mondial de Vercel. URL comme <code>competens-app.vercel.app</code>.</div></li>
+  <li><div class="s-num"></div><div class="s-body"><strong>Variables d'environnement</strong> — Les clés Supabase sont stockées dans les Settings Vercel (pas dans le code), et injectées lors du build.</div></li>
+</ol>
+
+<h3>Limites du plan gratuit Vercel</h3>
+<table>
+  <thead><tr><th>Limite</th><th>Plan Hobby (gratuit)</th></tr></thead>
+  <tbody>
+    <tr><td>Bande passante</td><td>100 GB/mois</td></tr>
+    <tr><td>Builds/mois</td><td>6 000</td></tr>
+    <tr><td>Domaine personnalisé</td><td>✅ Oui (gratuit si vous avez un domaine)</td></tr>
+    <tr><td>Analytics</td><td>Limité</td></tr>
+    <tr><td>Équipe / Collaborateurs</td><td>1 seul compte</td></tr>
+  </tbody>
+</table>
+
+<div class="box box-warn">
+  <div class="box-icon">⚠️</div>
+  <div class="box-body">
+    <p class="box-title">Important : Vercel gratuit interdit l'usage commercial</p>
+    <p>Si l'école utilise l'application dans un contexte professionnel (facturation, données élèves réelles à grande échelle), il faut passer au plan Pro (~20$/mois). Pour un usage scolaire interne non commercial, le plan gratuit convient.</p>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<div id="s8" class="sh"><div class="sh-num">8</div><h2>Acheter un domaine &amp; déployer dessus</h2></div>
+
+<p>Actuellement l'URL est <code>competens-app.vercel.app</code>. Pour avoir une URL professionnelle comme <code>competens.ma</code> ou <code>monecole.fr</code>, voici la procédure complète :</p>
+
+<h3>Étape 1 — Acheter le domaine</h3>
+<p>Choisir un registrar (vendeur de domaines) :</p>
+<table>
+  <thead><tr><th>Registrar</th><th>Prix indicatif (.com)</th><th>Notes</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Namecheap</strong></td><td>~10$/an</td><td>Interface simple, recommandé pour débutants</td></tr>
+    <tr><td><strong>GoDaddy</strong></td><td>~12$/an</td><td>Très connu, interface parfois complexe</td></tr>
+    <tr><td><strong>Porkbun</strong></td><td>~9$/an</td><td>Moins cher, excellent rapport qualité/prix</td></tr>
+    <tr><td><strong>OVH</strong></td><td>~8€/an</td><td>Hébergeur européen, bon pour .fr .ma</td></tr>
+    <tr><td><strong>Gandi</strong></td><td>~16€/an</td><td>Français, respectueux des données</td></tr>
+  </tbody>
+</table>
+
+<h3>Étape 2 — Lier le domaine à Vercel</h3>
+<ol class="steps">
+  <li><div class="s-num"></div><div class="s-body"><strong>Dans Vercel</strong> → Dashboard → votre projet → Settings → Domains → Add Domain → saisir <code>mondomaine.com</code></div></li>
+  <li><div class="s-num"></div><div class="s-body"><strong>Vercel affiche deux enregistrements DNS</strong> à configurer :<br>
+    - Un enregistrement <code>A</code> pointant vers l'IP Vercel (ex: <code>76.76.21.21</code>)<br>
+    - Un enregistrement <code>CNAME</code> pour <code>www</code> pointant vers <code>cname.vercel-dns.com</code>
+  </div></li>
+  <li><div class="s-num"></div><div class="s-body"><strong>Chez votre registrar</strong> → DNS Management → ajouter ces deux enregistrements</div></li>
+  <li><div class="s-num"></div><div class="s-body"><strong>Attendre la propagation DNS</strong> : 15 minutes à 48 heures selon les registrars</div></li>
+  <li><div class="s-num"></div><div class="s-body"><strong>Vercel active le certificat HTTPS automatiquement</strong> (via Let's Encrypt, gratuit)</div></li>
+</ol>
+
+<div class="box box-success">
+  <div class="box-icon">✅</div>
+  <div class="box-body">
+    <p class="box-title">Résultat</p>
+    <p>Votre application est accessible sur <code>https://mondomaine.com</code> avec HTTPS, sans rien changer au code. Vercel reste l'hébergeur du frontend, et Supabase reste la base de données. Le domaine est juste un alias.</p>
+  </div>
+</div>
+
+<h3>Alternative : héberger sur un VPS avec son propre serveur</h3>
+<p>Si vous voulez tout contrôler (et ne pas dépendre de Vercel), vous pouvez louer un VPS (serveur virtuel privé) :</p>
+<table>
+  <thead><tr><th>Fournisseur</th><th>Prix</th><th>Notes</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Hetzner</strong></td><td>~4€/mois</td><td>Excellent rapport qualité/prix, datacenter Europe</td></tr>
+    <tr><td><strong>DigitalOcean</strong></td><td>~6$/mois</td><td>Interface très simple, tutoriels nombreux</td></tr>
+    <tr><td><strong>OVH VPS</strong></td><td>~4€/mois</td><td>Bon pour la France/Maroc</td></tr>
+  </tbody>
+</table>
+<p>Sur le VPS : installer Nginx, déployer les fichiers <code>dist/</code> avec un script, configurer Certbot pour HTTPS. Plus complexe mais 100% sous contrôle.</p>
+
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<div id="s9" class="sh"><div class="sh-num">9</div><h2>Alternatives à Supabase (serveur local ou autre)</h2></div>
+
+<h3>Option A — Garder Supabase (recommandé)</h3>
+<p>Supabase est gratuit jusqu'à 500 MB de données et 50 000 utilisateurs auth. Pour une école, c'est largement suffisant. Le plan Pro (~25$/mois) donne 8 GB et des sauvegardes automatiques.</p>
+
+<h3>Option B — Pocketbase (serveur local ultra-simple)</h3>
+<p>PocketBase est un seul fichier exécutable qui inclut base de données SQLite + API REST + Auth + UI admin. Idéal pour un serveur local dans l'école.</p>
+<pre><code># Télécharger pocketbase (Linux/Mac/Windows)
+# https://pocketbase.io/docs/
+
+# Lancer le serveur
+./pocketbase serve --http=0.0.0.0:8090
+
+# Interface admin accessible sur :
+# http://localhost:8090/_/</code></pre>
+<p>Pour connecter le frontend React à PocketBase, remplacer Supabase par le SDK PocketBase :</p>
+<pre><code>npm install pocketbase
+
+// lib/pocketbase.ts
+import PocketBase from 'pocketbase';
+export const pb = new PocketBase('http://localhost:8090');</code></pre>
+<div class="box box-warn">
+  <div class="box-icon">⚠️</div>
+  <div class="box-body">
+    <p class="box-title">Effort de migration</p>
+    <p>Passer de Supabase à PocketBase nécessite de réécrire tous les hooks (use-students.ts, use-classes.ts, etc.) pour utiliser l'API PocketBase. Les tables SQL doivent être recréées via l'UI admin de PocketBase. Compter 2 à 4 jours de travail.</p>
+  </div>
+</div>
+
+<h3>Option C — Node.js + Express + PostgreSQL local</h3>
+<p>Solution la plus flexible mais la plus complexe. Requiert de créer une API REST complète, gérer l'authentification JWT manuellement, et administrer PostgreSQL.</p>
+<pre><code># Stack nécessaire
+Node.js + Express (API)
+PostgreSQL (base de données)
+JWT (authentification)
+Prisma ou Drizzle (ORM)
+
+# Structure
+server/
+├── routes/students.ts
+├── routes/evaluations.ts
+├── middleware/auth.ts
+└── db/prisma.schema</code></pre>
+<p>Non recommandé pour commencer — Supabase fait tout cela automatiquement.</p>
+
+<h3>Option D — Firebase (Google)</h3>
+<p>Alternative à Supabase, également gratuite dans les limites de base. Utilise Firestore (base NoSQL) au lieu de PostgreSQL. L'authentification est excellente. Moins adapté pour des requêtes SQL complexes comme les statistiques d'évaluations.</p>
+
+<h3>Comparatif</h3>
+<table>
+  <thead><tr><th>Solution</th><th>Complexité</th><th>Coût</th><th>Idéal pour</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Supabase (actuel)</strong></td><td>Faible</td><td>Gratuit / 25$/mois</td><td>Continuer le projet tel quel</td></tr>
+    <tr><td><strong>PocketBase</strong></td><td>Faible</td><td>Gratuit (auto-hébergé)</td><td>Serveur local à l'école</td></tr>
+    <tr><td><strong>Node.js + PostgreSQL</strong></td><td>Élevée</td><td>VPS ~4€/mois</td><td>Contrôle total, équipe expérimentée</td></tr>
+    <tr><td><strong>Firebase</strong></td><td>Moyenne</td><td>Gratuit / Pay-as-go</td><td>Applications mobiles Google</td></tr>
+  </tbody>
+</table>
+
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<div id="s10" class="sh"><div class="sh-num">10</div><h2>Améliorations recommandées</h2></div>
+
+<h3>🔴 Priorité haute</h3>
+<ul>
+  <li><strong>Génération automatique des alertes</strong> — Actuellement les alertes sont créées manuellement ou via du code métier basique. Il faudrait une fonction Supabase (Edge Function ou cron) qui analyse les évaluations et crée automatiquement des alertes quand un élève a plus de 3 évaluations "non_acquis" sur 2 semaines.</li>
+  <li><strong>Tests unitaires</strong> — Vitest est installé mais aucun test n'est écrit. Il faut tester au minimum les hooks (use-evaluation, use-student-detail) et la logique de calcul des taux d'acquisition.</li>
+  <li><strong>Protection des routes par rôle</strong> — Actuellement la navigation menu filtre par rôle, mais une URL tapée directement (<code>/school-years</code> par un professeur) n'est pas bloquée au niveau du routing. Ajouter un composant <code>ProtectedRoute</code>.</li>
+</ul>
+
+<h3>🟡 Priorité moyenne</h3>
+<ul>
+  <li><strong>Pagination des listes</strong> — Students, Evaluations : si l'école a 500+ élèves, les requêtes Supabase sans limite peuvent être lentes. Ajouter <code>.range(0, 49)</code> et une pagination UI.</li>
+  <li><strong>Export PDF des rapports élèves</strong> — Les parents/directeurs voudraient pouvoir imprimer le profil d'un élève. Utiliser la librairie <code>jspdf</code> ou <code>@react-pdf/renderer</code>.</li>
+  <li><strong>Notifications en temps réel</strong> — Supabase supporte les Realtime subscriptions. Les alertes pourraient apparaître immédiatement sans recharger la page.</li>
+  <li><strong>Réinitialisation du mot de passe</strong> — Actuellement l'admin doit manuellement réinitialiser. Supabase Auth supporte nativement l'email de reset (<code>supabase.auth.resetPasswordForEmail()</code>).</li>
+  <li><strong>Photo de profil élève</strong> — Le champ <code>photo_url</code> existe dans la table students mais n'est pas utilisé dans l'UI. Ajouter un upload vers Supabase Storage.</li>
+</ul>
+
+<h3>🟢 Priorité basse</h3>
+<ul>
+  <li><strong>Internationalisation (i18n)</strong> — L'interface est entièrement en français. Ajouter <code>react-i18next</code> pour supporter l'arabe ou d'autres langues.</li>
+  <li><strong>Application mobile native</strong> — Le projet peut être converti en app React Native (Expo) en réutilisant les hooks et la logique Supabase. Seul l'UI change.</li>
+  <li><strong>Historique des évaluations</strong> — Afficher l'évolution d'un élève dans le temps avec un graphique linéaire (LineChart Recharts).</li>
+  <li><strong>Dark mode persistant</strong> — Le dark mode existe déjà mais est stocké en localStorage. Le centraliser dans les préférences utilisateur Supabase.</li>
+</ul>
+
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<div id="s11" class="sh"><div class="sh-num">11</div><h2>Idées de nouvelles fonctionnalités</h2></div>
+
+<table>
+  <thead><tr><th>Idée</th><th>Complexité</th><th>Valeur</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Messagerie interne</strong> — communication Prof ↔ Admin ↔ Parent dans l'app</td><td>Élevée</td><td>Très haute</td></tr>
+    <tr><td><strong>Bulletins automatiques</strong> — générer un PDF de bulletin trimestriel par élève avec les stats</td><td>Moyenne</td><td>Très haute</td></tr>
+    <tr><td><strong>Agenda scolaire</strong> — calendrier partagé pour les événements, réunions, examens</td><td>Moyenne</td><td>Haute</td></tr>
+    <tr><td><strong>Absences</strong> — enregistrer et suivre les absences des élèves</td><td>Moyenne</td><td>Haute</td></tr>
+    <tr><td><strong>Comparaison de classes</strong> — vue côte à côte des stats moyennes de deux classes</td><td>Faible</td><td>Moyenne</td></tr>
+    <tr><td><strong>QR Code par élève</strong> — scanner pour accéder rapidement au profil depuis une tablette</td><td>Faible</td><td>Moyenne</td></tr>
+    <tr><td><strong>Objectifs personnalisés</strong> — définir des objectifs par élève et suivre leur atteinte</td><td>Élevée</td><td>Haute</td></tr>
+    <tr><td><strong>API publique</strong> — permettre à d'autres systèmes (logiciel de l'école) d'interroger les données</td><td>Élevée</td><td>Haute</td></tr>
+  </tbody>
+</table>
+
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<div id="s12" class="sh"><div class="sh-num">12</div><h2>Ce qu'il faut apprendre pour continuer</h2></div>
+
+<h3>Indispensable (sans ça, impossible de travailler)</h3>
+<table>
+  <thead><tr><th>Technologie</th><th>Ce qu'il faut maîtriser</th><th>Ressource recommandée</th></tr></thead>
+  <tbody>
+    <tr><td><strong>React 18</strong></td><td>Composants, hooks (useState, useEffect, useMemo, useCallback, useContext), JSX</td><td>react.dev (documentation officielle)</td></tr>
+    <tr><td><strong>TypeScript</strong></td><td>Interfaces, types, generics de base, typage des props React</td><td>typescriptlang.org/docs</td></tr>
+    <tr><td><strong>Tailwind CSS</strong></td><td>Classes utilitaires, responsive (sm:, md:, lg:), dark mode (dark:)</td><td>tailwindcss.com/docs</td></tr>
+    <tr><td><strong>React Router v6</strong></td><td>Routes, useNavigate, useParams, Outlet, Navigate</td><td>reactrouter.com/docs</td></tr>
+    <tr><td><strong>Supabase</strong></td><td>select/insert/update/delete, auth, RLS, upsert, filtres</td><td>supabase.com/docs</td></tr>
+    <tr><td><strong>Git</strong></td><td>commit, push, pull, branches, résolution de conflits</td><td>git-scm.com/book</td></tr>
+  </tbody>
+</table>
+
+<h3>Important (pour comprendre le code existant)</h3>
+<table>
+  <thead><tr><th>Technologie</th><th>Ce qu'il faut maîtriser</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Zustand</strong></td><td>create(), persist middleware, sélecteurs stables (éviter les nouvelles références)</td></tr>
+    <tr><td><strong>Shadcn UI</strong></td><td>Composants Dialog, Badge, Button, Select, Tabs — lire la doc composant par composant</td></tr>
+    <tr><td><strong>Recharts</strong></td><td>RadarChart, BarChart, ResponsiveContainer — utilisés dans StudentDetail et Dashboard</td></tr>
+    <tr><td><strong>SQL de base</strong></td><td>SELECT, INSERT, UPDATE, DELETE, JOIN, WHERE — pour comprendre le schema.sql</td></tr>
+    <tr><td><strong>XLSX (SheetJS)</strong></td><td>XLSX.read(), sheet_to_json() — pour modifier l'import Excel</td></tr>
+  </tbody>
+</table>
+
+<h3>Utile (pour améliorer)</h3>
+<ul>
+  <li><strong>Supabase Edge Functions</strong> (Deno) — pour la génération automatique d'alertes</li>
+  <li><strong>React Query / TanStack Query</strong> — déjà installé, peut remplacer les hooks fetch manuels</li>
+  <li><strong>Vitest + Testing Library</strong> — pour écrire des tests sur les hooks</li>
+  <li><strong>Supabase Realtime</strong> — pour les notifications en temps réel</li>
+  <li><strong>jsPDF ou react-pdf</strong> — pour générer des bulletins PDF</li>
+  <li><strong>Nginx</strong> — si déploiement sur VPS (pour servir les fichiers statiques)</li>
+</ul>
+
+<div class="box box-purple">
+  <div class="box-icon">🧭</div>
+  <div class="box-body">
+    <p class="box-title">Conseil pour le nouveau développeur</p>
+    <p>Commencez par lire <code>App.tsx</code> (les routes), puis <code>types/index.ts</code> (les interfaces), puis un hook simple comme <code>use-levels.ts</code>. Une fois que vous comprenez le patron démo/réel, vous pouvez lire tous les autres hooks. Ne touchez pas à <code>app-store.ts</code> ni à <code>AppLayout.tsx</code> avant d'avoir bien compris la structure globale.</p>
+  </div>
+</div>
+
+<hr class="div" />
+
+<div class="box box-tip">
+  <div class="box-icon">📌</div>
+  <div class="box-body">
+    <p class="box-title">Pour lancer le projet en local</p>
+    <pre><code>cd web-competens
+npm install
+# Créer le fichier .env avec les clés Supabase
+npm run dev
+# → http://localhost:5173</code></pre>
+    <p>Pour builder pour la production : <code>npm run build</code> → dossier <code>dist/</code></p>
+  </div>
+</div>
+
+<div class="footer">
+  <p><strong>Compétens</strong> — Rapport Technique Complet &nbsp;|&nbsp; Généré le 22 juin 2026</p>
+  <p style="margin-top:0.3rem;">Stack : React 18 · TypeScript 5 · Vite 8 · Supabase · Vercel &nbsp;·&nbsp; v1.0</p>
+</div>
+
+</body>
+</html>

@@ -1,3 +1,6 @@
+// SQL migration required in Supabase before deleteCompetency works in real mode:
+//   ALTER TABLE competencies ADD COLUMN IF NOT EXISTS is_archived BOOLEAN NOT NULL DEFAULT FALSE;
+
 import { useState, useEffect, useCallback } from "react";
 import { useDemoStore } from "@/stores/demo";
 import { useAppStore } from "@/stores/app-store";
@@ -13,15 +16,16 @@ export interface UseCompetenciesReturn {
   refetch: () => Promise<void>;
   addCompetency: (data: AddCompetencyInput) => Promise<void>;
   updateCompetency: (id: string, data: Partial<Omit<Competency, "id" | "createdAt">>) => Promise<void>;
+  deleteCompetency: (id: string) => Promise<void>;
 }
 
 export function useCompetencies(): UseCompetenciesReturn {
   const isDemo = useDemoStore((s) => s.isDemoMode);
 
-  // Always call store hooks (React rules of hooks)
   const storeCompetencies = useAppStore((s) => s.competencies);
   const storeAdd = useAppStore((s) => s.addCompetency);
   const storeUpdate = useAppStore((s) => s.updateCompetency);
+  const storeDelete = useAppStore((s) => s.deleteCompetency);
 
   const [sbCompetencies, setSbCompetencies] = useState<Competency[]>([]);
   const [loading, setLoading] = useState(false);
@@ -32,11 +36,11 @@ export function useCompetencies(): UseCompetenciesReturn {
     setLoading(true);
     setError(null);
     try {
-      const { data, error: err } = await supabase
-        .from("competencies")
-        .select("*")
-        .order("order");
+      let query = supabase.from("competencies").select("*").order("order");
+      // Filter archived if the column exists (migration applied)
+      try { query = query.eq("is_archived", false); } catch { /* column may not exist yet */ }
 
+      const { data, error: err } = await query;
       if (err) throw err;
 
       const competencies: Competency[] = (data ?? []).map((c) => ({
@@ -96,6 +100,20 @@ export function useCompetencies(): UseCompetenciesReturn {
     [fetchFromSupabase]
   );
 
+  // Soft delete: marks as archived so evaluations history is preserved.
+  const deleteCompetencyReal = useCallback(
+    async (id: string) => {
+      if (!supabase) throw new Error("Supabase non disponible");
+      const { error: err } = await supabase
+        .from("competencies")
+        .update({ is_archived: true })
+        .eq("id", id);
+      if (err) throw new Error(err.message);
+      await fetchFromSupabase();
+    },
+    [fetchFromSupabase]
+  );
+
   // ── Demo CRUD wrappers ────────────────────────────────────
 
   const addCompetencyDemo = useCallback(
@@ -110,6 +128,11 @@ export function useCompetencies(): UseCompetenciesReturn {
     [storeUpdate]
   );
 
+  const deleteCompetencyDemo = useCallback(
+    async (id: string) => { storeDelete(id); },
+    [storeDelete]
+  );
+
   return {
     competencies: isDemo ? storeCompetencies : sbCompetencies,
     loading,
@@ -117,5 +140,6 @@ export function useCompetencies(): UseCompetenciesReturn {
     refetch: fetchFromSupabase,
     addCompetency: isDemo ? addCompetencyDemo : addCompetencyReal,
     updateCompetency: isDemo ? updateCompetencyDemo : updateCompetencyReal,
+    deleteCompetency: isDemo ? deleteCompetencyDemo : deleteCompetencyReal,
   };
 }
