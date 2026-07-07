@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { useEvaluation } from "@/hooks/use-evaluation";
 import { useI18n } from "@/i18n";
+import { localizeCompTitle } from "@/i18n/competency-content";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -171,7 +172,7 @@ export default function EvaluationPage() {
                         className="gap-2"
                       >
                         <span className="font-mono font-bold">{c.code}</span>
-                        <span className="hidden sm:inline truncate max-w-[160px]">{c.title}</span>
+                        <span className="hidden sm:inline truncate max-w-[160px]">{localizeCompTitle(c.code, c.title, lang)}</span>
                       </Button>
                     ))}
                   </div>

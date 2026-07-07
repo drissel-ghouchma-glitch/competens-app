@@ -9,6 +9,7 @@ import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell,
 } from "recharts";
 import { useI18n } from "@/i18n";
+import { localizeCompTitle } from "@/i18n/competency-content";
 import type { Competency, EvaluationStatus } from "@/types";
 
 // ── Shared types (exported for hook consumers) ─────────────────────────────────
@@ -125,13 +126,13 @@ export function DailyGranularAnalytics({ studentId, rawEvals, competencies, clas
         return {
           id: comp.id,
           code: comp.code,
-          title: comp.title,
+          title: localizeCompTitle(comp.code, comp.title, lang),
           rate: Math.round(avg),
           teacherEvals: ce.map((e) => ({ teacherName: e.teacherName, status: e.status })),
         };
       })
       .filter((d): d is ChartEntry => d !== null);
-  }, [dayEvals, competencies]);
+  }, [dayEvals, competencies, lang]);
 
   const selectedComp = selectedCompId
     ? competencies.find((c) => c.id === selectedCompId) ?? null
@@ -232,7 +233,7 @@ export function DailyGranularAnalytics({ studentId, rawEvals, competencies, clas
               </Button>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold truncate">
-                  {selectedComp.code} — {selectedComp.title}
+                  {selectedComp.code} — {localizeCompTitle(selectedComp.code, selectedComp.title, lang)}
                 </p>
               </div>
             </div>

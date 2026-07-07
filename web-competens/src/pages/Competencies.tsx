@@ -4,6 +4,7 @@ import { useRequests } from "@/hooks/use-requests";
 import { useAuth } from "@/hooks/use-auth";
 import { useDemoStore } from "@/stores/demo";
 import { useI18n } from "@/i18n";
+import { localizeCompetency } from "@/i18n/competency-content";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,7 +21,7 @@ export default function CompetenciesPage() {
   const { competencies, loading, error, addCompetency, updateCompetency, deleteCompetency } = useCompetencies();
   const { submitRequest } = useRequests();
   const { user } = useAuth();
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const isDemo = useDemoStore((s) => s.isDemoMode);
   const isTeacherReal = !isDemo && user?.role === "professeur";
   const canDelete = user?.role === "admin" || user?.role === "directeur";
@@ -214,7 +215,9 @@ export default function CompetenciesPage() {
         </div>
       ) : (
         <div className="grid gap-3">
-          {sorted.map((c) => (
+          {sorted.map((c) => {
+            const cc = localizeCompetency(c.code, lang, { title: c.title, description: c.description, advice: c.pedagogicalAdvice });
+            return (
             <Card
               key={c.id}
               className={cn(
@@ -230,8 +233,8 @@ export default function CompetenciesPage() {
                   {c.code}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h3 className="font-semibold text-foreground">{c.title}</h3>
-                  <p className="text-sm text-muted-foreground line-clamp-1 mt-0.5">{c.description}</p>
+                  <h3 className="font-semibold text-foreground">{cc.title}</h3>
+                  <p className="text-sm text-muted-foreground line-clamp-1 mt-0.5">{cc.description}</p>
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
                   <Button
@@ -267,19 +270,20 @@ export default function CompetenciesPage() {
                 <div className="px-5 pb-5 space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
                   <div>
                     <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">{t("competencies.description")}</h4>
-                    <p className="text-sm text-foreground">{c.description}</p>
+                    <p className="text-sm text-foreground">{cc.description}</p>
                   </div>
                   <div className="flex items-start gap-2 p-3 rounded-xl bg-amber-500/5 border border-amber-500/10">
                     <Lightbulb className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
                     <div>
                       <h4 className="text-xs font-semibold text-amber-600 mb-1">{t("competencies.advice")}</h4>
-                      <p className="text-sm text-foreground">{c.pedagogicalAdvice}</p>
+                      <p className="text-sm text-foreground">{cc.advice}</p>
                     </div>
                   </div>
                 </div>
               )}
             </Card>
-          ))}
+            );
+          })}
         </div>
       )}
 

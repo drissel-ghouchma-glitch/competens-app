@@ -16,6 +16,7 @@ import {
 } from "recharts";
 import type { TimelinePoint } from "@/hooks/use-parent";
 import { DailyGranularAnalytics } from "@/components/DailyGranularAnalytics";
+import { localizeCompTitle } from "@/i18n/competency-content";
 
 // ── Helpers ────────────────────────────────────────────────────
 
@@ -181,7 +182,7 @@ function AttendanceSummary({ todayAttendance, absenceHistory }: {
 // ── Child Analytics (read-only) ────────────────────────────────
 
 function ChildAnalytics({ child, competencies }: { child: ParentChild; competencies: Competency[] }) {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const radarData = child.stats.map((s) => ({
     subject: s.competencyCode, value: s.acquisitionRate, fullMark: 100,
   }));
@@ -296,7 +297,7 @@ function ChildAnalytics({ child, competencies }: { child: ParentChild; competenc
                   </div>
                   <div className="min-w-0">
                     <p className="text-sm font-semibold">{s.competencyCode}</p>
-                    <p className="text-xs text-muted-foreground truncate">{s.competencyTitle}</p>
+                    <p className="text-xs text-muted-foreground truncate">{localizeCompTitle(s.competencyCode, s.competencyTitle, lang)}</p>
                     <div className="flex items-center gap-2 mt-1.5">
                       <Progress value={s.acquisitionRate} className="h-1 flex-1" />
                       <span className="text-xs font-mono">{s.acquisitionRate}%</span>

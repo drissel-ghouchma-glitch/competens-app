@@ -22,6 +22,7 @@ import {
 import type { CompetencyStat, TimelinePoint } from "@/hooks/use-student-detail";
 import type { AttendanceRecord } from "@/types";
 import { DailyGranularAnalytics } from "@/components/DailyGranularAnalytics";
+import { localizeCompTitle } from "@/i18n/competency-content";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -187,7 +188,7 @@ function SummaryPanel({ stats }: { stats: CompetencyStat[] }) {
 }
 
 function SkillGrid({ stats }: { stats: CompetencyStat[] }) {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   return (
     <Card className="border-border/50">
       <CardHeader className="pb-2">
@@ -208,7 +209,7 @@ function SkillGrid({ stats }: { stats: CompetencyStat[] }) {
               </div>
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-foreground">{s.competencyCode}</p>
-                <p className="text-xs text-muted-foreground truncate">{s.competencyTitle}</p>
+                <p className="text-xs text-muted-foreground truncate">{localizeCompTitle(s.competencyCode, s.competencyTitle, lang)}</p>
                 <div className="flex items-center gap-2 mt-1.5">
                   <Progress value={s.acquisitionRate} className="h-1 flex-1" />
                   <span className="text-xs font-mono font-medium">{s.acquisitionRate}%</span>
