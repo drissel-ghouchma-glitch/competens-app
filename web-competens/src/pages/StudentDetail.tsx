@@ -20,6 +20,7 @@ import {
 } from "recharts";
 import type { CompetencyStat, TimelinePoint } from "@/hooks/use-student-detail";
 import type { AttendanceRecord } from "@/types";
+import { DailyGranularAnalytics } from "@/components/DailyGranularAnalytics";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -279,6 +280,7 @@ export default function StudentDetailPage() {
   const {
     student, classe, level, competencies,
     myStats, globalStats, alerts, timeline, attendanceHistory, classes,
+    rawEvals, classTeachers,
     loading, error, updateStudent,
   } = useStudentDetail(id);
 
@@ -551,6 +553,15 @@ export default function StudentDetailPage() {
       <SkillGrid stats={displayStats} />
 
       <TimelineChart timeline={timeline} />
+
+      {id && (
+        <DailyGranularAnalytics
+          studentId={id}
+          rawEvals={rawEvals}
+          competencies={competencies}
+          classTeachers={classTeachers}
+        />
+      )}
 
       <AttendanceHistoryCard history={attendanceHistory} />
     </div>

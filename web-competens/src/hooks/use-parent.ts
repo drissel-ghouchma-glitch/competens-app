@@ -3,8 +3,9 @@ import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/lib/supabase";
 import { statusToScore, scoreToStatus, buildTimeline, type TimelinePoint } from "@/lib/eval-utils";
 import type { Student, Competency, Alert, EvaluationStatus, AttendanceStatus } from "@/types";
+import type { DailyEvalRecord, ClassTeacher } from "@/components/DailyGranularAnalytics";
 
-export type { TimelinePoint };
+export type { TimelinePoint, DailyEvalRecord, ClassTeacher };
 
 export interface ParentChildStat {
   competencyId: string;
@@ -18,6 +19,7 @@ export interface ParentChildStat {
 interface RawEval {
   studentId: string;
   competencyId: string;
+  teacherId: string;
   teacherName: string;
   status: EvaluationStatus;
   date: string;
@@ -51,6 +53,10 @@ export interface ParentChild extends Student {
   todayAttendance: AttendanceStatus | null;
   /** Dates when the child was absent, most recent first */
   absenceHistory: string[];
+  /** Un-aggregated eval records for daily granular analytics */
+  rawEvals: DailyEvalRecord[];
+  /** Teachers assigned to this child's class */
+  classTeachers: ClassTeacher[];
 }
 
 export interface UseParentReturn {
@@ -97,7 +103,7 @@ export function useParent(): UseParentReturn {
         supabase.from("competencies").select("*").order("order"),
         supabase
           .from("evaluations")
-          .select("student_id, competency_id, status, date, profiles(full_name)")
+          .select("student_id, competency_id, teacher_id, status, date, profiles(full_name)")
           .in("student_id", studentIds),
         supabase
           .from("alerts")
@@ -130,10 +136,31 @@ export function useParent(): UseParentReturn {
       const evals: RawEval[] = (evalsRes.data ?? []).map((e) => ({
         studentId: e.student_id,
         competencyId: e.competency_id,
+        teacherId: (e as { teacher_id?: string }).teacher_id ?? "",
         teacherName: (e.profiles as { full_name?: string } | null)?.full_name ?? "",
         status: e.status as EvaluationStatus,
         date: e.date,
       }));
+
+      // Fetch teachers for each unique class
+      const classIds = [...new Set(students.map((s) => s.classId).filter(Boolean))];
+      const tcasByClass = new Map<string, ClassTeacher[]>();
+      if (classIds.length > 0) {
+        const { data: tcaData } = await supabase
+          .from("teacher_class_assignments")
+          .select("class_id, teacher_id, profiles(full_name)")
+          .in("class_id", classIds);
+        for (const row of (tcaData ?? [])) {
+          const classId = (row as { class_id: string }).class_id;
+          const entry: ClassTeacher = {
+            id: (row as { teacher_id: string }).teacher_id,
+            name: (row.profiles as { full_name?: string } | null)?.full_name ?? (row as { teacher_id: string }).teacher_id,
+          };
+          const list = tcasByClass.get(classId) ?? [];
+          list.push(entry);
+          tcasByClass.set(classId, list);
+        }
+      }
 
       // Build attendance maps
       const todayAttMap = new Map<string, AttendanceStatus>();
@@ -166,6 +193,8 @@ export function useParent(): UseParentReturn {
         timeline: buildTimeline(evals.filter((e) => e.studentId === s.id)),
         todayAttendance: todayAttMap.get(s.id) ?? null,
         absenceHistory: absenceMap.get(s.id) ?? [],
+        rawEvals: evals.filter((e) => e.studentId === s.id),
+        classTeachers: tcasByClass.get(s.classId) ?? [],
       }));
 
       setCompetencies(comps);

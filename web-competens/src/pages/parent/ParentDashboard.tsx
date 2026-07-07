@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useParent, type ParentChild, type ParentChildStat } from "@/hooks/use-parent";
+import type { Competency } from "@/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -13,6 +14,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell,
 } from "recharts";
 import type { TimelinePoint } from "@/hooks/use-parent";
+import { DailyGranularAnalytics } from "@/components/DailyGranularAnalytics";
 
 // ── Helpers ────────────────────────────────────────────────────
 
@@ -175,7 +177,7 @@ function AttendanceSummary({ todayAttendance, absenceHistory }: {
 
 // ── Child Analytics (read-only) ────────────────────────────────
 
-function ChildAnalytics({ child }: { child: ParentChild }) {
+function ChildAnalytics({ child, competencies }: { child: ParentChild; competencies: Competency[] }) {
   const radarData = child.stats.map((s) => ({
     subject: s.competencyCode, value: s.acquisitionRate, fullMark: 100,
   }));
@@ -309,6 +311,14 @@ function ChildAnalytics({ child }: { child: ParentChild }) {
       {/* Timeline */}
       <TimelineChart timeline={child.timeline} />
 
+      {/* Daily granular analytics */}
+      <DailyGranularAnalytics
+        studentId={child.id}
+        rawEvals={child.rawEvals}
+        competencies={competencies}
+        classTeachers={child.classTeachers}
+      />
+
       {/* Attendance */}
       <AttendanceSummary
         todayAttendance={child.todayAttendance}
@@ -321,7 +331,7 @@ function ChildAnalytics({ child }: { child: ParentChild }) {
 // ── Main Page ──────────────────────────────────────────────────
 
 export default function ParentDashboard() {
-  const { children, loading, error } = useParent();
+  const { children, competencies, loading, error } = useParent();
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const selected = selectedId
@@ -432,7 +442,7 @@ export default function ParentDashboard() {
             </div>
           </div>
 
-          <ChildAnalytics child={selected} />
+          <ChildAnalytics child={selected} competencies={competencies} />
         </>
       )}
     </div>

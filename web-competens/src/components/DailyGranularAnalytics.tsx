@@ -1,0 +1,279 @@
+import { useState, useMemo } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { BarChart2, ChevronLeft, Users } from "lucide-react";
+import {
+  ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell,
+} from "recharts";
+import type { Competency, EvaluationStatus } from "@/types";
+
+// ── Shared types (exported for hook consumers) ─────────────────────────────────
+
+export interface DailyEvalRecord {
+  studentId: string;
+  competencyId: string;
+  teacherId: string;
+  teacherName: string;
+  status: EvaluationStatus;
+  date: string;
+}
+
+export interface ClassTeacher {
+  id: string;
+  name: string;
+}
+
+// ── Internal helpers ───────────────────────────────────────────────────────────
+
+function barColor(rate: number) {
+  if (rate > 90) return "hsl(122 39% 49%)";
+  if (rate >= 50) return "hsl(38 92% 50%)";
+  return "hsl(4 77% 55%)";
+}
+
+function statusLabel(s: EvaluationStatus) {
+  switch (s) {
+    case "acquis":   return "Acquis";
+    case "en_cours": return "En cours";
+    default:         return "Non acquis";
+  }
+}
+
+function statusBadgeStyle(s: EvaluationStatus): React.CSSProperties {
+  if (s === "acquis")   return { background: "hsl(122 39% 49% / 0.15)", color: "hsl(122 39% 32%)", border: "1px solid hsl(122 39% 49% / 0.3)" };
+  if (s === "en_cours") return { background: "hsl(38 92% 50% / 0.15)",  color: "hsl(38 92% 30%)",  border: "1px solid hsl(38 92% 50% / 0.3)"  };
+  return                       { background: "hsl(4 77% 55% / 0.15)",   color: "hsl(4 77% 40%)",   border: "1px solid hsl(4 77% 55% / 0.3)"   };
+}
+
+function statusToScore(s: EvaluationStatus) {
+  if (s === "acquis")   return 100;
+  if (s === "en_cours") return 70;
+  return 25;
+}
+
+// ── Level-1 Tooltip ────────────────────────────────────────────────────────────
+
+interface ChartEntry {
+  id: string;
+  code: string;
+  title: string;
+  rate: number;
+  teacherEvals: { teacherName: string; status: EvaluationStatus }[];
+}
+
+function DayCompTooltip({
+  active, payload,
+}: {
+  active?: boolean;
+  payload?: Array<{ payload: ChartEntry }>;
+}) {
+  if (!active || !payload?.length) return null;
+  const d = payload[0].payload;
+  return (
+    <div className="rounded-xl border bg-popover shadow-lg p-3 text-sm min-w-[190px]">
+      <p className="font-semibold text-foreground mb-1 text-xs truncate">{d.code} — {d.title}</p>
+      <p className="font-bold mb-2" style={{ color: barColor(d.rate) }}>{d.rate}%</p>
+      {d.teacherEvals.length > 0 && (
+        <div className="space-y-1.5 border-t border-border pt-2">
+          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Enseignants</p>
+          {d.teacherEvals.map((te, i) => (
+            <div key={i} className="flex items-center justify-between gap-2">
+              <span className="text-xs text-foreground truncate">{te.teacherName || "—"}</span>
+              <Badge className="text-[10px] px-1.5 py-0 h-4 shrink-0" style={statusBadgeStyle(te.status)}>
+                {statusLabel(te.status)}
+              </Badge>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Main component ─────────────────────────────────────────────────────────────
+
+interface Props {
+  studentId: string;
+  rawEvals: DailyEvalRecord[];
+  competencies: Competency[];
+  classTeachers: ClassTeacher[];
+}
+
+export function DailyGranularAnalytics({ studentId, rawEvals, competencies, classTeachers }: Props) {
+  const today = new Date().toISOString().split("T")[0];
+  const [selectedDate, setSelectedDate] = useState(today);
+  const [selectedCompId, setSelectedCompId] = useState<string | null>(null);
+
+  // Day evals for this student
+  const dayEvals = useMemo(
+    () => rawEvals.filter((e) => e.studentId === studentId && e.date === selectedDate),
+    [rawEvals, studentId, selectedDate],
+  );
+
+  // Level-1 chart data: one bar per evaluated competency on the selected day
+  const chartData = useMemo<ChartEntry[]>(() => {
+    return competencies
+      .map((comp) => {
+        const ce = dayEvals.filter((e) => e.competencyId === comp.id);
+        if (ce.length === 0) return null;
+        const avg = ce.reduce((sum, e) => sum + statusToScore(e.status), 0) / ce.length;
+        return {
+          id: comp.id,
+          code: comp.code,
+          title: comp.title,
+          rate: Math.round(avg),
+          teacherEvals: ce.map((e) => ({ teacherName: e.teacherName, status: e.status })),
+        };
+      })
+      .filter((d): d is ChartEntry => d !== null);
+  }, [dayEvals, competencies]);
+
+  const selectedComp = selectedCompId
+    ? competencies.find((c) => c.id === selectedCompId) ?? null
+    : null;
+
+  // Level-2 breakdown: each class teacher vs their eval for selected competency + day
+  const teacherBreakdown = useMemo(() => {
+    if (!selectedCompId) return [];
+    const compEvals = dayEvals.filter((e) => e.competencyId === selectedCompId);
+    const evalByTeacher = new Map(compEvals.map((e) => [e.teacherId, e]));
+    return classTeachers.map((t) => ({ teacher: t, ev: evalByTeacher.get(t.id) ?? null }));
+  }, [selectedCompId, dayEvals, classTeachers]);
+
+  const dateLabel = new Date(selectedDate + "T00:00:00").toLocaleDateString("fr-FR", {
+    weekday: "long", day: "numeric", month: "long", year: "numeric",
+  });
+
+  return (
+    <Card className="border-border/50">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base font-semibold flex items-center gap-2">
+          <BarChart2 className="w-4 h-4 text-primary" />
+          Analyse granulaire journalière
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+
+        {/* ── Date picker ──────────────────────────────────────── */}
+        <div className="flex flex-wrap items-center gap-3">
+          <Label className="text-xs text-muted-foreground shrink-0">Date</Label>
+          <Input
+            type="date"
+            value={selectedDate}
+            max={today}
+            onChange={(e) => { setSelectedDate(e.target.value); setSelectedCompId(null); }}
+            className="h-8 w-44 text-sm"
+          />
+          <span className="text-xs text-muted-foreground capitalize">{dateLabel}</span>
+        </div>
+
+        {/* ── Level-1: competency bar chart ─────────────────────── */}
+        {chartData.length === 0 ? (
+          <div className="py-10 text-center text-sm text-muted-foreground border border-dashed border-border/60 rounded-xl">
+            Aucune évaluation enregistrée pour ce jour.
+          </div>
+        ) : (
+          <>
+            <p className="text-[11px] text-muted-foreground">
+              Survolez une barre pour voir les évaluations par enseignant · Cliquez pour le détail complet de la classe.
+            </p>
+            <div className="h-[220px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={chartData}
+                  margin={{ top: 8, right: 8, left: -20, bottom: 0 }}
+                  onClick={(d) => {
+                    const p = (d?.activePayload?.[0]?.payload) as ChartEntry | undefined;
+                    if (p) setSelectedCompId((prev) => prev === p.id ? null : p.id);
+                  }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis dataKey="code" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
+                  <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} unit="%" />
+                  <Tooltip content={<DayCompTooltip />} />
+                  <Bar dataKey="rate" radius={[4, 4, 0, 0]} cursor="pointer">
+                    {chartData.map((entry, i) => (
+                      <Cell
+                        key={i}
+                        fill={barColor(entry.rate)}
+                        opacity={selectedCompId && selectedCompId !== entry.id ? 0.35 : 1}
+                      />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+
+            <div className="flex items-center gap-4 text-xs text-muted-foreground justify-center flex-wrap">
+              <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm inline-block" style={{ background: "hsl(122 39% 49%)" }} /> Acquis (&gt;90%)</span>
+              <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm inline-block" style={{ background: "hsl(38 92% 50%)" }} /> En cours (50–90%)</span>
+              <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm inline-block" style={{ background: "hsl(4 77% 55%)" }} /> Non acquis (&lt;50%)</span>
+            </div>
+          </>
+        )}
+
+        {/* ── Level-2: teacher breakdown drill-down ─────────────── */}
+        {selectedComp && (
+          <div className="border border-primary/20 rounded-xl p-4 space-y-3 bg-primary/5">
+            {/* Header */}
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 px-2 gap-1 text-xs"
+                onClick={() => setSelectedCompId(null)}
+              >
+                <ChevronLeft className="w-3.5 h-3.5" /> Retour
+              </Button>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold truncate">
+                  {selectedComp.code} — {selectedComp.title}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1.5">
+              <Users className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                Détail par enseignant de la classe
+              </p>
+            </div>
+
+            {classTeachers.length === 0 ? (
+              <p className="text-xs text-muted-foreground italic">
+                Aucun enseignant assigné à cette classe.
+              </p>
+            ) : (
+              <div className="divide-y divide-border/50 rounded-lg overflow-hidden border border-border/40 bg-card">
+                {teacherBreakdown.map(({ teacher, ev }) => (
+                  <div
+                    key={teacher.id}
+                    className="flex items-center justify-between px-3 py-2.5 gap-3"
+                  >
+                    <span className="text-sm font-medium text-foreground">{teacher.name}</span>
+                    {ev ? (
+                      <Badge className="text-xs shrink-0" style={statusBadgeStyle(ev.status)}>
+                        {statusLabel(ev.status)}
+                      </Badge>
+                    ) : (
+                      <span
+                        className="text-xs text-muted-foreground bg-muted/50 px-2 py-0.5 rounded-md"
+                        dir="rtl"
+                      >
+                        لم يقم بالتقييم
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+      </CardContent>
+    </Card>
+  );
+}

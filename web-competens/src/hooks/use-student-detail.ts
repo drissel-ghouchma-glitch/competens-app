@@ -5,8 +5,9 @@ import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/lib/supabase";
 import { statusToScore, scoreToStatus, buildTimeline, type TimelinePoint } from "@/lib/eval-utils";
 import type { Student, Classe, Level, Competency, Alert, EvaluationStatus, AttendanceRecord, AttendanceStatus } from "@/types";
+import type { DailyEvalRecord, ClassTeacher } from "@/components/DailyGranularAnalytics";
 
-export type { TimelinePoint };
+export type { TimelinePoint, DailyEvalRecord, ClassTeacher };
 
 export interface CompetencyStat {
   competencyId: string;
@@ -63,6 +64,10 @@ export interface UseStudentDetailReturn {
   attendanceHistory: AttendanceRecord[];
   /** Classes list for the edit dropdown (admin only) */
   classes: Classe[];
+  /** Un-aggregated evaluation records for daily granular analytics */
+  rawEvals: DailyEvalRecord[];
+  /** Teachers assigned to this student's class */
+  classTeachers: ClassTeacher[];
   loading: boolean;
   error: string | null;
   /** Update student — only available for admin/directeur */
@@ -139,6 +144,12 @@ export function useStudentDetail(studentId: string | undefined): UseStudentDetai
     () => storeAttendance.filter((a) => a.studentId === studentId).sort((a, b) => b.date.localeCompare(a.date)),
     [storeAttendance, studentId]
   );
+  const demoClassTeachers = useMemo<ClassTeacher[]>(() => {
+    const ids = new Set(demoRawEvals.filter((e) => e.studentId === studentId).map((e) => e.teacherId));
+    return storeTeachers
+      .filter((t) => ids.has(t.id))
+      .map((t) => ({ id: t.id, name: `${t.firstName} ${t.lastName}` }));
+  }, [demoRawEvals, storeTeachers, studentId]);
 
   // ── Supabase state ───────────────────────────────────────
   const [sbStudent, setSbStudent] = useState<Student | null>(null);
@@ -150,6 +161,7 @@ export function useStudentDetail(studentId: string | undefined): UseStudentDetai
   const [sbMyEvals, setSbMyEvals] = useState<RawEval[]>([]);
   const [sbAllEvals, setSbAllEvals] = useState<RawEval[]>([]);
   const [sbAttendanceHistory, setSbAttendanceHistory] = useState<AttendanceRecord[]>([]);
+  const [sbClassTeachers, setSbClassTeachers] = useState<ClassTeacher[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -202,12 +214,15 @@ export function useStudentDetail(studentId: string | undefined): UseStudentDetai
       };
       setSbStudent(student);
 
-      // 2. Classes + competencies + alerts + attendance
-      const [classesRes, compRes, alertsRes, attRes] = await Promise.all([
+      // 2. Classes + competencies + alerts + attendance + class teachers
+      const [classesRes, compRes, alertsRes, attRes, tcaRes] = await Promise.all([
         supabase.from("classes").select("*, levels(*)").eq("is_archived", false).order("name"),
         supabase.from("competencies").select("*").order("order"),
         supabase.from("alerts").select("*").eq("student_id", studentId).order("created_at", { ascending: false }),
         supabase.from("attendance").select("*").eq("student_id", studentId).order("date", { ascending: false }),
+        student.classId
+          ? supabase.from("teacher_class_assignments").select("teacher_id, profiles(full_name)").eq("class_id", student.classId)
+          : Promise.resolve({ data: [] as { teacher_id: string; profiles: { full_name?: string } | null }[], error: null }),
       ]);
 
       if (classesRes.error) throw classesRes.error;
@@ -245,6 +260,11 @@ export function useStudentDetail(studentId: string | undefined): UseStudentDetai
         id: a.id, studentId: a.student_id, classId: a.class_id,
         teacherId: a.teacher_id ?? "", date: a.date,
         status: a.status as AttendanceStatus, createdAt: a.created_at,
+      })));
+
+      setSbClassTeachers((tcaRes.data ?? []).map((r) => ({
+        id: r.teacher_id,
+        name: (r.profiles as { full_name?: string } | null)?.full_name ?? r.teacher_id,
       })));
 
       // 3. Evaluations — always fetch all for timeline; filter by teacher for myStats
@@ -316,6 +336,8 @@ export function useStudentDetail(studentId: string | undefined): UseStudentDetai
     timeline: isDemo ? demoTimeline : sbTimeline,
     attendanceHistory: isDemo ? demoAttendanceHistory : sbAttendanceHistory,
     classes: isDemo ? storeClasses : sbClasses,
+    rawEvals: isDemo ? demoRawEvals : sbAllEvals,
+    classTeachers: isDemo ? demoClassTeachers : sbClassTeachers,
     loading,
     error,
     updateStudent: isDemo ? updateStudentDemo : updateStudentReal,
