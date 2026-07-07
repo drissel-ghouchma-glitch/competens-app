@@ -9,9 +9,16 @@ export function statusToScore(status: EvaluationStatus): number {
 }
 
 // Derives the display status from a computed rate, enforcing the agreed ranges.
+// This is the single bridge between the teacher's "100% / -1" demerit toggle
+// (Evaluation.tsx) and the Acquis/En cours/Non acquis categories shown by every
+// chart (StudentDetail, ParentDashboard, DailyGranularAnalytics). Those charts
+// are never touched directly — they always render whatever this function returns.
+//   90–100  → Acquis
+//   51–89   → En cours
+//   ≤50     → Non acquis
 export function scoreToStatus(rate: number): EvaluationStatus {
-  if (rate > 90) return "acquis";
-  if (rate >= 50) return "en_cours";
+  if (rate >= 90) return "acquis";
+  if (rate > 50) return "en_cours";
   return "non_acquis";
 }
 

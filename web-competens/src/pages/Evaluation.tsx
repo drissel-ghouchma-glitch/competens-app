@@ -5,11 +5,19 @@ import { localizeCompTitle } from "@/i18n/competency-content";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ClipboardCheck, CheckCircle, Clock, XCircle, Save, Loader2, AlertCircle } from "lucide-react";
+import { ClipboardCheck, CheckCircle, MinusCircle, Save, Loader2, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { EvaluationStatus, DailyEvaluationInput } from "@/types";
 
 type EvalState = Record<string, EvaluationStatus>;
+
+/** On this screen a student is either at 100% (untouched / "acquis") or has
+ *  a "-1" penalty applied. Any status other than "acquis" is shown as the
+ *  penalty state — this also lets a pre-existing "en_cours" record (saved
+ *  before this screen existed) render correctly as a penalty. */
+function isPenalized(status: EvaluationStatus | undefined): boolean {
+  return status !== undefined && status !== "acquis";
+}
 
 export default function EvaluationPage() {
   const { t, lang } = useI18n();
@@ -53,12 +61,24 @@ export default function EvaluationPage() {
     setSaveSuccess(false);
   };
 
-  const toggleStatus = (studentId: string) => {
+  const togglePenalty = (studentId: string) => {
     setEvalStates((prev) => {
-      const current = prev[studentId] ?? todayEvals[studentId] ?? "non_acquis";
-      const next: EvaluationStatus =
-        current === "non_acquis" ? "en_cours" : current === "en_cours" ? "acquis" : "non_acquis";
-      return { ...prev, [studentId]: next };
+      const original = todayEvals[studentId];
+      const current = prev[studentId] ?? original;
+      const next = { ...prev };
+      if (isPenalized(current)) {
+        // Undo → back to 100%
+        if (isPenalized(original)) {
+          // A penalty was already persisted today — must explicitly overwrite it on save.
+          next[studentId] = "acquis";
+        } else {
+          // Nothing persisted yet — just drop the pending edit, nothing to save.
+          delete next[studentId];
+        }
+      } else {
+        next[studentId] = "non_acquis";
+      }
+      return next;
     });
   };
 
@@ -82,12 +102,6 @@ export default function EvaluationPage() {
     } finally {
       setSaving(false);
     }
-  };
-
-  const statusConfig: Record<EvaluationStatus, { icon: typeof CheckCircle; label: string; color: string; bg: string }> = {
-    acquis:     { icon: CheckCircle, label: t("status.acquis"),     color: "text-green-600", bg: "bg-green-500/10 border-green-500/30" },
-    en_cours:   { icon: Clock,       label: t("status.en_cours"),   color: "text-amber-600", bg: "bg-amber-500/10 border-amber-500/30" },
-    non_acquis: { icon: XCircle,     label: t("status.non_acquis"), color: "text-red-600",   bg: "bg-red-500/10 border-red-500/30" },
   };
 
   const editedCount = Object.keys(evalStates).length;
@@ -195,17 +209,17 @@ export default function EvaluationPage() {
               </CardHeader>
               <CardContent>
                 {/* Legend */}
-                <div className="flex gap-4 mb-4 text-xs">
-                  {(["acquis", "en_cours", "non_acquis"] as EvaluationStatus[]).map((s) => {
-                    const cfg = statusConfig[s];
-                    const Icon = cfg.icon;
-                    return (
-                      <div key={s} className="flex items-center gap-1.5 text-muted-foreground">
-                        <Icon className={cn("w-4 h-4", cfg.color)} /> {cfg.label}
-                      </div>
-                    );
-                  })}
+                <div className="flex flex-wrap items-center gap-4 mb-2 text-xs">
+                  <div className="flex items-center gap-1.5 text-muted-foreground">
+                    <CheckCircle className="w-4 h-4 text-green-600" />
+                    <span className="font-bold text-green-600">100%</span> — {t("evaluation.legendAcquired")}
+                  </div>
+                  <div className="flex items-center gap-1.5 text-muted-foreground">
+                    <MinusCircle className="w-4 h-4 text-amber-600" />
+                    <span className="font-bold text-amber-600">-1</span> — {t("evaluation.legendPenalty")}
+                  </div>
                 </div>
+                <p className="text-[11px] text-muted-foreground mb-4">{t("evaluation.clickHint")}</p>
 
                 {/* Student List */}
                 {classStudents.length === 0 ? (
@@ -215,17 +229,16 @@ export default function EvaluationPage() {
                 ) : (
                   <div className="grid gap-2">
                     {classStudents.map((s, idx) => {
-                      const status = evalStates[s.id] ?? todayEvals[s.id] ?? "non_acquis";
-                      const cfg = statusConfig[status];
-                      const Icon = cfg.icon;
+                      const current = evalStates[s.id] ?? todayEvals[s.id];
+                      const penalized = isPenalized(current);
                       return (
                         <button
                           key={s.id}
-                          onClick={() => toggleStatus(s.id)}
+                          onClick={() => togglePenalty(s.id)}
                           className={cn(
                             "flex items-center gap-3 p-3 rounded-xl border-2 transition-all duration-200 text-start w-full",
-                            cfg.bg,
-                            evalStates[s.id] ? "border-current" : "border-transparent hover:border-muted-foreground/20"
+                            penalized ? "bg-amber-500/10 border-amber-500/30" : "bg-green-500/10 border-green-500/30",
+                            s.id in evalStates ? "border-current" : "border-transparent hover:border-muted-foreground/20"
                           )}
                         >
                           <span className="w-7 h-7 rounded-lg bg-muted flex items-center justify-center text-xs font-mono font-bold text-muted-foreground shrink-0">
@@ -236,8 +249,12 @@ export default function EvaluationPage() {
                               {s.firstName} {s.lastName}
                             </p>
                           </div>
-                          <Icon className={cn("w-5 h-5 shrink-0", cfg.color)} />
-                          <span className={cn("text-xs font-medium shrink-0", cfg.color)}>{cfg.label}</span>
+                          {penalized
+                            ? <MinusCircle className="w-5 h-5 shrink-0 text-amber-600" />
+                            : <CheckCircle className="w-5 h-5 shrink-0 text-green-600" />}
+                          <span className={cn("text-sm font-bold shrink-0 tabular-nums", penalized ? "text-amber-600" : "text-green-600")}>
+                            {penalized ? "-1" : "100%"}
+                          </span>
                         </button>
                       );
                     })}

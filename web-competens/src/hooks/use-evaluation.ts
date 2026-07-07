@@ -3,6 +3,7 @@ import { useDemoStore } from "@/stores/demo";
 import { useAppStore } from "@/stores/app-store";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/lib/supabase";
+import { statusToScore, scoreToStatus } from "@/lib/eval-utils";
 import type { Classe, Student, Competency, EvaluationStatus, Level, DailyEvaluationInput } from "@/types";
 
 function splitFullName(n: string) {
@@ -72,7 +73,8 @@ export function useEvaluation(): UseEvaluationReturn {
       const [classesRes, levelsRes, competenciesRes] = await Promise.all([
         classesQuery,
         supabase.from("levels").select("*").eq("is_archived", false).order("name"),
-        supabase.from("competencies").select("*").order("order"),
+        // Archived competencies must never reach the teacher's evaluation grid.
+        supabase.from("competencies").select("*").eq("is_archived", false).order("order"),
       ]);
 
       if (classesRes.error) throw classesRes.error;
@@ -197,6 +199,59 @@ export function useEvaluation(): UseEvaluationReturn {
     [storeSave]
   );
 
+  // After a save, re-checks each affected student's overall score for this
+  // competency (averaged across all teachers/dates, same formula as the
+  // stats hooks) and raises a critical alert the moment it drops to the
+  // "Non acquis" threshold (≤50). Best-effort — never blocks the save.
+  const checkThresholdAlerts = useCallback(
+    async (competencyId: string, studentIds: string[]) => {
+      if (!supabase) return;
+      const competency = sbCompetencies.find((c) => c.id === competencyId);
+      if (!competency) return;
+
+      for (const studentId of studentIds) {
+        try {
+          const { data: allEvals } = await supabase
+            .from("evaluations")
+            .select("status")
+            .eq("student_id", studentId)
+            .eq("competency_id", competencyId);
+          if (!allEvals || allEvals.length === 0) continue;
+
+          const rate = Math.round(
+            allEvals.reduce((sum, e) => sum + statusToScore(e.status as EvaluationStatus), 0) / allEvals.length
+          );
+          if (scoreToStatus(rate) !== "non_acquis") continue;
+
+          const student = sbStudents.find((s) => s.id === studentId);
+          const studentName = student ? `${student.firstName} ${student.lastName}` : studentId;
+          const cause = `Alerte critique : ${studentName} a chuté à ${rate}/100 en ${competency.code} — ${competency.title} (Non acquis).`;
+
+          // Avoid re-raising the same alert repeatedly the same day.
+          const { data: existing } = await supabase
+            .from("alerts")
+            .select("id")
+            .eq("student_id", studentId)
+            .eq("date", today)
+            .ilike("cause", `%${competency.code}%`)
+            .limit(1);
+          if (existing && existing.length > 0) continue;
+
+          await supabase.from("alerts").insert({
+            student_id: studentId,
+            level: "critical",
+            cause,
+            date: today,
+            resolved: false,
+          });
+        } catch {
+          // Alerting is best-effort — a failure here must not break the save.
+        }
+      }
+    },
+    [sbCompetencies, sbStudents, today]
+  );
+
   const saveRealEval = useCallback(
     async (classId: string, competencyId: string, evals: DailyEvaluationInput[]) => {
       if (!supabase) throw new Error("Supabase non disponible");
@@ -238,8 +293,10 @@ export function useEvaluation(): UseEvaluationReturn {
         updated[e.competency_id][e.student_id] = e.status as EvaluationStatus;
       }
       setSbTodayEvals(updated);
+
+      await checkThresholdAlerts(competencyId, studentIds);
     },
-    [user?.id, today, sbTodayEvals]
+    [user?.id, today, sbTodayEvals, checkThresholdAlerts]
   );
 
   return {

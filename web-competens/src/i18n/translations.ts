@@ -308,6 +308,9 @@ export const fr: Dict = {
   "evaluation.saved": "Évaluations enregistrées avec succès",
   "evaluation.saving": "Enregistrement…",
   "evaluation.saveBtn": "Enregistrer",
+  "evaluation.legendAcquired": "Compétence acquise",
+  "evaluation.legendPenalty": "Point retiré (à revoir)",
+  "evaluation.clickHint": "Cliquez sur un élève pour retirer un point ; cliquez à nouveau pour annuler.",
 
   // ── Attendance ──────────────────────────────────────────
   "attendance.title": "Présences",
@@ -820,6 +823,9 @@ export const ar: Dict = {
   "evaluation.saved": "تم حفظ التقييمات بنجاح",
   "evaluation.saving": "جارٍ الحفظ…",
   "evaluation.saveBtn": "حفظ",
+  "evaluation.legendAcquired": "كفاية مكتسبة",
+  "evaluation.legendPenalty": "نقطة محذوفة (تحتاج مراجعة)",
+  "evaluation.clickHint": "انقر على تلميذ لخصم نقطة؛ انقر مرة أخرى للتراجع.",
 
   // ── Attendance ──────────────────────────────────────────
   "attendance.title": "الحضور",
