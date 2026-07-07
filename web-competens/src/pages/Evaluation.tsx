@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
 import { useEvaluation } from "@/hooks/use-evaluation";
+import { useI18n } from "@/i18n";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -10,6 +11,8 @@ import type { EvaluationStatus, DailyEvaluationInput } from "@/types";
 type EvalState = Record<string, EvaluationStatus>;
 
 export default function EvaluationPage() {
+  const { t, lang } = useI18n();
+  const locale = lang === "ar" ? "ar-MA" : "fr-FR";
   const {
     classes, levels, competencies,
     loading, error,
@@ -74,16 +77,16 @@ export default function EvaluationPage() {
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch (e: unknown) {
-      setSaveError(e instanceof Error ? e.message : "Erreur lors de l'enregistrement");
+      setSaveError(e instanceof Error ? e.message : t("common.saveError"));
     } finally {
       setSaving(false);
     }
   };
 
   const statusConfig: Record<EvaluationStatus, { icon: typeof CheckCircle; label: string; color: string; bg: string }> = {
-    acquis:     { icon: CheckCircle, label: "Acquis",     color: "text-green-600", bg: "bg-green-500/10 border-green-500/30" },
-    en_cours:   { icon: Clock,       label: "En cours",   color: "text-amber-600", bg: "bg-amber-500/10 border-amber-500/30" },
-    non_acquis: { icon: XCircle,     label: "Non acquis", color: "text-red-600",   bg: "bg-red-500/10 border-red-500/30" },
+    acquis:     { icon: CheckCircle, label: t("status.acquis"),     color: "text-green-600", bg: "bg-green-500/10 border-green-500/30" },
+    en_cours:   { icon: Clock,       label: t("status.en_cours"),   color: "text-amber-600", bg: "bg-amber-500/10 border-amber-500/30" },
+    non_acquis: { icon: XCircle,     label: t("status.non_acquis"), color: "text-red-600",   bg: "bg-red-500/10 border-red-500/30" },
   };
 
   const editedCount = Object.keys(evalStates).length;
@@ -92,11 +95,11 @@ export default function EvaluationPage() {
     <div className="space-y-6 animate-in fade-in duration-500">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Évaluation quotidienne</h1>
-          <p className="text-sm text-muted-foreground">Évaluez les compétences de vos élèves</p>
+          <h1 className="text-2xl font-bold tracking-tight">{t("evaluation.title")}</h1>
+          <p className="text-sm text-muted-foreground">{t("evaluation.subtitle")}</p>
         </div>
         <Badge variant="outline" className="text-sm">
-          {new Date().toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" })}
+          {new Date().toLocaleDateString(locale, { weekday: "long", day: "numeric", month: "long" })}
         </Badge>
       </div>
 
@@ -117,12 +120,12 @@ export default function EvaluationPage() {
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-semibold flex items-center gap-2">
                 <span className="w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-bold">1</span>
-                Choisir une classe
+                {t("evaluation.step1")}
               </CardTitle>
             </CardHeader>
             <CardContent>
               {classes.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Aucune classe disponible — créez des classes ou vérifiez vos attributions.</p>
+                <p className="text-sm text-muted-foreground">{t("evaluation.noClass")}</p>
               ) : (
                 <div className="flex flex-wrap gap-2">
                   {classes.map((c) => {
@@ -136,7 +139,7 @@ export default function EvaluationPage() {
                         className="gap-2"
                       >
                         {c.name}
-                        {level && <Badge variant="secondary" className="ml-1 text-[10px]">{level.code}</Badge>}
+                        {level && <Badge variant="secondary" className="ms-1 text-[10px]">{level.code}</Badge>}
                       </Button>
                     );
                   })}
@@ -151,12 +154,12 @@ export default function EvaluationPage() {
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-semibold flex items-center gap-2">
                   <span className="w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-bold">2</span>
-                  Choisir une compétence
+                  {t("evaluation.step2")}
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 {competencies.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">Aucune compétence — ajoutez-en dans la section Compétences.</p>
+                  <p className="text-sm text-muted-foreground">{t("evaluation.noCompetency")}</p>
                 ) : (
                   <div className="flex flex-wrap gap-2">
                     {competencies.map((c) => (
@@ -186,7 +189,7 @@ export default function EvaluationPage() {
                     <ClipboardCheck className="w-5 h-5 text-primary" />
                     {selectedClass?.name} — {selectedCompetency?.code}
                   </CardTitle>
-                  <Badge variant="secondary" className="font-mono">{classStudents.length} élèves</Badge>
+                  <Badge variant="secondary" className="font-mono">{t("evaluation.studentsCount", { count: classStudents.length })}</Badge>
                 </div>
               </CardHeader>
               <CardContent>
@@ -206,7 +209,7 @@ export default function EvaluationPage() {
                 {/* Student List */}
                 {classStudents.length === 0 ? (
                   <p className="text-center text-muted-foreground py-8">
-                    Aucun élève dans cette classe — ajoutez des élèves d'abord.
+                    {t("evaluation.noStudents")}
                   </p>
                 ) : (
                   <div className="grid gap-2">
@@ -219,7 +222,7 @@ export default function EvaluationPage() {
                           key={s.id}
                           onClick={() => toggleStatus(s.id)}
                           className={cn(
-                            "flex items-center gap-3 p-3 rounded-xl border-2 transition-all duration-200 text-left w-full",
+                            "flex items-center gap-3 p-3 rounded-xl border-2 transition-all duration-200 text-start w-full",
                             cfg.bg,
                             evalStates[s.id] ? "border-current" : "border-transparent hover:border-muted-foreground/20"
                           )}
@@ -248,7 +251,7 @@ export default function EvaluationPage() {
 
                 {saveSuccess && (
                   <div className="mt-4 flex items-center gap-2 p-3 rounded-lg bg-green-500/10 text-green-700 text-sm">
-                    <CheckCircle className="w-4 h-4 shrink-0" /> Évaluations enregistrées avec succès
+                    <CheckCircle className="w-4 h-4 shrink-0" /> {t("evaluation.saved")}
                   </div>
                 )}
 
@@ -261,7 +264,7 @@ export default function EvaluationPage() {
                     className="gap-2 px-8"
                   >
                     {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
-                    {saving ? "Enregistrement…" : `Enregistrer${editedCount > 0 ? ` (${editedCount})` : ""}`}
+                    {saving ? t("evaluation.saving") : `${t("evaluation.saveBtn")}${editedCount > 0 ? ` (${editedCount})` : ""}`}
                   </Button>
                 </div>
               </CardContent>

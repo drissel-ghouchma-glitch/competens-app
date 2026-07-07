@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
+import { useI18n } from "@/i18n";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -37,6 +38,8 @@ interface StudentOption {
 }
 
 export default function PendingTeachersPage() {
+  const { t, lang } = useI18n();
+  const locale = lang === "ar" ? "ar-MA" : "fr-FR";
   const [profiles, setProfiles] = useState<PendingProfile[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
@@ -56,7 +59,7 @@ export default function PendingTeachersPage() {
   const [linkError, setLinkError] = useState("");
 
   const fetchPending = useCallback(async () => {
-    if (!supabase) { toast.error("Supabase non configuré."); setIsLoading(false); return; }
+    if (!supabase) { toast.error(t("pending.supabaseNotConfigured")); setIsLoading(false); return; }
     setIsLoading(true);
     const { data, error } = await supabase
       .from("profiles")
@@ -66,12 +69,12 @@ export default function PendingTeachersPage() {
       .order("created_at", { ascending: false });
 
     if (error) {
-      toast.error(`Erreur: ${error.message}`);
+      toast.error(`${t("common.error")}: ${error.message}`);
     } else {
       setProfiles(data ?? []);
     }
     setIsLoading(false);
-  }, []);
+  }, [t]);
 
   useEffect(() => { fetchPending(); }, [fetchPending]);
 
@@ -90,7 +93,7 @@ export default function PendingTeachersPage() {
       .order("name");
 
     if (error) {
-      setAssignError("Impossible de charger les classes.");
+      setAssignError(t("pending.loadClassError"));
     } else {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       setAllClasses((data ?? []).map((c: any) => ({
@@ -100,7 +103,7 @@ export default function PendingTeachersPage() {
       })));
     }
     setClassesLoading(false);
-  }, []);
+  }, [t]);
 
   const toggleClass = (id: string) => {
     setSelectedClassIds((prev) =>
@@ -133,11 +136,11 @@ export default function PendingTeachersPage() {
         if (e2) throw new Error(e2.message);
       }
 
-      toast.success(`${assignTarget.full_name} activé${selectedClassIds.length > 0 ? ` et assigné à ${selectedClassIds.length} classe(s)` : ""}.`);
+      toast.success(t("pending.activated", { name: assignTarget.full_name }));
       setAssignTarget(null);
       setProfiles((prev) => prev.filter((p) => p.id !== assignTarget.id));
     } catch (e: unknown) {
-      setAssignError(e instanceof Error ? e.message : "Erreur");
+      setAssignError(e instanceof Error ? e.message : t("common.error"));
     } finally {
       setActionLoading(null);
     }
@@ -150,13 +153,12 @@ export default function PendingTeachersPage() {
     setSelectedStudentIds([]);
     setLinkError("");
     setStudentsLoading(true);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data, error } = await supabase
       .from("students")
       .select("id, first_name, last_name, classes(name)")
       .order("last_name");
     if (error) {
-      setLinkError("Impossible de charger les élèves.");
+      setLinkError(t("pending.loadStudentError"));
     } else {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       setAllStudents((data ?? []).map((s: any) => ({
@@ -167,7 +169,7 @@ export default function PendingTeachersPage() {
       })));
     }
     setStudentsLoading(false);
-  }, []);
+  }, [t]);
 
   const toggleStudent = (id: string) =>
     setSelectedStudentIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
@@ -189,11 +191,11 @@ export default function PendingTeachersPage() {
         if (e2) throw new Error(e2.message);
       }
 
-      toast.success(`${linkTarget.full_name} activé${selectedStudentIds.length > 0 ? ` et lié à ${selectedStudentIds.length} enfant(s)` : ""}.`);
+      toast.success(t("pending.activated", { name: linkTarget.full_name }));
       setLinkTarget(null);
       setProfiles((prev) => prev.filter((p) => p.id !== linkTarget.id));
     } catch (e: unknown) {
-      setLinkError(e instanceof Error ? e.message : "Erreur");
+      setLinkError(e instanceof Error ? e.message : t("common.error"));
     } finally {
       setActionLoading(null);
     }
@@ -204,9 +206,9 @@ export default function PendingTeachersPage() {
     setActionLoading(id);
     const { error } = await supabase.from("profiles").update({ status: "suspended" }).eq("id", id);
     if (error) {
-      toast.error("Erreur lors de la suspension.");
+      toast.error(t("pending.suspendError"));
     } else {
-      toast.success("Compte suspendu.");
+      toast.success(t("pending.suspendedToast"));
       setProfiles((prev) => prev.filter((p) => p.id !== id));
     }
     setActionLoading(null);
@@ -217,9 +219,9 @@ export default function PendingTeachersPage() {
     setActionLoading(id);
     const { error } = await supabase.from("profiles").update({ status: "active" }).eq("id", id);
     if (error) {
-      toast.error("Erreur lors de la réactivation.");
+      toast.error(t("pending.reactivateError"));
     } else {
-      toast.success("Compte réactivé.");
+      toast.success(t("pending.reactivatedToast"));
       setProfiles((prev) => prev.filter((p) => p.id !== id));
     }
     setActionLoading(null);
@@ -235,12 +237,12 @@ export default function PendingTeachersPage() {
         <div className="space-y-0.5">
           <div className="flex items-center gap-2">
             <p className="font-semibold text-foreground">{p.full_name}</p>
-            <Badge variant="secondary" className="text-xs">{isParent ? "Parent" : "Enseignant"}</Badge>
+            <Badge variant="secondary" className="text-xs">{isParent ? t("pending.parent") : t("pending.teacher")}</Badge>
           </div>
           <p className="text-sm text-muted-foreground">{p.email}</p>
           {p.phone && <p className="text-xs text-muted-foreground">{p.phone}</p>}
           <p className="text-xs text-muted-foreground">
-            {new Date(p.created_at).toLocaleDateString("fr-FR", { day: "2-digit", month: "long", year: "numeric" })}
+            {new Date(p.created_at).toLocaleDateString(locale, { day: "2-digit", month: "long", year: "numeric" })}
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
@@ -250,12 +252,12 @@ export default function PendingTeachersPage() {
             className="bg-green-600 hover:bg-green-700 text-white gap-1"
           >
             {isParent
-              ? <><UserCheck className="w-3.5 h-3.5" /> Approuver &amp; Lier</>
-              : <><Building2 className="w-3.5 h-3.5" /> Approuver &amp; Assigner</>
+              ? <><UserCheck className="w-3.5 h-3.5" /> {t("pending.approveLink")}</>
+              : <><Building2 className="w-3.5 h-3.5" /> {t("pending.approveAssign")}</>
             }
           </Button>
           <Button size="sm" variant="destructive" onClick={() => suspendTeacher(p.id)} disabled={!!actionLoading} className="gap-1">
-            <XCircle className="w-3.5 h-3.5" /> Refuser
+            <XCircle className="w-3.5 h-3.5" /> {t("pending.refuse")}
           </Button>
         </div>
       </CardContent>
@@ -267,14 +269,14 @@ export default function PendingTeachersPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
-            <UserCog className="w-6 h-6 text-primary" /> Demandes d'inscription
+            <UserCog className="w-6 h-6 text-primary" /> {t("pending.title")}
           </h1>
           <p className="text-muted-foreground text-sm mt-1">
-            Validez les comptes enseignants et parents, assignez les classes et les enfants.
+            {t("pending.subtitle")}
           </p>
         </div>
         <Button variant="outline" size="sm" onClick={fetchPending} disabled={isLoading}>
-          <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? "animate-spin" : ""}`} /> Actualiser
+          <RefreshCw className={`w-4 h-4 me-2 ${isLoading ? "animate-spin" : ""}`} /> {t("common.refresh")}
         </Button>
       </div>
 
@@ -285,14 +287,14 @@ export default function PendingTeachersPage() {
       ) : pendingTeachers.length === 0 && pendingParents.length === 0 && suspendedList.length === 0 ? (
         <div className="flex flex-col items-center justify-center h-40 gap-3 text-muted-foreground">
           <CheckCircle2 className="w-10 h-10 text-green-400" />
-          <p className="text-sm">Aucune demande en attente.</p>
+          <p className="text-sm">{t("pending.none")}</p>
         </div>
       ) : (
         <>
           {pendingTeachers.length > 0 && (
             <div className="space-y-3">
               <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-2">
-                <Clock className="w-4 h-4 text-orange-400" /> Enseignants en attente ({pendingTeachers.length})
+                <Clock className="w-4 h-4 text-orange-400" /> {t("pending.teachersWaiting", { count: pendingTeachers.length })}
               </h2>
               {pendingTeachers.map((p) => <ProfileCard key={p.id} p={p} />)}
             </div>
@@ -301,7 +303,7 @@ export default function PendingTeachersPage() {
           {pendingParents.length > 0 && (
             <div className="space-y-3">
               <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-2">
-                <Users className="w-4 h-4 text-amber-500" /> Parents en attente ({pendingParents.length})
+                <Users className="w-4 h-4 text-amber-500" /> {t("pending.parentsWaiting", { count: pendingParents.length })}
               </h2>
               {pendingParents.map((p) => <ProfileCard key={p.id} p={p} isParent />)}
             </div>
@@ -310,7 +312,7 @@ export default function PendingTeachersPage() {
           {suspendedList.length > 0 && (
             <div className="space-y-3">
               <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-2">
-                <XCircle className="w-4 h-4 text-destructive" /> Suspendus ({suspendedList.length})
+                <XCircle className="w-4 h-4 text-destructive" /> {t("pending.suspended", { count: suspendedList.length })}
               </h2>
               {suspendedList.map((p) => (
                 <Card key={p.id} className="border-border/60">
@@ -320,9 +322,9 @@ export default function PendingTeachersPage() {
                       <p className="text-sm text-muted-foreground">{p.email}</p>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      <Badge variant="destructive">Suspendu</Badge>
+                      <Badge variant="destructive">{t("pending.suspendedBadge")}</Badge>
                       <Button size="sm" onClick={() => reactivate(p.id)} disabled={!!actionLoading} className="bg-green-600 hover:bg-green-700 text-white gap-1">
-                        <CheckCircle2 className="w-3.5 h-3.5" /> Réactiver
+                        <CheckCircle2 className="w-3.5 h-3.5" /> {t("pending.reactivate")}
                       </Button>
                     </div>
                   </CardContent>
@@ -338,10 +340,10 @@ export default function PendingTeachersPage() {
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <UserCheck className="w-5 h-5 text-primary" /> Approuver &amp; Lier les enfants
+              <UserCheck className="w-5 h-5 text-primary" /> {t("pending.linkTitle")}
             </DialogTitle>
             <DialogDescription>
-              {linkTarget?.full_name} — sélectionnez les élèves liés à ce parent (optionnel).
+              {t("pending.linkDesc", { name: linkTarget?.full_name ?? "" })}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 pt-2">
@@ -349,9 +351,9 @@ export default function PendingTeachersPage() {
             {studentsLoading ? (
               <div className="flex justify-center py-6"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>
             ) : allStudents.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-4">Aucun élève disponible.</p>
+              <p className="text-sm text-muted-foreground text-center py-4">{t("pending.noStudents")}</p>
             ) : (
-              <div className="max-h-64 overflow-y-auto space-y-2 pr-1">
+              <div className="max-h-64 overflow-y-auto space-y-2 pe-1">
                 {allStudents.map((s) => (
                   <div key={s.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/40 cursor-pointer" onClick={() => toggleStudent(s.id)}>
                     <Checkbox checked={selectedStudentIds.includes(s.id)} onCheckedChange={() => toggleStudent(s.id)} id={`s-${s.id}`} />
@@ -364,13 +366,13 @@ export default function PendingTeachersPage() {
               </div>
             )}
             {selectedStudentIds.length > 0 && (
-              <p className="text-xs text-primary font-medium">{selectedStudentIds.length} élève(s) sélectionné(s)</p>
+              <p className="text-xs text-primary font-medium">{t("pending.studentsSelected", { count: selectedStudentIds.length })}</p>
             )}
             <div className="flex gap-2 justify-end pt-2">
-              <Button variant="outline" onClick={() => setLinkTarget(null)} disabled={!!actionLoading}>Annuler</Button>
+              <Button variant="outline" onClick={() => setLinkTarget(null)} disabled={!!actionLoading}>{t("common.cancel")}</Button>
               <Button onClick={handleApproveParent} disabled={!!actionLoading} className="bg-green-600 hover:bg-green-700 text-white">
-                {actionLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <CheckCircle2 className="w-4 h-4 mr-2" />}
-                Confirmer l'activation
+                {actionLoading ? <Loader2 className="w-4 h-4 animate-spin me-2" /> : <CheckCircle2 className="w-4 h-4 me-2" />}
+                {t("pending.confirmActivation")}
               </Button>
             </div>
           </div>
@@ -383,10 +385,10 @@ export default function PendingTeachersPage() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Building2 className="w-5 h-5 text-primary" />
-              Approuver &amp; Assigner des classes
+              {t("pending.assignTitle")}
             </DialogTitle>
             <DialogDescription>
-              {assignTarget?.full_name} — choisissez les classes à lui attribuer (optionnel).
+              {t("pending.assignDesc", { name: assignTarget?.full_name ?? "" })}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 pt-2">
@@ -400,10 +402,10 @@ export default function PendingTeachersPage() {
               </div>
             ) : allClasses.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-4">
-                Aucune classe disponible — créez des classes d'abord.
+                {t("pending.noClasses")}
               </p>
             ) : (
-              <div className="max-h-64 overflow-y-auto space-y-2 pr-1">
+              <div className="max-h-64 overflow-y-auto space-y-2 pe-1">
                 {allClasses.map((cls) => (
                   <div key={cls.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/40 cursor-pointer"
                     onClick={() => toggleClass(cls.id)}>
@@ -425,21 +427,21 @@ export default function PendingTeachersPage() {
 
             {selectedClassIds.length > 0 && (
               <p className="text-xs text-primary font-medium">
-                {selectedClassIds.length} classe(s) sélectionnée(s)
+                {t("pending.classesSelected", { count: selectedClassIds.length })}
               </p>
             )}
 
             <div className="flex gap-2 justify-end pt-2">
               <Button variant="outline" onClick={() => setAssignTarget(null)} disabled={!!actionLoading}>
-                Annuler
+                {t("common.cancel")}
               </Button>
               <Button
                 onClick={handleApproveAndAssign}
                 disabled={!!actionLoading}
                 className="bg-green-600 hover:bg-green-700 text-white"
               >
-                {actionLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <CheckCircle2 className="w-4 h-4 mr-2" />}
-                Confirmer l'activation
+                {actionLoading ? <Loader2 className="w-4 h-4 animate-spin me-2" /> : <CheckCircle2 className="w-4 h-4 me-2" />}
+                {t("pending.confirmActivation")}
               </Button>
             </div>
           </div>

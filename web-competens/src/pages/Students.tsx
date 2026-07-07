@@ -4,6 +4,7 @@ import { useStudents } from "@/hooks/use-students";
 import { useRequests } from "@/hooks/use-requests";
 import { useAuth } from "@/hooks/use-auth";
 import { useDemoStore } from "@/stores/demo";
+import { useI18n } from "@/i18n";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,6 +21,7 @@ export default function StudentsPage() {
   const { students, classes, loading, error, addStudent, importStudents, archiveStudent } = useStudents();
   const { submitRequest } = useRequests();
   const { user } = useAuth();
+  const { t } = useI18n();
   const isDemo = useDemoStore((s) => s.isDemoMode);
 
   const isTeacherReal = !isDemo && user?.role === "professeur";
@@ -67,7 +69,7 @@ export default function StudentsPage() {
       if (isTeacherReal) {
         // Send request to admin
         await submitRequest("add_student", { firstName, lastName, birthDate, gender, classId: studentClass });
-        toast.success("Demande envoyée à l'administration pour approbation.");
+        toast.success(t("students.reqSent"));
         resetAddForm();
         setOpenAdd(false);
       } else {
@@ -76,7 +78,7 @@ export default function StudentsPage() {
         setOpenAdd(false);
       }
     } catch (e: unknown) {
-      setAddError(e instanceof Error ? e.message : "Erreur lors de l'opération");
+      setAddError(e instanceof Error ? e.message : t("common.opError"));
     } finally {
       setAddLoading(false);
     }
@@ -128,7 +130,7 @@ export default function StudentsPage() {
         }).filter((r) => r.firstName && r.lastName);
         setImportPreview(mapped);
       } catch {
-        setImportError("Format invalide. Colonnes : Nom, Prénom, Date de naissance, Sexe, Classe");
+        setImportError(t("students.importInvalid"));
       }
     };
     reader.readAsBinaryString(file);
@@ -143,47 +145,46 @@ export default function StudentsPage() {
       setImportPreview([]);
       setOpenImport(false);
       if (result.failed.length === 0) {
-        toast.success(`${result.succeeded} élève(s) importé(s) avec succès.`);
+        toast.success(t("students.importSuccess", { count: result.succeeded }));
       } else if (result.succeeded === 0) {
-        toast.error(`Aucun élève importé. ${result.failed.length} erreur(s).`);
+        toast.error(t("students.importNone", { count: result.failed.length }));
       } else {
-        toast.warning(
-          `${result.succeeded} importé(s), ${result.failed.length} échoué(s) : ${result.failed.map((f) => f.name).join(", ")}`
-        );
+        toast.warning(t("students.importPartial", {
+          ok: result.succeeded, fail: result.failed.length,
+          names: result.failed.map((f) => f.name).join(", "),
+        }));
       }
     } catch (e: unknown) {
-      setImportError(e instanceof Error ? e.message : "Erreur lors de l'importation");
+      setImportError(e instanceof Error ? e.message : t("common.opError"));
     } finally {
       setImporting(false);
     }
   };
 
   const handleArchive = async (s: { id: string; firstName: string; lastName: string }) => {
-    if (!window.confirm(`Archiver l'élève "${s.firstName} ${s.lastName}" ? Son historique d'évaluations sera conservé.`)) return;
+    if (!window.confirm(t("students.archiveConfirm", { name: `${s.firstName} ${s.lastName}` }))) return;
     setArchiving(s.id);
     try {
       await archiveStudent(s.id);
-      toast.success(`${s.firstName} ${s.lastName} archivé(e).`);
+      toast.success(t("students.archived", { name: `${s.firstName} ${s.lastName}` }));
     } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : "Erreur lors de l'archivage");
+      toast.error(e instanceof Error ? e.message : t("common.archiveError"));
     } finally {
       setArchiving(null);
     }
   };
 
-  const addButtonLabel = isTeacherReal ? "Demander l'ajout d'un élève" : "Ajouter un élève";
-  const dialogTitle = isTeacherReal ? "Demande d'ajout d'élève" : "Ajouter un élève";
-  const dialogDesc = isTeacherReal
-    ? "Cette demande sera envoyée à l'administration pour approbation."
-    : "Renseignez les informations de l'élève";
+  const addButtonLabel = isTeacherReal ? t("students.requestAdd") : t("students.addStudent");
+  const dialogTitle = isTeacherReal ? t("students.requestAddTitle") : t("students.addTitle");
+  const dialogDesc = isTeacherReal ? t("students.requestAddDesc") : t("students.addDesc");
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Élèves</h1>
+          <h1 className="text-2xl font-bold tracking-tight">{t("students.title")}</h1>
           <p className="text-sm text-muted-foreground">
-            {loading ? "Chargement…" : `${students.length} élève${students.length !== 1 ? "s" : ""} inscrits`}
+            {loading ? t("common.loading") : t("students.enrolled", { count: students.length })}
           </p>
         </div>
         <div className="flex gap-2">
@@ -192,14 +193,14 @@ export default function StudentsPage() {
             <Dialog open={openImport} onOpenChange={setOpenImport}>
               <DialogTrigger asChild>
                 <Button variant="outline" size="sm" className="gap-2">
-                  <Upload className="w-4 h-4" /> Importer Excel
+                  <Upload className="w-4 h-4" /> {t("students.importExcel")}
                 </Button>
               </DialogTrigger>
               <DialogContent className="max-w-lg">
                 <DialogHeader>
-                  <DialogTitle>Importer des élèves</DialogTitle>
+                  <DialogTitle>{t("students.importTitle")}</DialogTitle>
                   <DialogDescription>
-                    Fichier Excel (.xlsx) — colonnes : Nom, Prénom, Date de naissance, Sexe, Classe
+                    {t("students.importDesc")}
                   </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 pt-2">
@@ -207,9 +208,9 @@ export default function StudentsPage() {
                     <Upload className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
                     <input ref={fileRef} type="file" accept=".xlsx,.xls" onChange={handleFileUpload} className="hidden" />
                     <Button variant="outline" onClick={() => fileRef.current?.click()} className="mb-2">
-                      Choisir un fichier
+                      {t("students.chooseFile")}
                     </Button>
-                    <p className="text-xs text-muted-foreground">.xlsx uniquement</p>
+                    <p className="text-xs text-muted-foreground">{t("students.xlsxOnly")}</p>
                   </div>
                   {importError && (
                     <div className="flex items-center gap-2 p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
@@ -218,7 +219,7 @@ export default function StudentsPage() {
                   )}
                   {importPreview.length > 0 && (
                     <div>
-                      <p className="text-sm font-medium mb-2">{importPreview.length} élèves détectés</p>
+                      <p className="text-sm font-medium mb-2">{t("students.detected", { count: importPreview.length })}</p>
                       <div className="max-h-40 overflow-auto border rounded-lg">
                         {importPreview.slice(0, 5).map((s, i) => (
                           <div key={i} className="px-3 py-2 text-sm border-b last:border-0 flex justify-between">
@@ -227,14 +228,14 @@ export default function StudentsPage() {
                           </div>
                         ))}
                         {importPreview.length > 5 && (
-                          <p className="px-3 py-2 text-xs text-muted-foreground">… et {importPreview.length - 5} autres</p>
+                          <p className="px-3 py-2 text-xs text-muted-foreground">{t("students.andOthers", { count: importPreview.length - 5 })}</p>
                         )}
                       </div>
                     </div>
                   )}
                   <Button onClick={handleImport} className="w-full" disabled={importPreview.length === 0 || importing}>
-                    {importing ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-                    Importer {importPreview.length} élèves
+                    {importing ? <Loader2 className="w-4 h-4 animate-spin me-2" /> : null}
+                    {t("students.importBtn", { count: importPreview.length })}
                   </Button>
                 </div>
               </DialogContent>
@@ -258,7 +259,7 @@ export default function StudentsPage() {
                 {isTeacherReal && (
                   <div className="flex items-start gap-2 p-3 rounded-lg bg-primary/5 border border-primary/20 text-sm text-primary">
                     <Info className="w-4 h-4 shrink-0 mt-0.5" />
-                    La demande sera examinée par l'administration avant d'être ajoutée.
+                    {t("students.teacherRequestNote")}
                   </div>
                 )}
                 {addError && (
@@ -268,34 +269,34 @@ export default function StudentsPage() {
                 )}
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-2">
-                    <Label>Prénom</Label>
+                    <Label>{t("students.firstName")}</Label>
                     <Input value={firstName} onChange={(e) => setFirstName(e.target.value)} placeholder="Fatou" />
                   </div>
                   <div className="space-y-2">
-                    <Label>Nom</Label>
+                    <Label>{t("students.lastName")}</Label>
                     <Input value={lastName} onChange={(e) => setLastName(e.target.value)} placeholder="Ndiaye" />
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-2">
-                    <Label>Date de naissance</Label>
+                    <Label>{t("students.birthDate")}</Label>
                     <Input type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} />
                   </div>
                   <div className="space-y-2">
-                    <Label>Sexe</Label>
+                    <Label>{t("students.gender")}</Label>
                     <Select value={gender} onValueChange={(v) => setGender(v as "M" | "F")}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="M">Masculin</SelectItem>
-                        <SelectItem value="F">Féminin</SelectItem>
+                        <SelectItem value="M">{t("students.male")}</SelectItem>
+                        <SelectItem value="F">{t("students.female")}</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label>Classe</Label>
+                  <Label>{t("students.class")}</Label>
                   <Select value={studentClass} onValueChange={setStudentClass}>
-                    <SelectTrigger><SelectValue placeholder="Sélectionner une classe" /></SelectTrigger>
+                    <SelectTrigger><SelectValue placeholder={t("students.selectClass")} /></SelectTrigger>
                     <SelectContent>
                       {classes.filter((c) => !c.isArchived).map((c) => (
                         <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
@@ -304,13 +305,13 @@ export default function StudentsPage() {
                   </Select>
                   {classes.length === 0 && (
                     <p className="text-xs text-muted-foreground flex items-center gap-1">
-                      <Info className="w-3 h-3" /> Aucune classe disponible
+                      <Info className="w-3 h-3" /> {t("students.noClassAvailable")}
                     </p>
                   )}
                 </div>
                 <Button onClick={handleAddStudent} className="w-full" disabled={addLoading || !firstName || !lastName || !studentClass}>
-                  {addLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-                  {isTeacherReal ? "Envoyer la demande" : "Ajouter"}
+                  {addLoading ? <Loader2 className="w-4 h-4 animate-spin me-2" /> : null}
+                  {isTeacherReal ? t("students.sendRequest") : t("common.add")}
                 </Button>
               </div>
             </DialogContent>
@@ -327,13 +328,13 @@ export default function StudentsPage() {
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input placeholder="Rechercher un élève..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
+          <Search className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input placeholder={t("students.searchPlaceholder")} value={search} onChange={(e) => setSearch(e.target.value)} className="ps-9" />
         </div>
         <Select value={classFilter} onValueChange={setClassFilter}>
-          <SelectTrigger className="w-[180px]"><SelectValue placeholder="Toutes les classes" /></SelectTrigger>
+          <SelectTrigger className="w-[180px]"><SelectValue placeholder={t("students.allClasses")} /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Toutes les classes</SelectItem>
+            <SelectItem value="all">{t("students.allClasses")}</SelectItem>
             {classes.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
           </SelectContent>
         </Select>
@@ -361,7 +362,7 @@ export default function StudentsPage() {
                             <h3 className="font-semibold text-foreground truncate">{s.firstName} {s.lastName}</h3>
                             <p className="text-xs text-muted-foreground">{cls?.name ?? "—"}</p>
                           </div>
-                          <ChevronRight className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 shrink-0" />
+                          <ChevronRight className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 shrink-0 rtl:rotate-180" />
                         </div>
                       </CardContent>
                     </Card>
@@ -370,7 +371,7 @@ export default function StudentsPage() {
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="absolute top-2 right-2 h-7 w-7 z-10 opacity-0 group-hover:opacity-100 text-destructive hover:text-destructive hover:bg-destructive/10"
+                      className="absolute top-2 end-2 h-7 w-7 z-10 opacity-0 group-hover:opacity-100 text-destructive hover:text-destructive hover:bg-destructive/10"
                       disabled={archiving === s.id}
                       onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleArchive(s); }}
                     >
@@ -387,9 +388,9 @@ export default function StudentsPage() {
             <Card className="border-dashed border-2">
               <CardContent className="p-8 text-center">
                 <Users className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
-                <p className="text-muted-foreground font-medium">Aucun élève</p>
+                <p className="text-muted-foreground font-medium">{t("students.emptyTitle")}</p>
                 <p className="text-sm text-muted-foreground mt-1">
-                  {isTeacherReal ? "Envoyez une demande d'ajout à l'administration" : "Ajoutez des élèves ou importez un fichier Excel"}
+                  {isTeacherReal ? t("students.emptyTeacher") : t("students.emptyAdmin")}
                 </p>
               </CardContent>
             </Card>

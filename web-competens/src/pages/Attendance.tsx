@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useAttendance } from "@/hooks/use-attendance";
 import { useAuth } from "@/hooks/use-auth";
+import { useI18n } from "@/i18n";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -15,6 +16,8 @@ function todayStr() {
 
 export default function AttendancePage() {
   const { user } = useAuth();
+  const { t, lang } = useI18n();
+  const locale = lang === "ar" ? "ar-MA" : "fr-FR";
   const role = user?.role ?? "professeur";
   const isTeacher = role === "professeur";
 
@@ -102,9 +105,9 @@ export default function AttendancePage() {
         status: localStatus[s.id] ?? "present",
       }));
       await saveAttendance(selectedClassId, selectedDate, inputs);
-      toast.success("Présences enregistrées.");
+      toast.success(t("attendance.saved"));
     } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : "Erreur lors de l'enregistrement");
+      toast.error(e instanceof Error ? e.message : t("common.saveError"));
     } finally {
       setSaving(false);
     }
@@ -115,7 +118,7 @@ export default function AttendancePage() {
 
   const selectedClass = classes.find((c) => c.id === selectedClassId);
   const dateLabel = selectedDate
-    ? new Date(selectedDate + "T00:00:00").toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" })
+    ? new Date(selectedDate + "T00:00:00").toLocaleDateString(locale, { weekday: "long", day: "numeric", month: "long", year: "numeric" })
     : "";
 
   return (
@@ -123,11 +126,9 @@ export default function AttendancePage() {
 
       {/* Page header */}
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Présences</h1>
+        <h1 className="text-2xl font-bold tracking-tight">{t("attendance.title")}</h1>
         <p className="text-sm text-muted-foreground">
-          {isTeacher
-            ? "Marquez les présences quotidiennes de votre classe"
-            : "Consultez les présences par classe et par date"}
+          {isTeacher ? t("attendance.subtitleTeacher") : t("attendance.subtitleAdmin")}
         </p>
       </div>
 
@@ -136,10 +137,10 @@ export default function AttendancePage() {
         <CardContent className="p-4">
           <div className="flex flex-wrap gap-3 items-end">
             <div className="flex-1 min-w-[180px]">
-              <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Classe</label>
+              <label className="text-xs font-medium text-muted-foreground mb-1.5 block">{t("attendance.class")}</label>
               <Select value={selectedClassId} onValueChange={setSelectedClassId}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Choisir une classe" />
+                  <SelectValue placeholder={t("attendance.chooseClass")} />
                 </SelectTrigger>
                 <SelectContent>
                   {classes.map((c) => (
@@ -149,7 +150,7 @@ export default function AttendancePage() {
               </Select>
             </div>
             <div className="flex-1 min-w-[150px]">
-              <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Date</label>
+              <label className="text-xs font-medium text-muted-foreground mb-1.5 block">{t("attendance.date")}</label>
               <input
                 type="date"
                 value={selectedDate}
@@ -175,14 +176,14 @@ export default function AttendancePage() {
         <Card className="border-dashed border-2">
           <CardContent className="p-12 text-center text-muted-foreground">
             <Users className="w-10 h-10 mx-auto mb-3 opacity-40" />
-            <p>Sélectionnez une classe pour commencer.</p>
+            <p>{t("attendance.selectClassPrompt")}</p>
           </CardContent>
         </Card>
       ) : students.length === 0 ? (
         <Card className="border-dashed border-2">
           <CardContent className="p-12 text-center text-muted-foreground">
             <Users className="w-10 h-10 mx-auto mb-3 opacity-40" />
-            <p>Aucun élève dans cette classe.</p>
+            <p>{t("attendance.noStudents")}</p>
           </CardContent>
         </Card>
       ) : (
@@ -191,18 +192,18 @@ export default function AttendancePage() {
           <div className="flex items-center gap-3 flex-wrap">
             <Badge variant="secondary" className="gap-1.5 text-sm px-3 py-1">
               <CheckCircle className="w-3.5 h-3.5 text-green-500" />
-              {presentCount} présent{presentCount !== 1 ? "s" : ""}
+              {t("attendance.present", { count: presentCount })}
             </Badge>
             <Badge variant="secondary" className="gap-1.5 text-sm px-3 py-1">
               <XCircle className="w-3.5 h-3.5 text-red-500" />
-              {absentCount} absent{absentCount !== 1 ? "s" : ""}
+              {t("attendance.absent", { count: absentCount })}
             </Badge>
             {attendanceLoading && (
               <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
             )}
             {isTeacher && (
-              <span className="text-xs text-muted-foreground ml-auto hidden sm:block">
-                Cliquez sur un élève pour changer son statut
+              <span className="text-xs text-muted-foreground ms-auto hidden sm:block">
+                {t("attendance.clickHint")}
               </span>
             )}
           </div>
@@ -249,7 +250,7 @@ export default function AttendancePage() {
 
                     {/* Status */}
                     <span className={`text-xs font-semibold hidden sm:block ${isPresent ? "text-green-600" : "text-red-600"}`}>
-                      {isPresent ? "Présent(e)" : "Absent(e)"}
+                      {isPresent ? t("attendance.presentLabel") : t("attendance.absentLabel")}
                     </span>
                     {isPresent
                       ? <CheckCircle className="w-5 h-5 text-green-500 shrink-0" />
@@ -267,7 +268,7 @@ export default function AttendancePage() {
                 {saving
                   ? <Loader2 className="w-4 h-4 animate-spin" />
                   : <Save className="w-4 h-4" />}
-                Enregistrer les présences
+                {t("attendance.saveBtn")}
               </Button>
             </div>
           )}

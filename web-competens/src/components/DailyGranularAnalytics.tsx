@@ -8,6 +8,7 @@ import { BarChart2, ChevronLeft, Users } from "lucide-react";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell,
 } from "recharts";
+import { useI18n } from "@/i18n";
 import type { Competency, EvaluationStatus } from "@/types";
 
 // ── Shared types (exported for hook consumers) ─────────────────────────────────
@@ -34,12 +35,10 @@ function barColor(rate: number) {
   return "hsl(4 77% 55%)";
 }
 
-function statusLabel(s: EvaluationStatus) {
-  switch (s) {
-    case "acquis":   return "Acquis";
-    case "en_cours": return "En cours";
-    default:         return "Non acquis";
-  }
+function statusKey(s: EvaluationStatus) {
+  if (s === "acquis")   return "status.acquis";
+  if (s === "en_cours") return "status.en_cours";
+  return "status.non_acquis";
 }
 
 function statusBadgeStyle(s: EvaluationStatus): React.CSSProperties {
@@ -70,6 +69,7 @@ function DayCompTooltip({
   active?: boolean;
   payload?: Array<{ payload: ChartEntry }>;
 }) {
+  const { t } = useI18n();
   if (!active || !payload?.length) return null;
   const d = payload[0].payload;
   return (
@@ -78,12 +78,12 @@ function DayCompTooltip({
       <p className="font-bold mb-2" style={{ color: barColor(d.rate) }}>{d.rate}%</p>
       {d.teacherEvals.length > 0 && (
         <div className="space-y-1.5 border-t border-border pt-2">
-          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Enseignants</p>
+          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">{t("daily.teachers")}</p>
           {d.teacherEvals.map((te, i) => (
             <div key={i} className="flex items-center justify-between gap-2">
               <span className="text-xs text-foreground truncate">{te.teacherName || "—"}</span>
               <Badge className="text-[10px] px-1.5 py-0 h-4 shrink-0" style={statusBadgeStyle(te.status)}>
-                {statusLabel(te.status)}
+                {t(statusKey(te.status))}
               </Badge>
             </div>
           ))}
@@ -103,6 +103,8 @@ interface Props {
 }
 
 export function DailyGranularAnalytics({ studentId, rawEvals, competencies, classTeachers }: Props) {
+  const { t, lang } = useI18n();
+  const locale = lang === "ar" ? "ar-MA" : "fr-FR";
   const today = new Date().toISOString().split("T")[0];
   const [selectedDate, setSelectedDate] = useState(today);
   const [selectedCompId, setSelectedCompId] = useState<string | null>(null);
@@ -140,10 +142,10 @@ export function DailyGranularAnalytics({ studentId, rawEvals, competencies, clas
     if (!selectedCompId) return [];
     const compEvals = dayEvals.filter((e) => e.competencyId === selectedCompId);
     const evalByTeacher = new Map(compEvals.map((e) => [e.teacherId, e]));
-    return classTeachers.map((t) => ({ teacher: t, ev: evalByTeacher.get(t.id) ?? null }));
+    return classTeachers.map((teacher) => ({ teacher, ev: evalByTeacher.get(teacher.id) ?? null }));
   }, [selectedCompId, dayEvals, classTeachers]);
 
-  const dateLabel = new Date(selectedDate + "T00:00:00").toLocaleDateString("fr-FR", {
+  const dateLabel = new Date(selectedDate + "T00:00:00").toLocaleDateString(locale, {
     weekday: "long", day: "numeric", month: "long", year: "numeric",
   });
 
@@ -152,14 +154,14 @@ export function DailyGranularAnalytics({ studentId, rawEvals, competencies, clas
       <CardHeader className="pb-3">
         <CardTitle className="text-base font-semibold flex items-center gap-2">
           <BarChart2 className="w-4 h-4 text-primary" />
-          Analyse granulaire journalière
+          {t("daily.title")}
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
 
         {/* ── Date picker ──────────────────────────────────────── */}
         <div className="flex flex-wrap items-center gap-3">
-          <Label className="text-xs text-muted-foreground shrink-0">Date</Label>
+          <Label className="text-xs text-muted-foreground shrink-0">{t("daily.date")}</Label>
           <Input
             type="date"
             value={selectedDate}
@@ -173,12 +175,12 @@ export function DailyGranularAnalytics({ studentId, rawEvals, competencies, clas
         {/* ── Level-1: competency bar chart ─────────────────────── */}
         {chartData.length === 0 ? (
           <div className="py-10 text-center text-sm text-muted-foreground border border-dashed border-border/60 rounded-xl">
-            Aucune évaluation enregistrée pour ce jour.
+            {t("daily.noEvalDay")}
           </div>
         ) : (
           <>
             <p className="text-[11px] text-muted-foreground">
-              Survolez une barre pour voir les évaluations par enseignant · Cliquez pour le détail complet de la classe.
+              {t("daily.hint")}
             </p>
             <div className="h-[220px]">
               <ResponsiveContainer width="100%" height="100%">
@@ -208,9 +210,9 @@ export function DailyGranularAnalytics({ studentId, rawEvals, competencies, clas
             </div>
 
             <div className="flex items-center gap-4 text-xs text-muted-foreground justify-center flex-wrap">
-              <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm inline-block" style={{ background: "hsl(122 39% 49%)" }} /> Acquis (&gt;90%)</span>
-              <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm inline-block" style={{ background: "hsl(38 92% 50%)" }} /> En cours (50–90%)</span>
-              <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm inline-block" style={{ background: "hsl(4 77% 55%)" }} /> Non acquis (&lt;50%)</span>
+              <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm inline-block" style={{ background: "hsl(122 39% 49%)" }} /> {t("status.acquisLong")}</span>
+              <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm inline-block" style={{ background: "hsl(38 92% 50%)" }} /> {t("status.enCoursLong")}</span>
+              <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm inline-block" style={{ background: "hsl(4 77% 55%)" }} /> {t("status.nonAcquisLong")}</span>
             </div>
           </>
         )}
@@ -226,7 +228,7 @@ export function DailyGranularAnalytics({ studentId, rawEvals, competencies, clas
                 className="h-7 px-2 gap-1 text-xs"
                 onClick={() => setSelectedCompId(null)}
               >
-                <ChevronLeft className="w-3.5 h-3.5" /> Retour
+                <ChevronLeft className="w-3.5 h-3.5 rtl:rotate-180" /> {t("daily.back")}
               </Button>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold truncate">
@@ -238,13 +240,13 @@ export function DailyGranularAnalytics({ studentId, rawEvals, competencies, clas
             <div className="flex items-center gap-1.5">
               <Users className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                Détail par enseignant de la classe
+                {t("daily.classDetail")}
               </p>
             </div>
 
             {classTeachers.length === 0 ? (
               <p className="text-xs text-muted-foreground italic">
-                Aucun enseignant assigné à cette classe.
+                {t("daily.noTeacherAssigned")}
               </p>
             ) : (
               <div className="divide-y divide-border/50 rounded-lg overflow-hidden border border-border/40 bg-card">
@@ -256,14 +258,14 @@ export function DailyGranularAnalytics({ studentId, rawEvals, competencies, clas
                     <span className="text-sm font-medium text-foreground">{teacher.name}</span>
                     {ev ? (
                       <Badge className="text-xs shrink-0" style={statusBadgeStyle(ev.status)}>
-                        {statusLabel(ev.status)}
+                        {t(statusKey(ev.status))}
                       </Badge>
                     ) : (
                       <span
                         className="text-xs text-muted-foreground bg-muted/50 px-2 py-0.5 rounded-md"
                         dir="rtl"
                       >
-                        لم يقم بالتقييم
+                        {t("daily.notEvaluated")}
                       </span>
                     )}
                   </div>

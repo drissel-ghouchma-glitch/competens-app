@@ -4,11 +4,12 @@ import { useAppStore } from "@/stores/app-store";
 import { useAuth } from "@/hooks/use-auth";
 import { useDemoStore } from "@/stores/demo";
 import { useRequests } from "@/hooks/use-requests";
+import { useI18n } from "@/i18n";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, GraduationCap, Building2, Users, UserCog,
   BookOpen, ClipboardCheck, Bell, Moon, Sun, Menu, X,
-  LogOut, School, UserCheck, ClipboardList, Home, ShieldCheck, CalendarCheck,
+  LogOut, School, UserCheck, ClipboardList, Home, ShieldCheck, CalendarCheck, Languages,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -16,38 +17,39 @@ import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 const navItems = [
-  { to: "/dashboard", icon: LayoutDashboard, label: "Dashboard", roles: ["admin", "directeur", "professeur"] },
-  { to: "/school-years", icon: School, label: "Années scolaires", roles: ["admin"] },
-  { to: "/levels", icon: GraduationCap, label: "Niveaux", roles: ["admin"] },
-  { to: "/classes", icon: Building2, label: "Classes", roles: ["admin", "directeur", "professeur"] },
-  { to: "/students", icon: Users, label: "Élèves", roles: ["admin", "directeur", "professeur"] },
-  { to: "/teachers", icon: UserCog, label: "Professeurs", roles: ["admin", "directeur"] },
-  { to: "/competencies", icon: BookOpen, label: "Compétences", roles: ["admin", "professeur"] },
-  { to: "/evaluation", icon: ClipboardCheck, label: "Évaluation", roles: ["professeur"] },
-  { to: "/attendance", icon: CalendarCheck, label: "Présences", roles: ["admin", "directeur", "professeur"] },
-  { to: "/alerts", icon: Bell, label: "Alertes", roles: ["admin", "directeur", "professeur"] },
-  { to: "/admin/pending-teachers", icon: UserCheck, label: "Inscriptions", roles: ["admin"] },
-  { to: "/admin/requests", icon: ClipboardList, label: "Demandes", roles: ["admin"], badge: true },
-  { to: "/admin/users", icon: ShieldCheck, label: "Utilisateurs", roles: ["admin"] },
+  { to: "/dashboard", icon: LayoutDashboard, labelKey: "nav.dashboard", roles: ["admin", "directeur", "professeur"] },
+  { to: "/school-years", icon: School, labelKey: "nav.schoolYears", roles: ["admin"] },
+  { to: "/levels", icon: GraduationCap, labelKey: "nav.levels", roles: ["admin"] },
+  { to: "/classes", icon: Building2, labelKey: "nav.classes", roles: ["admin", "directeur", "professeur"] },
+  { to: "/students", icon: Users, labelKey: "nav.students", roles: ["admin", "directeur", "professeur"] },
+  { to: "/teachers", icon: UserCog, labelKey: "nav.teachers", roles: ["admin", "directeur"] },
+  { to: "/competencies", icon: BookOpen, labelKey: "nav.competencies", roles: ["admin", "professeur"] },
+  { to: "/evaluation", icon: ClipboardCheck, labelKey: "nav.evaluation", roles: ["professeur"] },
+  { to: "/attendance", icon: CalendarCheck, labelKey: "nav.attendance", roles: ["admin", "directeur", "professeur"] },
+  { to: "/alerts", icon: Bell, labelKey: "nav.alerts", roles: ["admin", "directeur", "professeur"] },
+  { to: "/admin/pending-teachers", icon: UserCheck, labelKey: "nav.registrations", roles: ["admin"] },
+  { to: "/admin/requests", icon: ClipboardList, labelKey: "nav.requests", roles: ["admin"], badge: true },
+  { to: "/admin/users", icon: ShieldCheck, labelKey: "nav.users", roles: ["admin"] },
   // Parent
-  { to: "/parent", icon: Home, label: "Mes enfants", roles: ["parent"] },
+  { to: "/parent", icon: Home, labelKey: "nav.myChildren", roles: ["parent"] },
 ];
 
 const mobileNavItems = [
-  { to: "/dashboard", icon: LayoutDashboard, label: "Accueil" },
-  { to: "/classes", icon: Building2, label: "Classes" },
-  { to: "/students", icon: Users, label: "Élèves" },
-  { to: "/evaluation", icon: ClipboardCheck, label: "Évaluer" },
-  { to: "/alerts", icon: Bell, label: "Alertes" },
+  { to: "/dashboard", icon: LayoutDashboard, labelKey: "nav.home" },
+  { to: "/classes", icon: Building2, labelKey: "nav.classes" },
+  { to: "/students", icon: Users, labelKey: "nav.students" },
+  { to: "/evaluation", icon: ClipboardCheck, labelKey: "nav.evaluate" },
+  { to: "/alerts", icon: Bell, labelKey: "nav.alerts" },
 ];
 
 const parentMobileNavItems = [
-  { to: "/parent", icon: Home, label: "Enfants" },
+  { to: "/parent", icon: Home, labelKey: "nav.children" },
 ];
 
 export default function AppLayout() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { t, lang, setLang, resetPicked } = useI18n();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [dark, setDark] = useState(() => {
     if (typeof window !== "undefined") {
@@ -66,9 +68,12 @@ export default function AppLayout() {
   const role = user?.role ?? "admin";
   const { pendingCount } = useRequests();
 
+  const toggleLang = () => setLang(lang === "ar" ? "fr" : "ar");
+
   const handleLogout = async () => {
     await logout();
     disableDemo();
+    resetPicked();           // re-arm the language gate for the next login
     navigate("/login", { replace: true });
   };
 
@@ -102,7 +107,7 @@ export default function AppLayout() {
           <div className="w-12 h-12 rounded-2xl bg-primary flex items-center justify-center animate-pulse">
             <GraduationCap className="w-6 h-6 text-primary-foreground" />
           </div>
-          <p className="text-sm text-muted-foreground animate-pulse">Chargement...</p>
+          <p className="text-sm text-muted-foreground animate-pulse">{t("common.loading")}</p>
         </div>
       </div>
     );
@@ -114,7 +119,7 @@ export default function AppLayout() {
     <div className="flex h-screen overflow-hidden bg-background">
       {/* Desktop Sidebar */}
       <aside className={cn(
-        "hidden md:flex flex-col w-64 border-r border-border bg-card shrink-0 transition-all duration-300",
+        "hidden md:flex flex-col w-64 border-e border-border bg-card shrink-0 transition-all duration-300",
         isDemo && !initialized && "opacity-0"
       )}>
         <div className="flex items-center gap-3 px-5 h-16 border-b border-border">
@@ -123,7 +128,7 @@ export default function AppLayout() {
           </div>
           <div>
             <h1 className="font-bold text-foreground text-sm tracking-tight">Compétens</h1>
-            <p className="text-xs text-muted-foreground">Suivi scolaire</p>
+            <p className="text-xs text-muted-foreground">{t("layout.subtitle")}</p>
           </div>
         </div>
         <ScrollArea className="flex-1 px-3 py-4">
@@ -141,9 +146,9 @@ export default function AppLayout() {
                 )}
               >
                 <item.icon className="w-5 h-5 shrink-0" />
-                <span className="truncate flex-1">{item.label}</span>
+                <span className="truncate flex-1">{t(item.labelKey)}</span>
                 {"badge" in item && item.badge && !isDemo && pendingCount > 0 && (
-                  <span className="ml-auto w-5 h-5 rounded-full bg-destructive flex items-center justify-center text-[10px] font-bold text-destructive-foreground shrink-0">
+                  <span className="ms-auto w-5 h-5 rounded-full bg-destructive flex items-center justify-center text-[10px] font-bold text-destructive-foreground shrink-0">
                     {pendingCount > 9 ? "9+" : pendingCount}
                   </span>
                 )}
@@ -159,18 +164,26 @@ export default function AppLayout() {
               </span>
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-foreground truncate">{user?.fullName ?? "Utilisateur"}</p>
-              <p className="text-xs text-muted-foreground capitalize">{role}</p>
+              <p className="text-sm font-medium text-foreground truncate">{user?.fullName ?? t("layout.user")}</p>
+              <p className="text-xs text-muted-foreground">{t(`role.${role}`)}</p>
             </div>
           </div>
           <div className="flex gap-1">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" className="flex-1 h-9" onClick={toggleLang}>
+                  <span className="text-xs font-bold">{lang === "ar" ? "FR" : "ع"}</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{t("layout.language")}</TooltipContent>
+            </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button variant="ghost" size="icon" className="flex-1 h-9" onClick={() => setDark(!dark)}>
                   {dark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>{dark ? "Mode clair" : "Mode sombre"}</TooltipContent>
+              <TooltipContent>{dark ? t("layout.lightMode") : t("layout.darkMode")}</TooltipContent>
             </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -178,7 +191,7 @@ export default function AppLayout() {
                   <LogOut className="w-4 h-4" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>Déconnexion</TooltipContent>
+              <TooltipContent>{t("layout.logout")}</TooltipContent>
             </Tooltip>
           </div>
         </div>
@@ -196,6 +209,9 @@ export default function AppLayout() {
           <h1 className="font-bold text-foreground text-sm">Compétens</h1>
         </div>
         <div className="flex-1" />
+        <Button variant="ghost" size="icon" className="shrink-0" onClick={toggleLang}>
+          <span className="text-xs font-bold">{lang === "ar" ? "FR" : "ع"}</span>
+        </Button>
         <Button variant="ghost" size="icon" className="shrink-0" onClick={() => setDark(!dark)}>
           {dark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
         </Button>
@@ -206,7 +222,7 @@ export default function AppLayout() {
         <div className="fixed inset-0 z-50 md:hidden" onClick={() => setSidebarOpen(false)}>
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
           <div
-            className="absolute top-0 left-0 bottom-0 w-72 bg-card shadow-2xl animate-in slide-in-from-left duration-300"
+            className="absolute top-0 bottom-0 start-0 w-72 bg-card shadow-2xl animate-in slide-in-from-left duration-300"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between px-4 h-14 border-b border-border">
@@ -231,7 +247,7 @@ export default function AppLayout() {
                     )}
                   >
                     <item.icon className="w-5 h-5" />
-                    <span className="flex-1">{item.label}</span>
+                    <span className="flex-1">{t(item.labelKey)}</span>
                     {"badge" in item && item.badge && !isDemo && pendingCount > 0 && (
                       <span className="w-5 h-5 rounded-full bg-destructive flex items-center justify-center text-[10px] font-bold text-destructive-foreground shrink-0">
                         {pendingCount > 9 ? "9+" : pendingCount}
@@ -242,7 +258,7 @@ export default function AppLayout() {
               </div>
               <div className="mt-4 pt-4 border-t border-border">
                 <Button variant="ghost" className="w-full justify-start text-muted-foreground" onClick={handleLogout}>
-                  <LogOut className="w-4 h-4 mr-3" /> Déconnexion
+                  <LogOut className="w-4 h-4 me-3" /> {t("layout.logout")}
                 </Button>
               </div>
             </ScrollArea>
@@ -273,13 +289,13 @@ export default function AppLayout() {
             >
               <div className="relative">
                 <item.icon className="w-5 h-5" />
-                {item.label === "Alertes" && unreadCount > 0 && (
-                  <span className="absolute -top-1 -right-2 w-4 h-4 rounded-full bg-destructive flex items-center justify-center text-[10px] font-bold text-destructive-foreground">
+                {item.to === "/alerts" && unreadCount > 0 && (
+                  <span className="absolute -top-1 -end-2 w-4 h-4 rounded-full bg-destructive flex items-center justify-center text-[10px] font-bold text-destructive-foreground">
                     {unreadCount > 9 ? "9+" : unreadCount}
                   </span>
                 )}
               </div>
-              <span className="text-[10px] font-medium">{item.label}</span>
+              <span className="text-[10px] font-medium">{t(item.labelKey)}</span>
             </NavLink>
           ))}
         </div>

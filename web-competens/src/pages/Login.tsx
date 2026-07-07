@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "@/hooks/use-auth";
 import { useDemoStore } from "@/stores/demo";
+import { useI18n } from "@/i18n";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -28,6 +29,7 @@ export default function LoginPage() {
 
   const { login, user, isLoading: authLoading } = useAuth();
   const { enableDemo, disableDemo } = useDemoStore();
+  const { t, lang, setLang } = useI18n();
   const navigate = useNavigate();
 
   // Already authenticated — redirect in effect, never during render
@@ -47,7 +49,7 @@ export default function LoginPage() {
       const role = await login(email, password);
       navigate(homeRouteForRole(role), { replace: true });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Erreur de connexion.");
+      setError(err instanceof Error ? err.message : t("login.errorGeneric"));
     } finally {
       setIsLoading(false);
     }
@@ -64,6 +66,13 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-primary/10 p-4">
       <div className="w-full max-w-md">
+        {/* Language toggle */}
+        <div className="flex justify-end mb-2">
+          <Button variant="ghost" size="sm" className="gap-1.5" onClick={() => setLang(lang === "ar" ? "fr" : "ar")}>
+            <span className="text-xs font-bold">{lang === "ar" ? "Français" : "العربية"}</span>
+          </Button>
+        </div>
+
         {/* Logo */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-primary shadow-lg shadow-primary/25 mb-4">
@@ -71,7 +80,7 @@ export default function LoginPage() {
           </div>
           <h1 className="text-2xl font-bold text-foreground tracking-tight">Compétens</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Gestion des compétences et évaluations
+            {t("login.tagline")}
           </p>
         </div>
 
@@ -79,10 +88,10 @@ export default function LoginPage() {
           <CardHeader className="pb-4">
             <CardTitle className="text-lg flex items-center gap-2">
               <LogIn className="w-5 h-5 text-primary" />
-              Connexion
+              {t("login.title")}
             </CardTitle>
             <CardDescription>
-              Connectez-vous pour accéder à votre espace
+              {t("login.desc")}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -95,7 +104,7 @@ export default function LoginPage() {
 
             <form onSubmit={handleLogin} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
+                <Label htmlFor="email">{t("login.email")}</Label>
                 <Input
                   id="email"
                   type="email"
@@ -105,10 +114,11 @@ export default function LoginPage() {
                   required
                   autoComplete="email"
                   className="h-11"
+                  dir="ltr"
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="password">Mot de passe</Label>
+                <Label htmlFor="password">{t("login.password")}</Label>
                 <Input
                   id="password"
                   type="password"
@@ -118,6 +128,7 @@ export default function LoginPage() {
                   required
                   autoComplete="current-password"
                   className="h-11"
+                  dir="ltr"
                 />
               </div>
               <Button
@@ -125,7 +136,7 @@ export default function LoginPage() {
                 className="w-full h-11 font-semibold"
                 disabled={isLoading}
               >
-                {isLoading ? "Connexion en cours…" : "Se connecter"}
+                {isLoading ? t("login.submitting") : t("login.submit")}
               </Button>
             </form>
 
@@ -134,7 +145,7 @@ export default function LoginPage() {
                 <div className="w-full border-t border-border" />
               </div>
               <div className="relative flex justify-center text-xs">
-                <span className="bg-card px-2 text-muted-foreground">OU</span>
+                <span className="bg-card px-2 text-muted-foreground">{t("common.or")}</span>
               </div>
             </div>
 
@@ -145,19 +156,19 @@ export default function LoginPage() {
               disabled={isLoading}
               type="button"
             >
-              <GraduationCap className="w-4 h-4 mr-2" />
-              Accéder en mode démo
+              <GraduationCap className="w-4 h-4 me-2" />
+              {t("login.demo")}
             </Button>
           </CardContent>
         </Card>
 
         <p className="text-center text-xs text-muted-foreground mt-4">
-          Mode démo — données simulées localement. Aucune connexion réelle requise.
+          {t("login.demoNote")}
         </p>
         <p className="text-center text-sm text-muted-foreground mt-3">
-          Enseignant ou parent ?{" "}
+          {t("login.registerPrompt")}{" "}
           <Link to="/register" className="text-primary font-medium hover:underline">
-            Créer un compte
+            {t("login.createAccount")}
           </Link>
         </p>
       </div>

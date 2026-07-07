@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useSchoolYears } from "@/hooks/use-school-years";
+import { useI18n } from "@/i18n";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,6 +15,8 @@ import type { SchoolYear } from "@/types";
 
 export default function SchoolYearsPage() {
   const { schoolYears, loading, error, addSchoolYear, updateSchoolYear, toggleSchoolYearActive, closeSchoolYear } = useSchoolYears();
+  const { t, lang } = useI18n();
+  const locale = lang === "ar" ? "ar-MA" : "fr-FR";
 
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -34,7 +37,7 @@ export default function SchoolYearsPage() {
       }
       resetForm();
     } catch (e: unknown) {
-      setSaveError(e instanceof Error ? e.message : "Erreur lors de l'enregistrement");
+      setSaveError(e instanceof Error ? e.message : t("common.saveError"));
     } finally {
       setSaving(false);
     }
@@ -61,39 +64,39 @@ export default function SchoolYearsPage() {
     <div className="space-y-6 animate-in fade-in duration-500">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Années scolaires</h1>
-          <p className="text-sm text-muted-foreground">Gérez les années scolaires de l'établissement</p>
+          <h1 className="text-2xl font-bold tracking-tight">{t("schoolYears.title")}</h1>
+          <p className="text-sm text-muted-foreground">{t("schoolYears.subtitle")}</p>
         </div>
         <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) resetForm(); }}>
           <DialogTrigger asChild>
             <Button size="sm" className="gap-2">
-              <Plus className="w-4 h-4" /> Nouvelle année
+              <Plus className="w-4 h-4" /> {t("schoolYears.newYear")}
             </Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>{editId ? "Modifier" : "Créer"} une année scolaire</DialogTitle>
-              <DialogDescription>Remplissez les informations de l'année scolaire</DialogDescription>
+              <DialogTitle>{editId ? t("schoolYears.editTitle") : t("schoolYears.createTitle")}</DialogTitle>
+              <DialogDescription>{t("schoolYears.formDesc")}</DialogDescription>
             </DialogHeader>
             <div className="space-y-4 pt-2">
               <div className="space-y-2">
-                <Label>Nom</Label>
+                <Label>{t("schoolYears.name")}</Label>
                 <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="2025-2026" />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-2">
-                  <Label>Date de début</Label>
+                  <Label>{t("schoolYears.startDate")}</Label>
                   <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
                 </div>
                 <div className="space-y-2">
-                  <Label>Date de fin</Label>
+                  <Label>{t("schoolYears.endDate")}</Label>
                   <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
                 </div>
               </div>
               {saveError && <p className="text-sm text-destructive">{saveError}</p>}
               <Button onClick={handleSubmit} className="w-full" disabled={!name || saving}>
-                {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-                {editId ? "Enregistrer" : "Créer l'année"}
+                {saving ? <Loader2 className="w-4 h-4 animate-spin me-2" /> : null}
+                {editId ? t("common.save") : t("schoolYears.createBtn")}
               </Button>
             </div>
           </DialogContent>
@@ -122,15 +125,18 @@ export default function SchoolYearsPage() {
                   <div>
                     <div className="flex items-center gap-2 flex-wrap">
                       <h3 className="font-semibold text-foreground">{sy.name}</h3>
-                      {sy.isClosed && <Badge variant="secondary">Clôturée</Badge>}
+                      {sy.isClosed && <Badge variant="secondary">{t("schoolYears.closed")}</Badge>}
                       {sy.isActive && (
                         <Badge className="bg-green-500/10 text-green-600 border-green-500/20 flex items-center gap-1">
-                          <CheckCircle className="w-3 h-3" /> Active
+                          <CheckCircle className="w-3 h-3" /> {t("schoolYears.active")}
                         </Badge>
                       )}
                     </div>
                     <p className="text-sm text-muted-foreground mt-0.5">
-                      Du {new Date(sy.startDate).toLocaleDateString("fr-FR")} au {new Date(sy.endDate).toLocaleDateString("fr-FR")}
+                      {t("schoolYears.period", {
+                        start: new Date(sy.startDate).toLocaleDateString(locale),
+                        end: new Date(sy.endDate).toLocaleDateString(locale),
+                      })}
                     </p>
                   </div>
                 </div>
@@ -140,12 +146,12 @@ export default function SchoolYearsPage() {
                   </Button>
                   {!sy.isClosed && !sy.isActive && (
                     <Button variant="outline" size="sm" onClick={() => toggleSchoolYearActive(sy.id)}>
-                      Activer
+                      {t("schoolYears.activate")}
                     </Button>
                   )}
                   {sy.isActive && (
                     <Button variant="outline" size="sm" onClick={() => closeSchoolYear(sy.id)} className="text-destructive border-destructive/30 hover:bg-destructive/5">
-                      <Clock className="w-3.5 h-3.5 mr-1.5" /> Clôturer
+                      <Clock className="w-3.5 h-3.5 me-1.5" /> {t("schoolYears.close")}
                     </Button>
                   )}
                 </div>
@@ -156,8 +162,8 @@ export default function SchoolYearsPage() {
             <Card className="border-dashed border-2">
               <CardContent className="p-8 text-center">
                 <Calendar className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
-                <p className="text-muted-foreground font-medium">Aucune année scolaire</p>
-                <p className="text-sm text-muted-foreground mt-1">Créez votre première année scolaire</p>
+                <p className="text-muted-foreground font-medium">{t("schoolYears.emptyTitle")}</p>
+                <p className="text-sm text-muted-foreground mt-1">{t("schoolYears.emptyHint")}</p>
               </CardContent>
             </Card>
           )}

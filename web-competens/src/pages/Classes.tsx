@@ -3,6 +3,7 @@ import { useClasses } from "@/hooks/use-classes";
 import { useRequests } from "@/hooks/use-requests";
 import { useAuth } from "@/hooks/use-auth";
 import { useDemoStore } from "@/stores/demo";
+import { useI18n } from "@/i18n";
 import { supabase } from "@/lib/supabase";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -29,6 +30,7 @@ export default function ClassesPage() {
   } = useClasses();
   const { submitRequest } = useRequests();
   const { user } = useAuth();
+  const { t } = useI18n();
   const isDemo = useDemoStore((s) => s.isDemoMode);
 
   // Teacher in real mode → request flow only
@@ -61,7 +63,6 @@ export default function ClassesPage() {
     setRequestError("");
     try {
       const [classesRes, assignRes] = await Promise.all([
-        // Use a join through levels to bypass potential RLS filter on classes
         supabase
           .from("classes")
           .select("id, name, level_id, capacity, student_count, is_archived, school_year_id, created_at")
@@ -73,28 +74,19 @@ export default function ClassesPage() {
           .eq("teacher_id", user.id),
       ]);
 
-      // If RLS blocks the teacher from reading classes, classesRes.data will be []
-      // In that case, fall back to fetching classes via assignments join
       let allClasses: Classe[] = (classesRes.data ?? []).map((c) => ({
         id: c.id, name: c.name, levelId: c.level_id ?? "",
         capacity: c.capacity, studentCount: c.student_count,
         isArchived: c.is_archived, schoolYearId: c.school_year_id, createdAt: c.created_at,
       }));
 
-      // Fallback: if direct fetch returned nothing but teacher has assignments,
-      // fetch all classes via the assignments join (works even with strict RLS)
       if (allClasses.length === 0) {
         const { data: joinData } = await supabase
           .from("teacher_class_assignments")
           .select("classes(id, name, level_id, capacity, student_count, is_archived, school_year_id, created_at)")
           .not("class_id", "is", null);
-        // This only gives assigned classes — still useful for context
-        // The real fix is an RLS policy: see requestError below
         if ((joinData ?? []).length === 0) {
-          setRequestError(
-            "RLS_BLOCK: La politique de sécurité Supabase empêche la lecture des classes. " +
-            "Exécutez le SQL de correction dans le Dashboard Supabase (voir instructions)."
-          );
+          setRequestError(t("classes.rlsBlock"));
         }
       }
 
@@ -102,7 +94,7 @@ export default function ClassesPage() {
       setAllDialogClasses(allClasses);
       setMyAssignedClassIds(assignedIds);
     } catch {
-      setRequestError("Impossible de charger les classes. Vérifiez votre connexion.");
+      setRequestError(t("classes.loadError"));
     } finally {
       setDialogLoading(false);
     }
@@ -129,7 +121,6 @@ export default function ClassesPage() {
     return list;
   }, [classes, search, levelFilter]);
 
-  // Classes the teacher can still request (not already assigned) — uses fresh dialog fetch
   const requestableClasses = useMemo(
     () => allDialogClasses.filter((c) => !myAssignedClassIds.includes(c.id)),
     [allDialogClasses, myAssignedClassIds]
@@ -148,7 +139,7 @@ export default function ClassesPage() {
       }
       resetForm();
     } catch (e: unknown) {
-      setSaveError(e instanceof Error ? e.message : "Erreur lors de l'enregistrement");
+      setSaveError(e instanceof Error ? e.message : t("common.saveError"));
     } finally {
       setSaving(false);
     }
@@ -160,12 +151,12 @@ export default function ClassesPage() {
   };
 
   const handleDelete = async (classId: string) => {
-    if (!window.confirm("Supprimer cette classe ? Cette action est irréversible.")) return;
+    if (!window.confirm(t("classes.deleteConfirm"))) return;
     try {
       await deleteClass(classId);
-      toast.success("Classe supprimée.");
+      toast.success(t("classes.deleted"));
     } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : "Erreur lors de la suppression");
+      toast.error(e instanceof Error ? e.message : t("common.deleteError"));
     }
   };
 
@@ -187,11 +178,11 @@ export default function ClassesPage() {
     setSubmitting(true);
     try {
       await submitRequest("assign_class", { classIds: requestedClassIds });
-      toast.success(`Demande envoyée pour ${requestedClassIds.length} classe(s). L'administration va examiner votre demande.`);
+      toast.success(t("classes.reqSent", { count: requestedClassIds.length }));
       setRequestedClassIds([]);
       setOpenRequest(false);
     } catch (e: unknown) {
-      setRequestError(e instanceof Error ? e.message : "Erreur lors de l'envoi");
+      setRequestError(e instanceof Error ? e.message : t("common.opError"));
     } finally {
       setSubmitting(false);
     }
@@ -201,13 +192,13 @@ export default function ClassesPage() {
     <div className="space-y-6 animate-in fade-in duration-500">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Classes</h1>
+          <h1 className="text-2xl font-bold tracking-tight">{t("classes.title")}</h1>
           <p className="text-sm text-muted-foreground">
             {loading
-              ? "Chargement…"
+              ? t("common.loading")
               : activeYear
-              ? `Année ${activeYear.name} — ${filteredClasses.length} classe${filteredClasses.length !== 1 ? "s" : ""}`
-              : `${filteredClasses.length} classe${filteredClasses.length !== 1 ? "s" : ""}`}
+              ? t("classes.countYear", { name: activeYear.name, count: filteredClasses.length })
+              : t("classes.count", { count: filteredClasses.length })}
           </p>
         </div>
 
@@ -216,13 +207,13 @@ export default function ClassesPage() {
           <Dialog open={openCreate} onOpenChange={(o) => { setOpenCreate(o); if (!o) resetForm(); }}>
             <DialogTrigger asChild>
               <Button size="sm" className="gap-2">
-                <Plus className="w-4 h-4" /> Nouvelle classe
+                <Plus className="w-4 h-4" /> {t("classes.newClass")}
               </Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>{editId ? "Modifier" : "Créer"} une classe</DialogTitle>
-                <DialogDescription>Définissez les informations de la classe</DialogDescription>
+                <DialogTitle>{editId ? t("classes.editTitle") : t("classes.createTitle")}</DialogTitle>
+                <DialogDescription>{t("classes.formDesc")}</DialogDescription>
               </DialogHeader>
               <div className="space-y-4 pt-2">
                 {saveError && (
@@ -233,17 +224,17 @@ export default function ClassesPage() {
                 {!activeYear && !editId && (
                   <div className="flex items-center gap-2 p-3 rounded-lg bg-amber-500/10 text-amber-600 text-sm">
                     <Info className="w-4 h-4 shrink-0" />
-                    Aucune année scolaire active. Activez-en une d'abord.
+                    {t("classes.noActiveYear")}
                   </div>
                 )}
                 <div className="space-y-2">
-                  <Label>Nom de la classe</Label>
+                  <Label>{t("classes.name")}</Label>
                   <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="CP1-A" />
                 </div>
                 <div className="space-y-2">
-                  <Label>Niveau</Label>
+                  <Label>{t("classes.level")}</Label>
                   <Select value={levelId} onValueChange={setLevelId}>
-                    <SelectTrigger><SelectValue placeholder="Sélectionner un niveau" /></SelectTrigger>
+                    <SelectTrigger><SelectValue placeholder={t("classes.selectLevel")} /></SelectTrigger>
                     <SelectContent>
                       {levels.filter((l) => !l.isArchived).map((l) => (
                         <SelectItem key={l.id} value={l.id}>{l.code} – {l.name}</SelectItem>
@@ -252,12 +243,12 @@ export default function ClassesPage() {
                   </Select>
                   {levels.length === 0 && (
                     <p className="text-xs text-muted-foreground flex items-center gap-1">
-                      <Info className="w-3 h-3" /> Aucun niveau — créez d'abord des niveaux
+                      <Info className="w-3 h-3" /> {t("classes.noLevel")}
                     </p>
                   )}
                 </div>
                 <div className="space-y-2">
-                  <Label>Effectif maximum</Label>
+                  <Label>{t("classes.capacity")}</Label>
                   <Input
                     type="number" value={capacity}
                     onChange={(e) => setCapacity(Number(e.target.value))}
@@ -268,8 +259,8 @@ export default function ClassesPage() {
                   onClick={handleSubmit} className="w-full"
                   disabled={saving || !name || !levelId || (!editId && !activeYear)}
                 >
-                  {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-                  {editId ? "Enregistrer" : "Créer la classe"}
+                  {saving ? <Loader2 className="w-4 h-4 animate-spin me-2" /> : null}
+                  {editId ? t("common.save") : t("classes.createBtn")}
                 </Button>
               </div>
             </DialogContent>
@@ -281,23 +272,23 @@ export default function ClassesPage() {
           <Dialog open={openRequest} onOpenChange={(o) => { setOpenRequest(o); if (!o) { setRequestedClassIds([]); setRequestError(""); } }}>
             <DialogTrigger asChild>
               <Button size="sm" className="gap-2" onClick={handleOpenRequest}>
-                <Send className="w-4 h-4" /> Demander l'accès à une classe
+                <Send className="w-4 h-4" /> {t("classes.requestAccess")}
               </Button>
             </DialogTrigger>
             <DialogContent className="max-w-md">
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2">
                   <Building2 className="w-5 h-5 text-primary" />
-                  Demande d'accès à une classe
+                  {t("classes.requestTitle")}
                 </DialogTitle>
                 <DialogDescription>
-                  Sélectionnez la ou les classes auxquelles vous souhaitez avoir accès. Votre demande sera examinée par l'administration.
+                  {t("classes.requestDesc")}
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4 pt-2">
                 <div className="flex items-start gap-2 p-3 rounded-lg bg-primary/5 border border-primary/20 text-sm text-primary">
                   <Info className="w-4 h-4 shrink-0 mt-0.5" />
-                  Une fois approuvée, les élèves de cette classe apparaîtront dans vos évaluations.
+                  {t("classes.requestInfo")}
                 </div>
 
                 {requestError && (
@@ -313,27 +304,26 @@ export default function ClassesPage() {
                 ) : allDialogClasses.length === 0 ? (
                   <div className="flex flex-col items-center gap-2 py-6 text-center">
                     <AlertCircle className="w-10 h-10 text-amber-400" />
-                    <p className="text-sm font-medium text-foreground">Aucune classe accessible</p>
+                    <p className="text-sm font-medium text-foreground">{t("classes.noAccessTitle")}</p>
                     <p className="text-xs text-muted-foreground max-w-xs">
-                      La politique de sécurité Supabase (RLS) empêche la lecture des classes.
-                      Demandez à l'administrateur d'exécuter le correctif SQL.
+                      {t("classes.rlsBlock")}
                     </p>
                   </div>
                 ) : requestableClasses.length === 0 ? (
                   <div className="flex flex-col items-center gap-2 py-6 text-center">
                     <CheckCircle2 className="w-10 h-10 text-green-400" />
                     <p className="text-sm font-medium text-muted-foreground">
-                      Vous avez déjà accès à toutes les classes disponibles.
+                      {t("classes.allAccess")}
                     </p>
                   </div>
                 ) : (
                   <>
                     <div className="space-y-1.5">
                       <Label className="text-sm font-medium flex items-center justify-between">
-                        <span>Classes disponibles</span>
+                        <span>{t("classes.available")}</span>
                         {requestedClassIds.length > 0 && (
                           <span className="text-xs text-primary font-normal">
-                            {requestedClassIds.length} sélectionnée{requestedClassIds.length > 1 ? "s" : ""}
+                            {t("classes.selectedCount", { count: requestedClassIds.length })}
                           </span>
                         )}
                       </Label>
@@ -361,11 +351,11 @@ export default function ClassesPage() {
                                 >
                                   <span className="text-sm font-medium">{c.name}</span>
                                   {level && (
-                                    <span className="ml-2 text-xs text-muted-foreground font-mono">{level.code}</span>
+                                    <span className="ms-2 text-xs text-muted-foreground font-mono">{level.code}</span>
                                   )}
                                 </label>
                                 <span className="text-xs text-muted-foreground">
-                                  {c.studentCount} élèves
+                                  {t("classes.studentsCount", { count: c.studentCount })}
                                 </span>
                               </div>
                             );
@@ -378,7 +368,7 @@ export default function ClassesPage() {
                     {myAssignedClassIds.length > 0 && (
                       <div className="text-xs text-muted-foreground flex items-center gap-1.5">
                         <CheckCircle2 className="w-3.5 h-3.5 text-green-500 shrink-0" />
-                        {myAssignedClassIds.length} classe{myAssignedClassIds.length > 1 ? "s" : ""} déjà assignée{myAssignedClassIds.length > 1 ? "s" : ""} (non affichée{myAssignedClassIds.length > 1 ? "s" : ""})
+                        {t("classes.alreadyAssigned", { count: myAssignedClassIds.length })}
                       </div>
                     )}
                   </>
@@ -386,7 +376,7 @@ export default function ClassesPage() {
 
                 <div className="flex gap-2 pt-1">
                   <Button variant="outline" className="flex-1" onClick={() => setOpenRequest(false)}>
-                    Annuler
+                    {t("common.cancel")}
                   </Button>
                   <Button
                     className="flex-1 gap-2"
@@ -394,7 +384,7 @@ export default function ClassesPage() {
                     disabled={submitting || requestedClassIds.length === 0}
                   >
                     {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                    Envoyer la demande
+                    {t("classes.sendRequest")}
                   </Button>
                 </div>
               </div>
@@ -413,29 +403,27 @@ export default function ClassesPage() {
       {isTeacherReal && (
         <div className="flex items-start gap-2 p-3 rounded-lg bg-muted/50 border border-border text-sm text-muted-foreground">
           <Info className="w-4 h-4 shrink-0 mt-0.5 text-primary" />
-          <span>
-            Vous voyez toutes les classes de l'école. Utilisez le bouton <strong className="text-foreground">«&nbsp;Demander l'accès&nbsp;»</strong> pour demander à l'administration de vous assigner une classe.
-          </span>
+          <span>{t("classes.teacherBanner")}</span>
         </div>
       )}
 
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Search className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
-            placeholder="Rechercher une classe..."
+            placeholder={t("classes.searchPlaceholder")}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
+            className="ps-9"
           />
         </div>
         <Select value={levelFilter} onValueChange={setLevelFilter}>
           <SelectTrigger className="w-[180px]">
-            <SelectValue placeholder="Tous les niveaux" />
+            <SelectValue placeholder={t("classes.allLevels")} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Tous les niveaux</SelectItem>
+            <SelectItem value="all">{t("classes.allLevels")}</SelectItem>
             {levels.filter((l) => !l.isArchived).map((l) => (
               <SelectItem key={l.id} value={l.id}>{l.code}</SelectItem>
             ))}
@@ -463,7 +451,7 @@ export default function ClassesPage() {
                       <div className="flex items-center gap-1.5">
                         {isMyClass && (
                           <Badge className="text-xs bg-green-500/10 text-green-600 border-green-500/20 hover:bg-green-500/10">
-                            Ma classe
+                            {t("classes.myClass")}
                           </Badge>
                         )}
                         <Badge variant="secondary" className="font-mono text-xs">
@@ -475,7 +463,7 @@ export default function ClassesPage() {
                     <div className="flex items-center justify-between mt-2">
                       <p className="text-sm text-muted-foreground flex items-center gap-2">
                         <Users className="w-3.5 h-3.5" />
-                        {c.studentCount} / {c.capacity} élèves
+                        {t("classes.studentsOf", { count: c.studentCount, capacity: c.capacity })}
                       </p>
                       {!isTeacherReal && (
                         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -484,14 +472,14 @@ export default function ClassesPage() {
                             className="h-7 px-2 text-xs gap-1"
                             onClick={() => handleEdit(c)}
                           >
-                            <Pencil className="w-3 h-3" /> Modifier
+                            <Pencil className="w-3 h-3" /> {t("common.edit")}
                           </Button>
                           <Button
                             size="sm" variant="ghost"
                             className="h-7 px-2 text-xs gap-1 text-destructive hover:text-destructive"
                             onClick={() => handleDelete(c.id)}
                           >
-                            <Trash2 className="w-3 h-3" /> Supprimer
+                            <Trash2 className="w-3 h-3" /> {t("common.delete")}
                           </Button>
                         </div>
                       )}
@@ -506,11 +494,9 @@ export default function ClassesPage() {
             <Card className="border-dashed border-2">
               <CardContent className="p-8 text-center">
                 <Building2 className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
-                <p className="text-muted-foreground font-medium">Aucune classe</p>
+                <p className="text-muted-foreground font-medium">{t("classes.emptyTitle")}</p>
                 <p className="text-sm text-muted-foreground mt-1">
-                  {isTeacherReal
-                    ? "Aucune classe disponible pour le moment"
-                    : "Créez votre première classe"}
+                  {isTeacherReal ? t("classes.emptyTeacher") : t("classes.emptyAdmin")}
                 </p>
               </CardContent>
             </Card>
@@ -523,7 +509,7 @@ export default function ClassesPage() {
         <Dialog open={openCreate && !!editId} onOpenChange={(o) => { if (!o) resetForm(); }}>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Modifier la classe</DialogTitle>
+              <DialogTitle>{t("classes.editTitle")}</DialogTitle>
             </DialogHeader>
             <div className="space-y-4 pt-2">
               {saveError && (
@@ -532,13 +518,13 @@ export default function ClassesPage() {
                 </div>
               )}
               <div className="space-y-2">
-                <Label>Nom de la classe</Label>
+                <Label>{t("classes.name")}</Label>
                 <Input value={name} onChange={(e) => setName(e.target.value)} />
               </div>
               <div className="space-y-2">
-                <Label>Niveau</Label>
+                <Label>{t("classes.level")}</Label>
                 <Select value={levelId} onValueChange={setLevelId}>
-                  <SelectTrigger><SelectValue placeholder="Sélectionner un niveau" /></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder={t("classes.selectLevel")} /></SelectTrigger>
                   <SelectContent>
                     {levels.filter((l) => !l.isArchived).map((l) => (
                       <SelectItem key={l.id} value={l.id}>{l.code} – {l.name}</SelectItem>
@@ -547,12 +533,12 @@ export default function ClassesPage() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>Effectif maximum</Label>
+                <Label>{t("classes.capacity")}</Label>
                 <Input type="number" value={capacity} onChange={(e) => setCapacity(Number(e.target.value))} min={1} max={60} />
               </div>
               <Button onClick={handleSubmit} className="w-full" disabled={saving || !name || !levelId}>
-                {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-                Enregistrer
+                {saving ? <Loader2 className="w-4 h-4 animate-spin me-2" /> : null}
+                {t("common.save")}
               </Button>
             </div>
           </DialogContent>

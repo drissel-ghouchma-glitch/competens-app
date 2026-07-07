@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useParams } from "react-router-dom";
 import { useStudentDetail } from "@/hooks/use-student-detail";
 import { useAuth } from "@/hooks/use-auth";
+import { useI18n } from "@/i18n";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -32,12 +33,10 @@ function StatusIcon({ status }: { status: string }) {
   }
 }
 
-function statusLabel(status: string) {
-  switch (status) {
-    case "acquis": return "Acquis";
-    case "en_cours": return "En cours";
-    default: return "Non acquis";
-  }
+function statusKey(status: string) {
+  if (status === "acquis") return "status.acquis";
+  if (status === "en_cours") return "status.en_cours";
+  return "status.non_acquis";
 }
 
 function acquisitionColor(rate: number) {
@@ -55,19 +54,20 @@ function barColor(rate: number) {
 }
 
 function TimelineTooltip({ active, payload }: { active?: boolean; payload?: Array<{ payload: TimelinePoint }> }) {
+  const { t, lang } = useI18n();
   if (!active || !payload?.length) return null;
   const d = payload[0].payload;
-  const dateLabel = new Date(d.date + "T00:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
+  const dateLabel = new Date(d.date + "T00:00:00").toLocaleDateString(lang === "ar" ? "ar-MA" : "fr-FR", { day: "numeric", month: "long", year: "numeric" });
   return (
     <div className="rounded-xl border bg-popover shadow-lg p-3 text-sm min-w-[160px]">
       <p className="font-semibold text-foreground mb-1">{dateLabel}</p>
       <p className="font-bold" style={{ color: barColor(d.rate) }}>{d.rate}%</p>
-      <p className="text-xs text-muted-foreground mt-0.5">{d.count} évaluation(s)</p>
+      <p className="text-xs text-muted-foreground mt-0.5">{t("studentDetail.evalUnit", { count: d.count })}</p>
       {d.teachers.length > 0 && (
         <div className="mt-2 pt-2 border-t border-border">
-          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1">Enseignant(s)</p>
-          {d.teachers.map((t) => (
-            <p key={t} className="text-xs text-foreground">{t}</p>
+          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1">{t("studentDetail.teachersLabel")}</p>
+          {d.teachers.map((teacher) => (
+            <p key={teacher} className="text-xs text-foreground">{teacher}</p>
           ))}
         </div>
       )}
@@ -76,25 +76,26 @@ function TimelineTooltip({ active, payload }: { active?: boolean; payload?: Arra
 }
 
 function TimelineChart({ timeline }: { timeline: TimelinePoint[] }) {
+  const { t, lang } = useI18n();
   if (timeline.length === 0) {
     return (
       <Card className="border-border/50">
         <CardContent className="p-8 text-center text-muted-foreground text-sm">
-          Aucune évaluation enregistrée — le graphique apparaîtra après la première session d'évaluation.
+          {t("studentDetail.timelineEmpty")}
         </CardContent>
       </Card>
     );
   }
   const data = timeline.map((p) => ({
     ...p,
-    label: new Date(p.date + "T00:00:00").toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" }),
+    label: new Date(p.date + "T00:00:00").toLocaleDateString(lang === "ar" ? "ar-MA" : "fr-FR", { day: "2-digit", month: "2-digit" }),
   }));
   return (
     <Card className="border-border/50">
       <CardHeader className="pb-2">
         <CardTitle className="text-base font-semibold flex items-center gap-2">
           <BarChart2 className="w-4 h-4 text-primary" />
-          Évolution temporelle des évaluations
+          {t("studentDetail.timelineTitle")}
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -113,10 +114,10 @@ function TimelineChart({ timeline }: { timeline: TimelinePoint[] }) {
             </BarChart>
           </ResponsiveContainer>
         </div>
-        <div className="flex items-center gap-4 mt-3 text-xs text-muted-foreground justify-center">
-          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm inline-block" style={{ background: "hsl(122 39% 49%)" }} /> Acquis (&gt;90%)</span>
-          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm inline-block" style={{ background: "hsl(38 92% 50%)" }} /> En cours (50–90%)</span>
-          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm inline-block" style={{ background: "hsl(4 77% 55%)" }} /> Non acquis (&lt;50%)</span>
+        <div className="flex items-center gap-4 mt-3 text-xs text-muted-foreground justify-center flex-wrap">
+          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm inline-block" style={{ background: "hsl(122 39% 49%)" }} /> {t("status.acquisLong")}</span>
+          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm inline-block" style={{ background: "hsl(38 92% 50%)" }} /> {t("status.enCoursLong")}</span>
+          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm inline-block" style={{ background: "hsl(4 77% 55%)" }} /> {t("status.nonAcquisLong")}</span>
         </div>
       </CardContent>
     </Card>
@@ -126,11 +127,12 @@ function TimelineChart({ timeline }: { timeline: TimelinePoint[] }) {
 // ── Stats panels (shared between roles) ──────────────────────────────────────
 
 function RadarPanel({ stats, title }: { stats: CompetencyStat[]; title?: string }) {
+  const { t } = useI18n();
   const data = stats.map((s) => ({ subject: s.competencyCode, value: s.acquisitionRate, fullMark: 100 }));
   if (data.length === 0) return (
     <Card className="border-border/50">
       <CardContent className="p-8 text-center text-muted-foreground text-sm">
-        Aucune évaluation disponible.
+        {t("studentDetail.noEvalAvailable")}
       </CardContent>
     </Card>
   );
@@ -139,7 +141,7 @@ function RadarPanel({ stats, title }: { stats: CompetencyStat[]; title?: string 
       <CardHeader className="pb-2">
         <CardTitle className="text-base font-semibold flex items-center gap-2">
           <TrendingUp className="w-4 h-4 text-primary" />
-          {title ?? "Radar des compétences"}
+          {title ?? t("studentDetail.radarTitle")}
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -149,7 +151,7 @@ function RadarPanel({ stats, title }: { stats: CompetencyStat[]; title?: string 
               <PolarGrid stroke="hsl(var(--border))" />
               <PolarAngleAxis dataKey="subject" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
               <PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fontSize: 10 }} />
-              <Radar name="Taux d'acquisition" dataKey="value" stroke="hsl(220 99% 62%)" fill="hsl(220 99% 62%)" fillOpacity={0.2} />
+              <Radar name="rate" dataKey="value" stroke="hsl(220 99% 62%)" fill="hsl(220 99% 62%)" fillOpacity={0.2} />
             </RadarChart>
           </ResponsiveContainer>
         </div>
@@ -159,13 +161,14 @@ function RadarPanel({ stats, title }: { stats: CompetencyStat[]; title?: string 
 }
 
 function SummaryPanel({ stats }: { stats: CompetencyStat[] }) {
+  const { t } = useI18n();
   return (
     <Card className="border-border/50">
       <CardHeader className="pb-2">
-        <CardTitle className="text-base font-semibold">Résumé</CardTitle>
+        <CardTitle className="text-base font-semibold">{t("studentDetail.summary")}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
-        {stats.length === 0 && <p className="text-sm text-muted-foreground">Aucune donnée.</p>}
+        {stats.length === 0 && <p className="text-sm text-muted-foreground">{t("studentDetail.noData")}</p>}
         {stats.map((s) => (
           <div key={s.competencyCode} className="space-y-1.5">
             <div className="flex items-center justify-between text-xs">
@@ -184,15 +187,16 @@ function SummaryPanel({ stats }: { stats: CompetencyStat[] }) {
 }
 
 function SkillGrid({ stats }: { stats: CompetencyStat[] }) {
+  const { t } = useI18n();
   return (
     <Card className="border-border/50">
       <CardHeader className="pb-2">
-        <CardTitle className="text-base font-semibold">Détail par compétence</CardTitle>
+        <CardTitle className="text-base font-semibold">{t("studentDetail.detailByComp")}</CardTitle>
       </CardHeader>
       <CardContent>
         {stats.length === 0 && (
           <p className="text-sm text-muted-foreground py-4 text-center">
-            Aucune évaluation enregistrée pour cet élève.
+            {t("studentDetail.noEvalRecorded")}
           </p>
         )}
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -210,7 +214,7 @@ function SkillGrid({ stats }: { stats: CompetencyStat[] }) {
                   <span className="text-xs font-mono font-medium">{s.acquisitionRate}%</span>
                 </div>
                 <p className="text-[10px] text-muted-foreground mt-0.5">
-                  {s.totalEvaluations} éval. · {statusLabel(s.lastStatus)}
+                  {t("studentDetail.evalCount", { count: s.totalEvaluations, status: t(statusKey(s.lastStatus)) })}
                 </p>
               </div>
             </div>
@@ -224,6 +228,7 @@ function SkillGrid({ stats }: { stats: CompetencyStat[] }) {
 // ── Attendance History ────────────────────────────────────────────────────────
 
 function AttendanceHistoryCard({ history }: { history: AttendanceRecord[] }) {
+  const { t, lang } = useI18n();
   if (history.length === 0) return null;
   const absences = history.filter((r) => r.status === "absent");
   return (
@@ -231,10 +236,10 @@ function AttendanceHistoryCard({ history }: { history: AttendanceRecord[] }) {
       <CardHeader className="pb-2">
         <CardTitle className="text-base font-semibold flex items-center gap-2">
           <CalendarCheck className="w-4 h-4 text-primary" />
-          Historique de présence
+          {t("studentDetail.attendanceHistory")}
           {absences.length > 0 && (
-            <Badge className="ml-1 bg-red-500/10 text-red-600 border-red-500/20 text-xs">
-              {absences.length} absence{absences.length > 1 ? "s" : ""}
+            <Badge className="ms-1 bg-red-500/10 text-red-600 border-red-500/20 text-xs">
+              {t("studentDetail.absencesBadge", { count: absences.length })}
             </Badge>
           )}
         </CardTitle>
@@ -243,7 +248,7 @@ function AttendanceHistoryCard({ history }: { history: AttendanceRecord[] }) {
         <div className="divide-y divide-border">
           {history.slice(0, 30).map((r) => {
             const isPresent = r.status === "present";
-            const dateLabel = new Date(r.date + "T00:00:00").toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "long", year: "numeric" });
+            const dateLabel = new Date(r.date + "T00:00:00").toLocaleDateString(lang === "ar" ? "ar-MA" : "fr-FR", { weekday: "short", day: "numeric", month: "long", year: "numeric" });
             return (
               <div key={r.id} className="flex items-center justify-between py-2.5">
                 <span className="text-sm text-muted-foreground">{dateLabel}</span>
@@ -253,8 +258,8 @@ function AttendanceHistoryCard({ history }: { history: AttendanceRecord[] }) {
                     : "bg-red-500/10 text-red-700 border-red-500/20"}
                 >
                   {isPresent
-                    ? <><CheckCircle className="w-3 h-3 mr-1 inline" />Présent(e)</>
-                    : <><XCircle className="w-3 h-3 mr-1 inline" />Absent(e)</>}
+                    ? <><CheckCircle className="w-3 h-3 me-1 inline" />{t("studentDetail.present")}</>
+                    : <><XCircle className="w-3 h-3 me-1 inline" />{t("studentDetail.absent")}</>}
                 </Badge>
               </div>
             );
@@ -262,7 +267,7 @@ function AttendanceHistoryCard({ history }: { history: AttendanceRecord[] }) {
         </div>
         {history.length > 30 && (
           <p className="text-xs text-muted-foreground mt-3 text-center">
-            Affichage des 30 derniers enregistrements sur {history.length}.
+            {t("studentDetail.attendanceShown", { count: history.length })}
           </p>
         )}
       </CardContent>
@@ -275,6 +280,7 @@ function AttendanceHistoryCard({ history }: { history: AttendanceRecord[] }) {
 export default function StudentDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
+  const { t } = useI18n();
   const role = user?.role ?? "admin";
 
   const {
@@ -326,7 +332,7 @@ export default function StudentDetailPage() {
       });
       setEditing(false);
     } catch (e: unknown) {
-      setSaveError(e instanceof Error ? e.message : "Erreur lors de la sauvegarde");
+      setSaveError(e instanceof Error ? e.message : t("common.saveError"));
     } finally {
       setSaving(false);
     }
@@ -353,7 +359,7 @@ export default function StudentDetailPage() {
   if (!student) {
     return (
       <div className="text-center py-16 text-muted-foreground text-sm">
-        Élève introuvable.
+        {t("studentDetail.notFound")}
       </div>
     );
   }
@@ -377,24 +383,24 @@ export default function StudentDetailPage() {
             <h1 className="text-2xl font-bold tracking-tight">{student.firstName} {student.lastName}</h1>
             <div className="flex flex-wrap items-center gap-3 mt-2 text-sm text-muted-foreground">
               <span className="flex items-center gap-1"><GraduationCap className="w-4 h-4" />{classe?.name ?? "—"}</span>
-              <span className="flex items-center gap-1"><User className="w-4 h-4" />{student.gender === "M" ? "Garçon" : "Fille"}</span>
-              {student.birthDate && <span className="flex items-center gap-1"><Calendar className="w-4 h-4" />{age} ans</span>}
+              <span className="flex items-center gap-1"><User className="w-4 h-4" />{student.gender === "M" ? t("studentDetail.boy") : t("studentDetail.girl")}</span>
+              {student.birthDate && <span className="flex items-center gap-1"><Calendar className="w-4 h-4" />{t("studentDetail.years", { count: age })}</span>}
               {level && <Badge variant="secondary">{level.code}</Badge>}
-              {pendingAlerts > 0 && <Badge className="bg-destructive/10 text-destructive border-destructive/20">{pendingAlerts} alerte(s)</Badge>}
+              {pendingAlerts > 0 && <Badge className="bg-destructive/10 text-destructive border-destructive/20">{t("studentDetail.alerts", { count: pendingAlerts })}</Badge>}
             </div>
             <p className="mt-2 text-xs text-muted-foreground italic flex items-center gap-1">
-              <Eye className="w-3.5 h-3.5" /> Vous voyez uniquement vos évaluations pour cet élève.
+              <Eye className="w-3.5 h-3.5" /> {t("studentDetail.teacherViewNote")}
             </p>
           </div>
         </div>
 
         {/* Active alerts */}
         {alerts.filter((a) => !a.resolved).map((a) => (
-          <Card key={a.id} className={`border-l-4 ${a.level === "critical" ? "border-l-destructive" : "border-l-amber-400"}`}>
+          <Card key={a.id} className={`border-s-4 ${a.level === "critical" ? "border-s-destructive" : "border-s-amber-400"}`}>
             <CardContent className="p-4 flex items-start gap-3">
               <Bell className={`w-5 h-5 mt-0.5 shrink-0 ${a.level === "critical" ? "text-destructive" : "text-amber-500"}`} />
               <div>
-                <p className="font-medium text-foreground">{a.level === "critical" ? "Alerte importante" : "Alerte légère"}</p>
+                <p className="font-medium text-foreground">{a.level === "critical" ? t("studentDetail.criticalAlert") : t("studentDetail.lightAlert")}</p>
                 <p className="text-sm text-muted-foreground">{a.cause}</p>
               </div>
             </CardContent>
@@ -404,7 +410,7 @@ export default function StudentDetailPage() {
         {/* Stats */}
         <div className="grid lg:grid-cols-3 gap-4 md:gap-6">
           <div className="lg:col-span-2">
-            <RadarPanel stats={myStats} title="Mes évaluations — radar des compétences" />
+            <RadarPanel stats={myStats} title={t("studentDetail.myRadar")} />
           </div>
           <SummaryPanel stats={myStats} />
         </div>
@@ -429,34 +435,34 @@ export default function StudentDetailPage() {
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-2">
                 <div className="space-y-1">
-                  <Label className="text-xs">Prénom</Label>
+                  <Label className="text-xs">{t("studentDetail.firstName")}</Label>
                   <Input value={editFirstName} onChange={(e) => setEditFirstName(e.target.value)} className="h-8" />
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-xs">Nom</Label>
+                  <Label className="text-xs">{t("studentDetail.lastName")}</Label>
                   <Input value={editLastName} onChange={(e) => setEditLastName(e.target.value)} className="h-8" />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div className="space-y-1">
-                  <Label className="text-xs">Date de naissance</Label>
+                  <Label className="text-xs">{t("studentDetail.birthDate")}</Label>
                   <Input type="date" value={editBirthDate} onChange={(e) => setEditBirthDate(e.target.value)} className="h-8" />
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-xs">Genre</Label>
+                  <Label className="text-xs">{t("studentDetail.gender")}</Label>
                   <Select value={editGender} onValueChange={(v) => setEditGender(v as "M" | "F")}>
                     <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="M">Garçon</SelectItem>
-                      <SelectItem value="F">Fille</SelectItem>
+                      <SelectItem value="M">{t("studentDetail.boy")}</SelectItem>
+                      <SelectItem value="F">{t("studentDetail.girl")}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
               </div>
               <div className="space-y-1">
-                <Label className="text-xs">Classe</Label>
+                <Label className="text-xs">{t("studentDetail.class")}</Label>
                 <Select value={editClassId} onValueChange={setEditClassId}>
-                  <SelectTrigger className="h-8"><SelectValue placeholder="Choisir une classe" /></SelectTrigger>
+                  <SelectTrigger className="h-8"><SelectValue placeholder={t("studentDetail.chooseClass")} /></SelectTrigger>
                   <SelectContent>
                     {classes.map((c) => (
                       <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
@@ -468,10 +474,10 @@ export default function StudentDetailPage() {
               <div className="flex gap-2">
                 <Button size="sm" onClick={saveEdit} disabled={saving} className="gap-1.5">
                   {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-                  Enregistrer
+                  {t("common.save")}
                 </Button>
                 <Button size="sm" variant="outline" onClick={cancelEdit} disabled={saving} className="gap-1.5">
-                  <X className="w-3.5 h-3.5" /> Annuler
+                  <X className="w-3.5 h-3.5" /> {t("common.cancel")}
                 </Button>
               </div>
             </div>
@@ -482,14 +488,14 @@ export default function StudentDetailPage() {
                   <h1 className="text-2xl font-bold tracking-tight">{student.firstName} {student.lastName}</h1>
                   <div className="flex flex-wrap items-center gap-3 mt-2 text-sm text-muted-foreground">
                     <span className="flex items-center gap-1"><GraduationCap className="w-4 h-4" />{classe?.name ?? "—"}</span>
-                    <span className="flex items-center gap-1"><User className="w-4 h-4" />{student.gender === "M" ? "Garçon" : "Fille"}</span>
-                    {student.birthDate && <span className="flex items-center gap-1"><Calendar className="w-4 h-4" />{age} ans</span>}
+                    <span className="flex items-center gap-1"><User className="w-4 h-4" />{student.gender === "M" ? t("studentDetail.boy") : t("studentDetail.girl")}</span>
+                    {student.birthDate && <span className="flex items-center gap-1"><Calendar className="w-4 h-4" />{t("studentDetail.years", { count: age })}</span>}
                     {level && <Badge variant="secondary">{level.code}</Badge>}
-                    {pendingAlerts > 0 && <Badge className="bg-destructive/10 text-destructive border-destructive/20">{pendingAlerts} alerte(s)</Badge>}
+                    {pendingAlerts > 0 && <Badge className="bg-destructive/10 text-destructive border-destructive/20">{t("studentDetail.alerts", { count: pendingAlerts })}</Badge>}
                   </div>
                 </div>
                 <Button size="sm" variant="outline" onClick={startEdit} className="gap-1.5 shrink-0">
-                  <Edit className="w-3.5 h-3.5" /> Modifier
+                  <Edit className="w-3.5 h-3.5" /> {t("studentDetail.edit")}
                 </Button>
               </div>
             </>
@@ -499,11 +505,11 @@ export default function StudentDetailPage() {
 
       {/* Active alerts */}
       {alerts.filter((a) => !a.resolved).map((a) => (
-        <Card key={a.id} className={`border-l-4 ${a.level === "critical" ? "border-l-destructive" : "border-l-amber-400"}`}>
+        <Card key={a.id} className={`border-s-4 ${a.level === "critical" ? "border-s-destructive" : "border-s-amber-400"}`}>
           <CardContent className="p-4 flex items-start gap-3">
             <Bell className={`w-5 h-5 mt-0.5 shrink-0 ${a.level === "critical" ? "text-destructive" : "text-amber-500"}`} />
             <div>
-              <p className="font-medium text-foreground">{a.level === "critical" ? "Alerte importante" : "Alerte légère"}</p>
+              <p className="font-medium text-foreground">{a.level === "critical" ? t("studentDetail.criticalAlert") : t("studentDetail.lightAlert")}</p>
               <p className="text-sm text-muted-foreground">{a.cause}</p>
             </div>
           </CardContent>
@@ -518,7 +524,7 @@ export default function StudentDetailPage() {
           onClick={() => setShowGlobal(false)}
           className="gap-1.5"
         >
-          <Eye className="w-3.5 h-3.5" /> Vue globale
+          <Eye className="w-3.5 h-3.5" /> {t("studentDetail.globalView")}
         </Button>
         <Button
           size="sm"
@@ -526,7 +532,7 @@ export default function StudentDetailPage() {
           onClick={() => setShowGlobal(true)}
           className="gap-1.5"
         >
-          <BarChart2 className="w-3.5 h-3.5" /> Analyse globale (tous les enseignants)
+          <BarChart2 className="w-3.5 h-3.5" /> {t("studentDetail.globalAnalysis")}
         </Button>
       </div>
 
@@ -534,7 +540,7 @@ export default function StudentDetailPage() {
         <Card className="border-primary/20 bg-primary/5">
           <CardContent className="p-3 text-xs text-primary flex items-center gap-2">
             <BarChart2 className="w-3.5 h-3.5 shrink-0" />
-            Vous visualisez les évaluations combinées de <strong>tous les enseignants</strong>. Cela donne une vue d'ensemble des forces et faiblesses de l'élève sur toutes les matières.
+            {t("studentDetail.globalBanner")}
           </CardContent>
         </Card>
       )}
@@ -544,7 +550,7 @@ export default function StudentDetailPage() {
         <div className="lg:col-span-2">
           <RadarPanel
             stats={displayStats}
-            title={showGlobal ? "Analyse globale — tous enseignants" : "Vue globale des compétences"}
+            title={showGlobal ? t("studentDetail.radarGlobal") : t("studentDetail.radarDefault")}
           />
         </div>
         <SummaryPanel stats={displayStats} />

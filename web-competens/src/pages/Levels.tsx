@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useLevels } from "@/hooks/use-levels";
+import { useI18n } from "@/i18n";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,6 +12,7 @@ import type { Level } from "@/types";
 
 export default function LevelsPage() {
   const { levels, loading, error, addLevel, updateLevel, archiveLevel } = useLevels();
+  const { t } = useI18n();
 
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -30,7 +32,7 @@ export default function LevelsPage() {
       }
       resetForm();
     } catch (e: unknown) {
-      setSaveError(e instanceof Error ? e.message : "Erreur lors de l'enregistrement");
+      setSaveError(e instanceof Error ? e.message : t("common.saveError"));
     } finally {
       setSaving(false);
     }
@@ -58,33 +60,33 @@ export default function LevelsPage() {
     <div className="space-y-6 animate-in fade-in duration-500">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Niveaux</h1>
-          <p className="text-sm text-muted-foreground">Gestion des niveaux d'enseignement</p>
+          <h1 className="text-2xl font-bold tracking-tight">{t("levels.title")}</h1>
+          <p className="text-sm text-muted-foreground">{t("levels.subtitle")}</p>
         </div>
         <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) resetForm(); }}>
           <DialogTrigger asChild>
             <Button size="sm" className="gap-2">
-              <Plus className="w-4 h-4" /> Ajouter un niveau
+              <Plus className="w-4 h-4" /> {t("levels.addLevel")}
             </Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>{editId ? "Modifier" : "Ajouter"} un niveau</DialogTitle>
-              <DialogDescription>Définissez le nom et le code du niveau</DialogDescription>
+              <DialogTitle>{editId ? t("levels.editTitle") : t("levels.addTitle")}</DialogTitle>
+              <DialogDescription>{t("levels.formDesc")}</DialogDescription>
             </DialogHeader>
             <div className="space-y-4 pt-2">
               <div className="space-y-2">
-                <Label>Code</Label>
+                <Label>{t("levels.code")}</Label>
                 <Input value={code} onChange={(e) => setCode(e.target.value)} placeholder="CP1" />
               </div>
               <div className="space-y-2">
-                <Label>Nom</Label>
-                <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Cours Préparatoire 1" />
+                <Label>{t("levels.name")}</Label>
+                <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={t("levels.namePlaceholder")} />
               </div>
               {saveError && <p className="text-sm text-destructive">{saveError}</p>}
               <Button onClick={handleSubmit} className="w-full" disabled={!name || !code || saving}>
-                {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-                {editId ? "Enregistrer" : "Ajouter"}
+                {saving ? <Loader2 className="w-4 h-4 animate-spin me-2" /> : null}
+                {editId ? t("common.save") : t("common.add")}
               </Button>
             </div>
           </DialogContent>
@@ -125,14 +127,14 @@ export default function LevelsPage() {
             ))}
             {activeLevels.length === 0 && (
               <div className="col-span-full text-center py-10 text-muted-foreground text-sm">
-                Aucun niveau. Commencez par en ajouter un.
+                {t("levels.empty")}
               </div>
             )}
           </div>
 
           {archivedLevels.length > 0 && (
             <div>
-              <h2 className="text-sm font-semibold text-muted-foreground mb-3">Archivés</h2>
+              <h2 className="text-sm font-semibold text-muted-foreground mb-3">{t("levels.archived")}</h2>
               <div className="flex flex-wrap gap-2">
                 {archivedLevels.map((l) => (
                   <Badge key={l.id} variant="secondary" className="gap-1 cursor-pointer" onClick={() => archiveLevel(l.id)}>

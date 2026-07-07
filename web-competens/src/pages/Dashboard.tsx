@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import { useDashboard } from "@/hooks/use-dashboard";
+import { useI18n } from "@/i18n";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -13,26 +14,27 @@ import {
 } from "recharts";
 
 export default function DashboardPage() {
+  const { t } = useI18n();
   const {
     totalStudents, totalClasses, totalTeachers, totalEvaluations,
     activeYear, weeklyData, alerts, loading, error,
   } = useDashboard();
 
   const stats = useMemo(() => [
-    { label: "Élèves",      value: totalStudents,    icon: Users,          color: "text-blue-500",   bg: "bg-blue-500/10" },
-    { label: "Classes",     value: totalClasses,     icon: Building2,      color: "text-emerald-500", bg: "bg-emerald-500/10" },
-    { label: "Professeurs", value: totalTeachers,    icon: UserCog,        color: "text-violet-500", bg: "bg-violet-500/10" },
-    { label: "Évaluations", value: totalEvaluations, icon: ClipboardCheck, color: "text-amber-500",  bg: "bg-amber-500/10" },
-  ], [totalStudents, totalClasses, totalTeachers, totalEvaluations]);
+    { label: t("dashboard.students"),     value: totalStudents,    icon: Users,          color: "text-blue-500",   bg: "bg-blue-500/10" },
+    { label: t("dashboard.classes"),      value: totalClasses,     icon: Building2,      color: "text-emerald-500", bg: "bg-emerald-500/10" },
+    { label: t("dashboard.teachers"),     value: totalTeachers,    icon: UserCog,        color: "text-violet-500", bg: "bg-violet-500/10" },
+    { label: t("dashboard.evaluations"),  value: totalEvaluations, icon: ClipboardCheck, color: "text-amber-500",  bg: "bg-amber-500/10" },
+  ], [totalStudents, totalClasses, totalTeachers, totalEvaluations, t]);
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
+          <h1 className="text-2xl font-bold tracking-tight">{t("dashboard.title")}</h1>
           <p className="text-sm text-muted-foreground">
-            {loading ? "Chargement…" : activeYear ? `Année scolaire ${activeYear.name}` : "Aucune année active"}
+            {loading ? t("common.loading") : activeYear ? t("dashboard.schoolYear", { name: activeYear.name }) : t("dashboard.noActiveYear")}
           </p>
         </div>
       </div>
@@ -67,7 +69,7 @@ export default function DashboardPage() {
         <Card className="lg:col-span-2 border-border/50">
           <CardHeader className="pb-2">
             <CardTitle className="text-base font-semibold flex items-center gap-2">
-              <Activity className="w-4 h-4 text-primary" /> Activité (7 jours)
+              <Activity className="w-4 h-4 text-primary" /> {t("dashboard.activity7")}
             </CardTitle>
           </CardHeader>
           <CardContent className="pt-2">
@@ -102,12 +104,12 @@ export default function DashboardPage() {
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
               <CardTitle className="text-base font-semibold flex items-center gap-2">
-                <Bell className="w-4 h-4 text-warning" /> Alertes récentes
+                <Bell className="w-4 h-4 text-warning" /> {t("dashboard.recentAlerts")}
               </CardTitle>
               {alerts.length > 0 && (
                 <Link to="/alerts">
                   <Badge variant="outline" className="text-xs gap-1">
-                    Voir tout <ChevronRight className="w-3 h-3" />
+                    {t("dashboard.seeAll")} <ChevronRight className="w-3 h-3 rtl:rotate-180" />
                   </Badge>
                 </Link>
               )}
@@ -119,7 +121,7 @@ export default function DashboardPage() {
                 <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
               </div>
             ) : alerts.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-6">Aucune alerte en cours</p>
+              <p className="text-sm text-muted-foreground text-center py-6">{t("dashboard.noAlerts")}</p>
             ) : (
               alerts.slice(0, 5).map((a) => (
                 <Link
@@ -144,21 +146,21 @@ export default function DashboardPage() {
       {/* Quick Access */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
-          { to: "/classes",      label: "Classes",     icon: Building2,      bg: "from-emerald-500/20 to-emerald-500/5", text: "text-emerald-600 dark:text-emerald-400" },
-          { to: "/students",     label: "Élèves",      icon: Users,          bg: "from-blue-500/20 to-blue-500/5",       text: "text-blue-600 dark:text-blue-400" },
-          { to: "/competencies", label: "Compétences", icon: TrendingUp,     bg: "from-violet-500/20 to-violet-500/5",   text: "text-violet-600 dark:text-violet-400" },
-          { to: "/evaluation",   label: "Évaluer",     icon: ClipboardCheck, bg: "from-amber-500/20 to-amber-500/5",     text: "text-amber-600 dark:text-amber-400" },
+          { to: "/classes",      label: t("dashboard.classes"),      icon: Building2,      bg: "from-emerald-500/20 to-emerald-500/5", text: "text-emerald-600 dark:text-emerald-400" },
+          { to: "/students",     label: t("dashboard.students"),     icon: Users,          bg: "from-blue-500/20 to-blue-500/5",       text: "text-blue-600 dark:text-blue-400" },
+          { to: "/competencies", label: t("dashboard.competencies"), icon: TrendingUp,     bg: "from-violet-500/20 to-violet-500/5",   text: "text-violet-600 dark:text-violet-400" },
+          { to: "/evaluation",   label: t("dashboard.evaluate"),     icon: ClipboardCheck, bg: "from-amber-500/20 to-amber-500/5",     text: "text-amber-600 dark:text-amber-400" },
         ].map((item) => (
           <Link key={item.to} to={item.to}>
             <Card className="border-border/50 hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-pointer overflow-hidden">
               <CardContent className="p-4 md:p-5 relative">
-                <div className={`absolute top-0 right-0 w-20 h-20 rounded-bl-[80px] bg-gradient-to-bl ${item.bg}`} />
+                <div className={`absolute top-0 end-0 w-20 h-20 rounded-bl-[80px] bg-gradient-to-bl ${item.bg}`} />
                 <div className={`w-10 h-10 rounded-xl flex items-center justify-center bg-gradient-to-br ${item.bg} mb-3`}>
                   <item.icon className={`w-5 h-5 ${item.text}`} />
                 </div>
                 <p className="font-semibold text-sm">{item.label}</p>
                 <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
-                  Accéder <ArrowRight className="w-3 h-3" />
+                  {t("dashboard.access")} <ArrowRight className="w-3 h-3 rtl:rotate-180" />
                 </p>
               </CardContent>
             </Card>

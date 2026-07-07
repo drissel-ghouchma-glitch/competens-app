@@ -3,6 +3,7 @@ import { useCompetencies } from "@/hooks/use-competencies";
 import { useRequests } from "@/hooks/use-requests";
 import { useAuth } from "@/hooks/use-auth";
 import { useDemoStore } from "@/stores/demo";
+import { useI18n } from "@/i18n";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,6 +20,7 @@ export default function CompetenciesPage() {
   const { competencies, loading, error, addCompetency, updateCompetency, deleteCompetency } = useCompetencies();
   const { submitRequest } = useRequests();
   const { user } = useAuth();
+  const { t } = useI18n();
   const isDemo = useDemoStore((s) => s.isDemoMode);
   const isTeacherReal = !isDemo && user?.role === "professeur";
   const canDelete = user?.role === "admin" || user?.role === "directeur";
@@ -59,7 +61,7 @@ export default function CompetenciesPage() {
           code, title, description, pedagogicalAdvice: advice,
           order: competencies.length + 1,
         });
-        toast.success("Demande envoyée à l'administration pour approbation.");
+        toast.success(t("competencies.reqSent"));
       } else {
         await addCompetency({
           code, title, description, pedagogicalAdvice: advice,
@@ -68,7 +70,7 @@ export default function CompetenciesPage() {
       }
       resetForm();
     } catch (e: unknown) {
-      setSaveError(e instanceof Error ? e.message : "Erreur lors de l'enregistrement");
+      setSaveError(e instanceof Error ? e.message : t("common.saveError"));
     } finally {
       setSaving(false);
     }
@@ -99,49 +101,54 @@ export default function CompetenciesPage() {
   };
 
   const handleDelete = async (c: Competency) => {
-    if (!window.confirm(`Supprimer la compétence "${c.code} — ${c.title}" ? Cette action est irréversible.`)) return;
+    if (!window.confirm(t("competencies.deleteConfirm", { code: c.code, title: c.title }))) return;
     setDeleting(c.id);
     try {
       await deleteCompetency(c.id);
-      toast.success(`Compétence "${c.code}" supprimée.`);
+      toast.success(t("competencies.deleted", { code: c.code }));
     } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : "Erreur lors de la suppression");
+      toast.error(e instanceof Error ? e.message : t("common.deleteError"));
     } finally {
       setDeleting(null);
     }
   };
 
+  const dialogTitle = editId
+    ? t("competencies.editTitle")
+    : isTeacherReal
+    ? t("competencies.requestAddTitle")
+    : t("competencies.addTitle");
+  const dialogDesc = isTeacherReal && !editId
+    ? t("competencies.requestAddDesc")
+    : t("competencies.formDesc");
+
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Compétences</h1>
+          <h1 className="text-2xl font-bold tracking-tight">{t("competencies.title")}</h1>
           <p className="text-sm text-muted-foreground">
-            {loading ? "Chargement…" : `${competencies.length} compétence${competencies.length !== 1 ? "s" : ""} dans le référentiel`}
+            {loading ? t("common.loading") : t("competencies.count", { count: competencies.length })}
           </p>
         </div>
         <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) resetForm(); }}>
           <DialogTrigger asChild>
             <Button size="sm" className="gap-2">
               {isTeacherReal ? <Send className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
-              {isTeacherReal ? "Demander l'ajout" : "Ajouter une compétence"}
+              {isTeacherReal ? t("competencies.requestAdd") : t("competencies.addCompetency")}
             </Button>
           </DialogTrigger>
           <DialogContent className="max-w-md">
             <DialogHeader>
-              <DialogTitle>{editId ? "Modifier" : isTeacherReal ? "Demande d'ajout de compétence" : "Ajouter"} {!editId && !isTeacherReal ? "une compétence" : ""}</DialogTitle>
-              <DialogDescription>
-                {isTeacherReal && !editId
-                  ? "Cette demande sera envoyée à l'administration pour approbation."
-                  : "Définissez le code, le titre et la description"}
-              </DialogDescription>
+              <DialogTitle>{dialogTitle}</DialogTitle>
+              <DialogDescription>{dialogDesc}</DialogDescription>
             </DialogHeader>
             <ScrollArea className="max-h-[60vh]">
               <div className="space-y-4 p-1">
                 {isTeacherReal && !editId && (
                   <div className="flex items-start gap-2 p-3 rounded-lg bg-primary/5 border border-primary/20 text-sm text-primary">
                     <Info className="w-4 h-4 shrink-0 mt-0.5" />
-                    La demande sera examinée par l'administration avant d'être ajoutée.
+                    {t("competencies.teacherRequestNote")}
                   </div>
                 )}
                 {saveError && (
@@ -150,34 +157,34 @@ export default function CompetenciesPage() {
                   </div>
                 )}
                 <div className="space-y-2">
-                  <Label>Code</Label>
+                  <Label>{t("competencies.code")}</Label>
                   <Input value={code} onChange={(e) => setCode(e.target.value)} placeholder="C13" />
                 </div>
                 <div className="space-y-2">
-                  <Label>Titre</Label>
-                  <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Titre de la compétence" />
+                  <Label>{t("competencies.titleField")}</Label>
+                  <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={t("competencies.titlePlaceholder")} />
                 </div>
                 <div className="space-y-2">
-                  <Label>Description</Label>
+                  <Label>{t("competencies.description")}</Label>
                   <Textarea
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
-                    placeholder="Description détaillée..."
+                    placeholder={t("competencies.descriptionPlaceholder")}
                     className="min-h-[80px]"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Conseils pédagogiques</Label>
+                  <Label>{t("competencies.advice")}</Label>
                   <Textarea
                     value={advice}
                     onChange={(e) => setAdvice(e.target.value)}
-                    placeholder="Suggestions pour les enseignants..."
+                    placeholder={t("competencies.advicePlaceholder")}
                     className="min-h-[80px]"
                   />
                 </div>
                 <Button onClick={handleSubmit} className="w-full" disabled={saving || !code || !title}>
-                  {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-                  {editId ? "Enregistrer" : isTeacherReal ? "Envoyer la demande" : "Ajouter"}
+                  {saving ? <Loader2 className="w-4 h-4 animate-spin me-2" /> : null}
+                  {editId ? t("common.save") : isTeacherReal ? t("competencies.sendRequest") : t("common.add")}
                 </Button>
               </div>
             </ScrollArea>
@@ -192,12 +199,12 @@ export default function CompetenciesPage() {
       )}
 
       <div className="relative max-w-md">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+        <Search className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
         <Input
-          placeholder="Rechercher une compétence..."
+          placeholder={t("competencies.searchPlaceholder")}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="pl-9"
+          className="ps-9"
         />
       </div>
 
@@ -259,13 +266,13 @@ export default function CompetenciesPage() {
               {expanded[c.id] && (
                 <div className="px-5 pb-5 space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
                   <div>
-                    <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Description</h4>
+                    <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">{t("competencies.description")}</h4>
                     <p className="text-sm text-foreground">{c.description}</p>
                   </div>
                   <div className="flex items-start gap-2 p-3 rounded-xl bg-amber-500/5 border border-amber-500/10">
                     <Lightbulb className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
                     <div>
-                      <h4 className="text-xs font-semibold text-amber-600 mb-1">Conseils pédagogiques</h4>
+                      <h4 className="text-xs font-semibold text-amber-600 mb-1">{t("competencies.advice")}</h4>
                       <p className="text-sm text-foreground">{c.pedagogicalAdvice}</p>
                     </div>
                   </div>
@@ -280,9 +287,9 @@ export default function CompetenciesPage() {
         <Card className="border-dashed border-2">
           <CardContent className="p-8 text-center">
             <BookOpen className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
-            <p className="text-muted-foreground font-medium">Aucune compétence trouvée</p>
+            <p className="text-muted-foreground font-medium">{t("competencies.emptyTitle")}</p>
             <p className="text-sm text-muted-foreground mt-1">
-              Ajoutez des compétences au référentiel
+              {t("competencies.emptyHint")}
             </p>
           </CardContent>
         </Card>

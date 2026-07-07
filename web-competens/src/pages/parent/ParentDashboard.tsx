@@ -1,12 +1,13 @@
 import { useState } from "react";
-import { useParent, type ParentChild, type ParentChildStat } from "@/hooks/use-parent";
+import { useParent, type ParentChild } from "@/hooks/use-parent";
+import { useI18n } from "@/i18n";
 import type { Competency } from "@/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-  GraduationCap, User, Calendar, Bell, TrendingUp,
+  User, Calendar, Bell, TrendingUp,
   CheckCircle, Clock, XCircle, Loader2, Users, CalendarCheck,
 } from "lucide-react";
 import {
@@ -26,12 +27,10 @@ function StatusIcon({ status }: { status: string }) {
   }
 }
 
-function statusLabel(s: string) {
-  switch (s) {
-    case "acquis":    return "Acquis";
-    case "en_cours":  return "En cours";
-    default:          return "Non acquis";
-  }
+function statusKey(s: string) {
+  if (s === "acquis") return "status.acquis";
+  if (s === "en_cours") return "status.en_cours";
+  return "status.non_acquis";
 }
 
 function acqColor(rate: number) {
@@ -49,18 +48,19 @@ function barColor(rate: number) {
 }
 
 function TimelineTooltipContent({ active, payload }: { active?: boolean; payload?: Array<{ payload: TimelinePoint }> }) {
+  const { t, lang } = useI18n();
   if (!active || !payload?.length) return null;
   const d = payload[0].payload;
-  const dateLabel = new Date(d.date + "T00:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
+  const dateLabel = new Date(d.date + "T00:00:00").toLocaleDateString(lang === "ar" ? "ar-MA" : "fr-FR", { day: "numeric", month: "long", year: "numeric" });
   return (
     <div className="rounded-xl border bg-popover shadow-lg p-3 text-sm min-w-[160px]">
       <p className="font-semibold text-foreground mb-1">{dateLabel}</p>
       <p className="font-bold" style={{ color: barColor(d.rate) }}>{d.rate}%</p>
-      <p className="text-xs text-muted-foreground mt-0.5">{d.count} évaluation(s)</p>
+      <p className="text-xs text-muted-foreground mt-0.5">{t("parent.evalUnit", { count: d.count })}</p>
       {d.teachers.length > 0 && (
         <div className="mt-2 pt-2 border-t border-border">
-          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1">Enseignant(s)</p>
-          {d.teachers.map((t) => <p key={t} className="text-xs text-foreground">{t}</p>)}
+          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1">{t("parent.teachersLabel")}</p>
+          {d.teachers.map((teacher) => <p key={teacher} className="text-xs text-foreground">{teacher}</p>)}
         </div>
       )}
     </div>
@@ -68,17 +68,18 @@ function TimelineTooltipContent({ active, payload }: { active?: boolean; payload
 }
 
 function TimelineChart({ timeline }: { timeline: TimelinePoint[] }) {
+  const { t, lang } = useI18n();
   if (timeline.length === 0) return null;
   const data = timeline.map((p) => ({
     ...p,
-    label: new Date(p.date + "T00:00:00").toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" }),
+    label: new Date(p.date + "T00:00:00").toLocaleDateString(lang === "ar" ? "ar-MA" : "fr-FR", { day: "2-digit", month: "2-digit" }),
   }));
   return (
     <Card className="border-border/50">
       <CardHeader className="pb-2">
         <CardTitle className="text-base font-semibold flex items-center gap-2">
           <TrendingUp className="w-4 h-4 text-primary" />
-          Évolution temporelle
+          {t("parent.timelineTitle")}
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -98,9 +99,9 @@ function TimelineChart({ timeline }: { timeline: TimelinePoint[] }) {
           </ResponsiveContainer>
         </div>
         <div className="flex items-center gap-4 mt-3 text-xs text-muted-foreground justify-center flex-wrap">
-          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm inline-block" style={{ background: "hsl(122 39% 49%)" }} /> Acquis</span>
-          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm inline-block" style={{ background: "hsl(38 92% 50%)" }} /> En cours</span>
-          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm inline-block" style={{ background: "hsl(4 77% 55%)" }} /> Non acquis</span>
+          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm inline-block" style={{ background: "hsl(122 39% 49%)" }} /> {t("status.acquis")}</span>
+          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm inline-block" style={{ background: "hsl(38 92% 50%)" }} /> {t("status.en_cours")}</span>
+          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm inline-block" style={{ background: "hsl(4 77% 55%)" }} /> {t("status.non_acquis")}</span>
         </div>
       </CardContent>
     </Card>
@@ -113,6 +114,8 @@ function AttendanceSummary({ todayAttendance, absenceHistory }: {
   todayAttendance: string | null;
   absenceHistory: string[];
 }) {
+  const { t, lang } = useI18n();
+  const locale = lang === "ar" ? "ar-MA" : "fr-FR";
   const isPresent  = todayAttendance === "present";
   const isAbsent   = todayAttendance === "absent";
   const isUnknown  = todayAttendance === null;
@@ -122,7 +125,7 @@ function AttendanceSummary({ todayAttendance, absenceHistory }: {
       <CardHeader className="pb-2">
         <CardTitle className="text-base font-semibold flex items-center gap-2">
           <CalendarCheck className="w-4 h-4 text-primary" />
-          Présence aujourd'hui
+          {t("parent.attendanceToday")}
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -141,10 +144,10 @@ function AttendanceSummary({ todayAttendance, absenceHistory }: {
               isAbsent  ? "text-red-700 dark:text-red-400" :
                           "text-muted-foreground"
             }`}>
-              {isPresent ? "Présent(e)" : isAbsent ? "Absent(e)" : "Non enregistré"}
+              {isPresent ? t("parent.present") : isAbsent ? t("parent.absent") : t("parent.notRecorded")}
             </p>
             <p className="text-xs text-muted-foreground">
-              {new Date().toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" })}
+              {new Date().toLocaleDateString(locale, { weekday: "long", day: "numeric", month: "long" })}
             </p>
           </div>
         </div>
@@ -153,14 +156,14 @@ function AttendanceSummary({ todayAttendance, absenceHistory }: {
         {absenceHistory.length > 0 && (
           <div>
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
-              Absences récentes ({absenceHistory.length})
+              {t("parent.recentAbsences", { count: absenceHistory.length })}
             </p>
-            <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+            <div className="space-y-1.5 max-h-40 overflow-y-auto pe-1">
               {absenceHistory.slice(0, 15).map((date) => (
                 <div key={date} className="flex items-center gap-2 text-sm">
                   <XCircle className="w-3.5 h-3.5 text-red-500 shrink-0" />
                   <span className="text-muted-foreground">
-                    {new Date(date + "T00:00:00").toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "long", year: "numeric" })}
+                    {new Date(date + "T00:00:00").toLocaleDateString(locale, { weekday: "short", day: "numeric", month: "long", year: "numeric" })}
                   </span>
                 </div>
               ))}
@@ -168,7 +171,7 @@ function AttendanceSummary({ todayAttendance, absenceHistory }: {
           </div>
         )}
         {absenceHistory.length === 0 && todayAttendance !== null && (
-          <p className="text-xs text-muted-foreground text-center py-1">Aucune absence enregistrée.</p>
+          <p className="text-xs text-muted-foreground text-center py-1">{t("parent.noAbsence")}</p>
         )}
       </CardContent>
     </Card>
@@ -178,6 +181,7 @@ function AttendanceSummary({ todayAttendance, absenceHistory }: {
 // ── Child Analytics (read-only) ────────────────────────────────
 
 function ChildAnalytics({ child, competencies }: { child: ParentChild; competencies: Competency[] }) {
+  const { t } = useI18n();
   const radarData = child.stats.map((s) => ({
     subject: s.competencyCode, value: s.acquisitionRate, fullMark: 100,
   }));
@@ -195,11 +199,11 @@ function ChildAnalytics({ child, competencies }: { child: ParentChild; competenc
       {child.alerts.length > 0 && (
         <div className="space-y-2">
           {child.alerts.map((a) => (
-            <Card key={a.id} className={`border-l-4 ${a.level === "critical" ? "border-l-destructive" : "border-l-amber-400"}`}>
+            <Card key={a.id} className={`border-s-4 ${a.level === "critical" ? "border-s-destructive" : "border-s-amber-400"}`}>
               <CardContent className="p-4 flex items-start gap-3">
                 <Bell className={`w-5 h-5 mt-0.5 shrink-0 ${a.level === "critical" ? "text-destructive" : "text-amber-500"}`} />
                 <div>
-                  <p className="font-medium text-foreground text-sm">{a.level === "critical" ? "Alerte importante" : "Alerte"}</p>
+                  <p className="font-medium text-foreground text-sm">{a.level === "critical" ? t("parent.criticalAlert") : t("parent.alert")}</p>
                   <p className="text-xs text-muted-foreground">{a.cause}</p>
                 </div>
               </CardContent>
@@ -211,10 +215,10 @@ function ChildAnalytics({ child, competencies }: { child: ParentChild; competenc
       {/* Summary cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
-          { label: "Taux global",   value: `${globalRate}%`,  color: "text-primary",        bg: "bg-primary/10" },
-          { label: "Acquis",        value: acquired,           color: "text-green-600",       bg: "bg-green-500/10" },
-          { label: "En cours",      value: inProgress,         color: "text-amber-600",       bg: "bg-amber-500/10" },
-          { label: "Non acquis",    value: notAcq,             color: "text-red-600",         bg: "bg-red-500/10" },
+          { label: t("parent.globalRate"),   value: `${globalRate}%`,  color: "text-primary",        bg: "bg-primary/10" },
+          { label: t("parent.acquired"),     value: acquired,           color: "text-green-600",       bg: "bg-green-500/10" },
+          { label: t("parent.inProgress"),   value: inProgress,         color: "text-amber-600",       bg: "bg-amber-500/10" },
+          { label: t("parent.notAcquired"),  value: notAcq,             color: "text-red-600",         bg: "bg-red-500/10" },
         ].map((c) => (
           <Card key={c.label} className="border-border/50">
             <CardContent className="p-4 text-center">
@@ -234,7 +238,7 @@ function ChildAnalytics({ child, competencies }: { child: ParentChild; competenc
           <Card className="lg:col-span-2 border-border/50">
             <CardHeader className="pb-2">
               <CardTitle className="text-base font-semibold flex items-center gap-2">
-                <TrendingUp className="w-4 h-4 text-primary" /> Radar des compétences
+                <TrendingUp className="w-4 h-4 text-primary" /> {t("parent.radarTitle")}
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -244,7 +248,7 @@ function ChildAnalytics({ child, competencies }: { child: ParentChild; competenc
                     <PolarGrid stroke="hsl(var(--border))" />
                     <PolarAngleAxis dataKey="subject" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
                     <PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fontSize: 10 }} />
-                    <Radar name="Acquisition" dataKey="value" stroke="hsl(220 99% 62%)" fill="hsl(220 99% 62%)" fillOpacity={0.2} />
+                    <Radar name="rate" dataKey="value" stroke="hsl(220 99% 62%)" fill="hsl(220 99% 62%)" fillOpacity={0.2} />
                   </RadarChart>
                 </ResponsiveContainer>
               </div>
@@ -253,7 +257,7 @@ function ChildAnalytics({ child, competencies }: { child: ParentChild; competenc
 
           <Card className="border-border/50">
             <CardHeader className="pb-2">
-              <CardTitle className="text-base font-semibold">Résumé</CardTitle>
+              <CardTitle className="text-base font-semibold">{t("parent.summary")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
               {child.stats.map((s) => (
@@ -271,7 +275,7 @@ function ChildAnalytics({ child, competencies }: { child: ParentChild; competenc
       ) : (
         <Card className="border-dashed border-2">
           <CardContent className="p-10 text-center text-muted-foreground text-sm">
-            Aucune évaluation enregistrée pour le moment.
+            {t("parent.noEvalYet")}
           </CardContent>
         </Card>
       )}
@@ -280,7 +284,7 @@ function ChildAnalytics({ child, competencies }: { child: ParentChild; competenc
       {child.stats.length > 0 && (
         <Card className="border-border/50">
           <CardHeader className="pb-2">
-            <CardTitle className="text-base font-semibold">Détail par compétence</CardTitle>
+            <CardTitle className="text-base font-semibold">{t("parent.detailByComp")}</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -298,7 +302,7 @@ function ChildAnalytics({ child, competencies }: { child: ParentChild; competenc
                       <span className="text-xs font-mono">{s.acquisitionRate}%</span>
                     </div>
                     <p className="text-[10px] text-muted-foreground mt-0.5">
-                      {s.totalEvaluations} éval. · {statusLabel(s.lastStatus)}
+                      {t("parent.evalCount", { count: s.totalEvaluations, status: t(statusKey(s.lastStatus)) })}
                     </p>
                   </div>
                 </div>
@@ -332,6 +336,7 @@ function ChildAnalytics({ child, competencies }: { child: ParentChild; competenc
 
 export default function ParentDashboard() {
   const { children, competencies, loading, error } = useParent();
+  const { t } = useI18n();
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const selected = selectedId
@@ -356,9 +361,9 @@ export default function ParentDashboard() {
     return (
       <div className="flex flex-col items-center justify-center h-64 gap-3 text-muted-foreground">
         <Users className="w-12 h-12" />
-        <p className="font-medium">Aucun enfant associé à votre compte.</p>
+        <p className="font-medium">{t("parent.noChildTitle")}</p>
         <p className="text-sm text-center max-w-xs">
-          Contactez l'administrateur pour que vos enfants soient liés à votre profil.
+          {t("parent.noChildBody")}
         </p>
       </div>
     );
@@ -373,15 +378,15 @@ export default function ParentDashboard() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Suivi de mes enfants</h1>
-          <p className="text-sm text-muted-foreground">Vue lecture seule — données combinées de tous les enseignants</p>
+          <h1 className="text-2xl font-bold tracking-tight">{t("parent.headerTitle")}</h1>
+          <p className="text-sm text-muted-foreground">{t("parent.headerSubtitle")}</p>
         </div>
 
         {/* Child selector — only if more than one child */}
         {children.length > 1 && (
           <Select value={selected?.id ?? ""} onValueChange={setSelectedId}>
             <SelectTrigger className="w-56">
-              <SelectValue placeholder="Choisir un enfant" />
+              <SelectValue placeholder={t("parent.chooseChild")} />
             </SelectTrigger>
             <SelectContent>
               {children.map((c) => (
@@ -431,11 +436,11 @@ export default function ParentDashboard() {
             <div>
               <h2 className="text-xl font-bold">{selected.firstName} {selected.lastName}</h2>
               <div className="flex flex-wrap items-center gap-3 mt-1 text-sm text-muted-foreground">
-                <span className="flex items-center gap-1"><User className="w-3.5 h-3.5" />{selected.gender === "M" ? "Garçon" : "Fille"}</span>
-                {selected.birthDate && <span className="flex items-center gap-1"><Calendar className="w-3.5 h-3.5" />{age} ans</span>}
+                <span className="flex items-center gap-1"><User className="w-3.5 h-3.5" />{selected.gender === "M" ? t("parent.boy") : t("parent.girl")}</span>
+                {selected.birthDate && <span className="flex items-center gap-1"><Calendar className="w-3.5 h-3.5" />{t("parent.years", { count: age })}</span>}
                 {selected.alerts.length > 0 && (
                   <Badge className="bg-destructive/10 text-destructive border-destructive/20">
-                    {selected.alerts.length} alerte(s) active(s)
+                    {t("parent.activeAlerts", { count: selected.alerts.length })}
                   </Badge>
                 )}
               </div>
