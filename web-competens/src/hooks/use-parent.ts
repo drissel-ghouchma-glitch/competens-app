@@ -47,7 +47,10 @@ export interface ParentChild extends Student {
   stats: ParentChildStat[];
   alerts: Alert[];
   timeline: TimelinePoint[];
-  todayAttendance: AttendanceStatus | null;
+  /** Confirmed morning attendance for today — null = not recorded or not confirmed yet */
+  todayMorning: AttendanceStatus | null;
+  /** Confirmed afternoon attendance for today — null = not recorded or not confirmed yet */
+  todayAfternoon: AttendanceStatus | null;
   absenceHistory: string[];
   rawEvals: DailyEvalRecord[];
   classTeachers: ClassTeacher[];
@@ -103,10 +106,12 @@ export function useParent(): UseParentReturn {
           .select("*")
           .in("student_id", studentIds)
           .eq("resolved", false),
+        // Only confirmed records are visible to parents
         supabase
           .from("attendance")
-          .select("student_id, date, status")
+          .select("student_id, date, period, status")
           .in("student_id", studentIds)
+          .eq("is_confirmed_by_admin", true)
           .order("date", { ascending: false }),
       ]);
 
@@ -153,14 +158,25 @@ export function useParent(): UseParentReturn {
         }
       }
 
-      const todayAttMap = new Map<string, AttendanceStatus>();
-      const absenceMap  = new Map<string, string[]>();
+      // Build per-student maps for today morning/afternoon + absence history
+      const morningMap = new Map<string, AttendanceStatus>();
+      const afternoonMap = new Map<string, AttendanceStatus>();
+      const absenceMap = new Map<string, string[]>();
+
       for (const a of (attRes.data ?? [])) {
-        if (a.date === todayDate) todayAttMap.set(a.student_id, a.status as AttendanceStatus);
-        if (a.status === "absent") {
-          const list = absenceMap.get(a.student_id) ?? [];
-          list.push(a.date);
-          absenceMap.set(a.student_id, list);
+        const sid = a.student_id as string;
+        const period = a.period as string;
+        const status = a.status as AttendanceStatus;
+        const date = a.date as string;
+
+        if (date === todayDate) {
+          if (period === "morning") morningMap.set(sid, status);
+          else if (period === "afternoon") afternoonMap.set(sid, status);
+        }
+        if (status === "absent") {
+          const list = absenceMap.get(sid) ?? [];
+          if (!list.includes(date)) list.push(date);
+          absenceMap.set(sid, list);
         }
       }
 
@@ -181,7 +197,8 @@ export function useParent(): UseParentReturn {
         stats: computeStats(evals, comps, s.id),
         alerts: alertsMap.get(s.id) ?? [],
         timeline: buildTimeline(evals.filter((e) => e.studentId === s.id)),
-        todayAttendance: todayAttMap.get(s.id) ?? null,
+        todayMorning: morningMap.get(s.id) ?? null,
+        todayAfternoon: afternoonMap.get(s.id) ?? null,
         absenceHistory: absenceMap.get(s.id) ?? [],
         rawEvals: evals.filter((e) => e.studentId === s.id),
         classTeachers: tcasByClass.get(s.classId) ?? [],

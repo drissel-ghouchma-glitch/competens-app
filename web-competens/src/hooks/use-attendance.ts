@@ -3,7 +3,7 @@ import { useDemoStore } from "@/stores/demo";
 import { useAppStore } from "@/stores/app-store";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/lib/supabase";
-import type { Classe, Student, AttendanceStatus, DailyAttendanceInput } from "@/types";
+import type { Classe, Student, AttendanceStatus, AttendancePeriod, DailyAttendanceInput } from "@/types";
 
 export interface UseAttendanceReturn {
   classes: Classe[];
@@ -11,11 +11,14 @@ export interface UseAttendanceReturn {
   error: string | null;
   refetch: () => Promise<void>;
   getStudentsForClass: (classId: string) => Student[];
-  /** Map of studentId → AttendanceStatus for the currently loaded class+date */
+  /** Map of studentId → AttendanceStatus for the currently loaded class+date+period */
   attendanceMap: Record<string, AttendanceStatus>;
+  /** Set of studentIds whose record for the current period is confirmed by admin */
+  confirmedStudentIds: Set<string>;
   attendanceLoading: boolean;
-  loadAttendance: (classId: string, date: string) => Promise<void>;
-  saveAttendance: (classId: string, date: string, inputs: DailyAttendanceInput[]) => Promise<void>;
+  loadAttendance: (classId: string, date: string, period: AttendancePeriod) => Promise<void>;
+  saveAttendance: (classId: string, date: string, period: AttendancePeriod, inputs: DailyAttendanceInput[]) => Promise<void>;
+  confirmAttendance: (classId: string, date: string, period: AttendancePeriod) => Promise<void>;
 }
 
 export function useAttendance(): UseAttendanceReturn {
@@ -35,8 +38,8 @@ export function useAttendance(): UseAttendanceReturn {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Loaded attendance for current (classId, date) selection
   const [attendanceMap, setAttendanceMap] = useState<Record<string, AttendanceStatus>>({});
+  const [confirmedStudentIds, setConfirmedStudentIds] = useState<Set<string>>(new Set());
   const [attendanceLoading, setAttendanceLoading] = useState(false);
 
   const fetchFromSupabase = useCallback(async () => {
@@ -95,39 +98,51 @@ export function useAttendance(): UseAttendanceReturn {
     if (!isDemo) fetchFromSupabase();
   }, [isDemo, fetchFromSupabase]);
 
-  // ── Load attendance for a specific class + date ───────────
+  // ── Load attendance for a specific class + date + period ──
 
-  const loadAttendanceReal = useCallback(async (classId: string, date: string) => {
+  const loadAttendanceReal = useCallback(async (classId: string, date: string, period: AttendancePeriod) => {
     if (!supabase) return;
     setAttendanceLoading(true);
     try {
       const { data, error: err } = await supabase
         .from("attendance")
-        .select("student_id, status")
+        .select("student_id, status, is_confirmed_by_admin")
         .eq("class_id", classId)
-        .eq("date", date);
+        .eq("date", date)
+        .eq("period", period);
       if (err) throw err;
       const map: Record<string, AttendanceStatus> = {};
-      for (const row of data ?? []) map[row.student_id] = row.status as AttendanceStatus;
+      const confirmed = new Set<string>();
+      for (const row of data ?? []) {
+        map[row.student_id] = row.status as AttendanceStatus;
+        if (row.is_confirmed_by_admin) confirmed.add(row.student_id);
+      }
       setAttendanceMap(map);
+      setConfirmedStudentIds(confirmed);
     } catch {
       setAttendanceMap({});
+      setConfirmedStudentIds(new Set());
     } finally {
       setAttendanceLoading(false);
     }
   }, []);
 
-  const loadAttendanceDemo = useCallback(async (classId: string, date: string) => {
+  const loadAttendanceDemo = useCallback(async (classId: string, date: string, period: AttendancePeriod) => {
     const map: Record<string, AttendanceStatus> = {};
+    const confirmed = new Set<string>();
     for (const a of storeAttendance) {
-      if (a.classId === classId && a.date === date) map[a.studentId] = a.status;
+      if (a.classId === classId && a.date === date && a.period === period) {
+        map[a.studentId] = a.status;
+        if (a.isConfirmedByAdmin) confirmed.add(a.studentId);
+      }
     }
     setAttendanceMap(map);
+    setConfirmedStudentIds(confirmed);
   }, [storeAttendance]);
 
   // ── Save attendance (upsert) ──────────────────────────────
 
-  const saveAttendanceReal = useCallback(async (classId: string, date: string, inputs: DailyAttendanceInput[]) => {
+  const saveAttendanceReal = useCallback(async (classId: string, date: string, period: AttendancePeriod, inputs: DailyAttendanceInput[]) => {
     if (!supabase || inputs.length === 0) return;
     const now = new Date().toISOString();
     const rows = inputs.map((i) => ({
@@ -135,20 +150,41 @@ export function useAttendance(): UseAttendanceReturn {
       class_id: classId,
       teacher_id: user?.id ?? null,
       date,
+      period,
       status: i.status,
+      is_confirmed_by_admin: false,
       updated_at: now,
     }));
     const { error: err } = await supabase
       .from("attendance")
-      .upsert(rows, { onConflict: "student_id,date" });
+      .upsert(rows, { onConflict: "student_id,date,period" });
     if (err) throw new Error(err.message);
-    await loadAttendanceReal(classId, date);
+    await loadAttendanceReal(classId, date, period);
   }, [user?.id, loadAttendanceReal]);
 
-  const saveAttendanceDemo = useCallback(async (classId: string, date: string, inputs: DailyAttendanceInput[]) => {
-    storeSaveAttendance(classId, date, inputs, user?.id ?? "");
-    await loadAttendanceDemo(classId, date);
+  const saveAttendanceDemo = useCallback(async (classId: string, date: string, period: AttendancePeriod, inputs: DailyAttendanceInput[]) => {
+    storeSaveAttendance(classId, date, period, inputs, user?.id ?? "");
+    await loadAttendanceDemo(classId, date, period);
   }, [storeSaveAttendance, user?.id, loadAttendanceDemo]);
+
+  // ── Confirm attendance (admin/directeur only) ─────────────
+
+  const confirmAttendanceReal = useCallback(async (classId: string, date: string, period: AttendancePeriod) => {
+    if (!supabase) return;
+    const { error: err } = await supabase
+      .from("attendance")
+      .update({ is_confirmed_by_admin: true })
+      .eq("class_id", classId)
+      .eq("date", date)
+      .eq("period", period);
+    if (err) throw new Error(err.message);
+    await loadAttendanceReal(classId, date, period);
+  }, [loadAttendanceReal]);
+
+  const confirmAttendanceDemo = useCallback(async (classId: string, date: string, period: AttendancePeriod) => {
+    useAppStore.getState().confirmDemoAttendance(classId, date, period);
+    await loadAttendanceDemo(classId, date, period);
+  }, [loadAttendanceDemo]);
 
   // ── Helpers ───────────────────────────────────────────────
 
@@ -158,9 +194,7 @@ export function useAttendance(): UseAttendanceReturn {
   );
 
   const getStudentsForClassDemo = useCallback((classId: string) => {
-    // In demo, teachers see all classes; filter by classId
     let students = storeStudents.filter((s) => s.classId === classId);
-    // Optionally filter if teacher role (use assignments)
     if (user?.role === "professeur") {
       const assignedClassIds = storeAssignments.filter((a) => a.teacherId === user.id).map((a) => a.classId);
       if (!assignedClassIds.includes(classId)) return [];
@@ -183,8 +217,10 @@ export function useAttendance(): UseAttendanceReturn {
     refetch: fetchFromSupabase,
     getStudentsForClass: isDemo ? getStudentsForClassDemo : getStudentsForClassReal,
     attendanceMap,
+    confirmedStudentIds,
     attendanceLoading,
     loadAttendance: isDemo ? loadAttendanceDemo : loadAttendanceReal,
     saveAttendance: isDemo ? saveAttendanceDemo : saveAttendanceReal,
+    confirmAttendance: isDemo ? confirmAttendanceDemo : confirmAttendanceReal,
   };
 }

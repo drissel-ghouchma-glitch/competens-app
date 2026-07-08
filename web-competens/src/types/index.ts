@@ -168,6 +168,7 @@ export interface ParentStudentLink {
 }
 
 export type AttendanceStatus = "present" | "absent";
+export type AttendancePeriod = "morning" | "afternoon";
 
 export interface AttendanceRecord {
   id: string;
@@ -175,7 +176,9 @@ export interface AttendanceRecord {
   classId: string;
   teacherId: string;
   date: string; // YYYY-MM-DD
+  period: AttendancePeriod;
   status: AttendanceStatus;
+  isConfirmedByAdmin: boolean;
   createdAt: string;
 }
 

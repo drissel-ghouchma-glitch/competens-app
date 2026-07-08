@@ -6,8 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CheckCircle, XCircle, Loader2, Save, Users, ClipboardList } from "lucide-react";
-import type { AttendanceStatus, DailyAttendanceInput, Student } from "@/types";
+import { CheckCircle, XCircle, Loader2, Save, Users, ClipboardList, ShieldCheck, Sun, Sunset } from "lucide-react";
+import type { AttendanceStatus, AttendancePeriod, DailyAttendanceInput, Student } from "@/types";
 import { toast } from "sonner";
 
 function todayStr() {
@@ -20,50 +20,49 @@ export default function AttendancePage() {
   const locale = lang === "ar" ? "ar-MA" : "fr-FR";
   const role = user?.role ?? "professeur";
   const isTeacher = role === "professeur";
+  const isAdmin = role === "admin" || role === "directeur";
 
   const {
     classes, loading, error,
     getStudentsForClass,
-    attendanceMap, attendanceLoading,
-    loadAttendance, saveAttendance,
+    attendanceMap, confirmedStudentIds, attendanceLoading,
+    loadAttendance, saveAttendance, confirmAttendance,
   } = useAttendance();
 
   const [selectedClassId, setSelectedClassId] = useState<string>("");
   const [selectedDate, setSelectedDate] = useState<string>(todayStr());
+  const [period, setPeriod] = useState<AttendancePeriod>("morning");
   const [students, setStudents] = useState<Student[]>([]);
   const [localStatus, setLocalStatus] = useState<Record<string, AttendanceStatus>>({});
   const [saving, setSaving] = useState(false);
+  const [confirming, setConfirming] = useState(false);
 
-  // Ref to track which (classId, date) was last loaded — prevents stale map application
+  // Includes period in the key to avoid stale map application across period switches
   const loadedKeyRef = useRef("");
 
-  // Auto-select first class once classes are loaded
   useEffect(() => {
     if (classes.length > 0 && !selectedClassId) setSelectedClassId(classes[0].id);
   }, [classes, selectedClassId]);
 
-  // When class changes, update student list
   useEffect(() => {
     if (!selectedClassId) { setStudents([]); return; }
     setStudents(getStudentsForClass(selectedClassId));
   }, [selectedClassId, getStudentsForClass]);
 
-  // When class or date changes → reset local to "present" + load from backend
+  // When class, date, or period changes → reset defaults + load from backend
   useEffect(() => {
     if (!selectedClassId) return;
-    const key = `${selectedClassId}:${selectedDate}`;
+    const key = `${selectedClassId}:${selectedDate}:${period}`;
     loadedKeyRef.current = key;
-    // Default all to present
     setLocalStatus((prev) => {
       const next: Record<string, AttendanceStatus> = {};
       for (const s of students) next[s.id] = prev[s.id] ?? "present";
       return next;
     });
-    loadAttendance(selectedClassId, selectedDate);
+    loadAttendance(selectedClassId, selectedDate, period);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedClassId, selectedDate]);
+  }, [selectedClassId, selectedDate, period]);
 
-  // Re-init when students list changes (e.g., class changed and students were re-fetched)
   useEffect(() => {
     if (!selectedClassId || students.length === 0) return;
     setLocalStatus((prev) => {
@@ -73,10 +72,9 @@ export default function AttendancePage() {
     });
   }, [students]);
 
-  // When attendanceMap resolves, overlay the saved statuses on top of the defaults
   useEffect(() => {
     if (attendanceLoading) return;
-    const key = `${selectedClassId}:${selectedDate}`;
+    const key = `${selectedClassId}:${selectedDate}:${period}`;
     if (loadedKeyRef.current !== key) return;
     if (Object.keys(attendanceMap).length === 0) return;
     setLocalStatus((prev) => {
@@ -86,7 +84,7 @@ export default function AttendancePage() {
       }
       return next;
     });
-  }, [attendanceMap, attendanceLoading, selectedClassId, selectedDate]);
+  }, [attendanceMap, attendanceLoading, selectedClassId, selectedDate, period]);
 
   const toggleStatus = useCallback((studentId: string) => {
     if (!isTeacher) return;
@@ -104,7 +102,7 @@ export default function AttendancePage() {
         studentId: s.id,
         status: localStatus[s.id] ?? "present",
       }));
-      await saveAttendance(selectedClassId, selectedDate, inputs);
+      await saveAttendance(selectedClassId, selectedDate, period, inputs);
       toast.success(t("attendance.saved"));
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : t("common.saveError"));
@@ -113,8 +111,22 @@ export default function AttendancePage() {
     }
   };
 
+  const handleConfirmAll = async () => {
+    if (!selectedClassId) return;
+    setConfirming(true);
+    try {
+      await confirmAttendance(selectedClassId, selectedDate, period);
+      toast.success(t("attendance.confirmSuccess"));
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : t("common.saveError"));
+    } finally {
+      setConfirming(false);
+    }
+  };
+
   const presentCount = students.filter((s) => (localStatus[s.id] ?? "present") === "present").length;
   const absentCount  = students.filter((s) => (localStatus[s.id] ?? "present") === "absent").length;
+  const allConfirmed = students.length > 0 && students.every((s) => confirmedStudentIds.has(s.id));
 
   const selectedClass = classes.find((c) => c.id === selectedClassId);
   const dateLabel = selectedDate
@@ -136,6 +148,7 @@ export default function AttendancePage() {
       <Card className="border-border/50">
         <CardContent className="p-4">
           <div className="flex flex-wrap gap-3 items-end">
+            {/* Class selector */}
             <div className="flex-1 min-w-[180px]">
               <label className="text-xs font-medium text-muted-foreground mb-1.5 block">{t("attendance.class")}</label>
               <Select value={selectedClassId} onValueChange={setSelectedClassId}>
@@ -149,6 +162,8 @@ export default function AttendancePage() {
                 </SelectContent>
               </Select>
             </div>
+
+            {/* Date picker */}
             <div className="flex-1 min-w-[150px]">
               <label className="text-xs font-medium text-muted-foreground mb-1.5 block">{t("attendance.date")}</label>
               <input
@@ -159,6 +174,37 @@ export default function AttendancePage() {
                 className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               />
             </div>
+
+            {/* Period toggle */}
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1.5 block">{t("attendance.period")}</label>
+              <div className="flex rounded-md border border-input overflow-hidden h-10">
+                <button
+                  type="button"
+                  onClick={() => setPeriod("morning")}
+                  className={`flex items-center gap-1.5 px-3 text-sm font-medium transition-colors ${
+                    period === "morning"
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-background text-muted-foreground hover:bg-muted"
+                  }`}
+                >
+                  <Sun className="w-3.5 h-3.5" />
+                  {t("attendance.morning")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPeriod("afternoon")}
+                  className={`flex items-center gap-1.5 px-3 text-sm font-medium transition-colors ${
+                    period === "afternoon"
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-background text-muted-foreground hover:bg-muted"
+                  }`}
+                >
+                  <Sunset className="w-3.5 h-3.5" />
+                  {t("attendance.afternoon")}
+                </button>
+              </div>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -167,7 +213,6 @@ export default function AttendancePage() {
         <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">{error}</div>
       )}
 
-      {/* Loading skeleton */}
       {loading ? (
         <div className="flex items-center justify-center py-20">
           <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
@@ -198,6 +243,20 @@ export default function AttendancePage() {
               <XCircle className="w-3.5 h-3.5 text-red-500" />
               {t("attendance.absent", { count: absentCount })}
             </Badge>
+            {/* Confirmation status badge */}
+            {Object.keys(attendanceMap).length > 0 && (
+              <Badge
+                variant="outline"
+                className={`gap-1.5 text-sm px-3 py-1 ${
+                  allConfirmed
+                    ? "border-green-500/40 text-green-600"
+                    : "border-amber-400/50 text-amber-600"
+                }`}
+              >
+                <ShieldCheck className="w-3.5 h-3.5" />
+                {allConfirmed ? t("attendance.confirmedBadge") : t("attendance.pendingBadge")}
+              </Badge>
+            )}
             {attendanceLoading && (
               <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
             )}
@@ -214,12 +273,16 @@ export default function AttendancePage() {
               <CardTitle className="text-base font-semibold flex items-center gap-2">
                 <ClipboardList className="w-4 h-4 text-primary" />
                 {selectedClass?.name} — {dateLabel}
+                <Badge variant="secondary" className="ms-1 font-normal text-xs">
+                  {period === "morning" ? t("attendance.morning") : t("attendance.afternoon")}
+                </Badge>
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-1.5 p-4 pt-2">
               {students.map((s) => {
                 const status = localStatus[s.id] ?? "present";
                 const isPresent = status === "present";
+                const isConfirmed = confirmedStudentIds.has(s.id);
                 return (
                   <div
                     key={s.id}
@@ -232,7 +295,6 @@ export default function AttendancePage() {
                         : "bg-red-500/5 border-red-500/20 hover:bg-red-500/10"
                     }`}
                   >
-                    {/* Avatar */}
                     <div className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
                       isPresent
                         ? "bg-green-500/15 text-green-700 dark:text-green-400"
@@ -241,14 +303,17 @@ export default function AttendancePage() {
                       {s.firstName[0]}{s.lastName[0]}
                     </div>
 
-                    {/* Name */}
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-sm text-foreground">
                         {s.lastName} <span className="font-normal">{s.firstName}</span>
                       </p>
                     </div>
 
-                    {/* Status */}
+                    {/* Confirmation indicator for admin */}
+                    {isAdmin && isConfirmed && (
+                      <ShieldCheck className="w-4 h-4 text-green-500 shrink-0" />
+                    )}
+
                     <span className={`text-xs font-semibold hidden sm:block ${isPresent ? "text-green-600" : "text-red-600"}`}>
                       {isPresent ? t("attendance.presentLabel") : t("attendance.absentLabel")}
                     </span>
@@ -261,17 +326,33 @@ export default function AttendancePage() {
             </CardContent>
           </Card>
 
-          {/* Save — teachers only */}
-          {isTeacher && (
-            <div className="flex justify-end gap-2">
+          {/* Action buttons */}
+          <div className="flex justify-end gap-2 flex-wrap">
+            {/* Confirm All — admins/directeurs only, only when there are saved records not yet confirmed */}
+            {isAdmin && Object.keys(attendanceMap).length > 0 && !allConfirmed && (
+              <Button
+                variant="outline"
+                onClick={handleConfirmAll}
+                disabled={confirming}
+                className="gap-2 border-green-500/40 text-green-700 hover:bg-green-500/10"
+              >
+                {confirming
+                  ? <Loader2 className="w-4 h-4 animate-spin" />
+                  : <ShieldCheck className="w-4 h-4" />}
+                {t("attendance.confirmAllBtn")}
+              </Button>
+            )}
+
+            {/* Save — teachers only */}
+            {isTeacher && (
               <Button onClick={handleSave} disabled={saving} className="gap-2">
                 {saving
                   ? <Loader2 className="w-4 h-4 animate-spin" />
                   : <Save className="w-4 h-4" />}
                 {t("attendance.saveBtn")}
               </Button>
-            </div>
-          )}
+            )}
+          </div>
         </>
       )}
     </div>

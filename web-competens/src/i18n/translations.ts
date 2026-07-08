@@ -335,6 +335,16 @@ export const fr: Dict = {
   "attendance.absentLabel": "Absent(e)",
   "attendance.saveBtn": "Enregistrer les présences",
   "attendance.saved": "Présences enregistrées.",
+  "attendance.period": "Période",
+  "attendance.morning": "Matin",
+  "attendance.afternoon": "Après-midi",
+  "attendance.confirmAllBtn": "Confirmer tout",
+  "attendance.confirmSuccess": "Présences confirmées.",
+  "attendance.confirmedBadge": "Confirmé",
+  "attendance.pendingBadge": "En attente",
+  "parent.attendanceMorning": "Matin",
+  "parent.attendanceAfternoon": "Après-midi",
+  "parent.notRecordedPeriod": "Non enregistré",
 
   // ── Alerts ──────────────────────────────────────────────
   "alerts.title": "Alertes",
@@ -857,6 +867,16 @@ export const ar: Dict = {
   "attendance.absentLabel": "غائب",
   "attendance.saveBtn": "حفظ الحضور",
   "attendance.saved": "تم حفظ الحضور.",
+  "attendance.period": "الفترة",
+  "attendance.morning": "الصباح",
+  "attendance.afternoon": "المساء",
+  "attendance.confirmAllBtn": "تأكيد الكل",
+  "attendance.confirmSuccess": "تم تأكيد الحضور.",
+  "attendance.confirmedBadge": "مؤكّد",
+  "attendance.pendingBadge": "في الانتظار",
+  "parent.attendanceMorning": "الصباح",
+  "parent.attendanceAfternoon": "المساء",
+  "parent.notRecordedPeriod": "غير مسجّل",
 
   // ── Alerts ──────────────────────────────────────────────
   "alerts.title": "التنبيهات",

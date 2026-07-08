@@ -4,7 +4,7 @@ import type {
   SchoolYear, Level, Classe, Student, Teacher,
   Competency, Evaluation, EvaluationStatus,
   Alert, Notification, TeacherClassAssignment, DailyEvaluationInput,
-  AttendanceRecord, DailyAttendanceInput, AttendanceStatus,
+  AttendanceRecord, DailyAttendanceInput, AttendanceStatus, AttendancePeriod,
 } from "@/types";
 import { generateDemoData } from "./seed-data";
 
@@ -67,7 +67,8 @@ interface AppStore {
   deleteCompetency: (id: string) => void;
 
   saveDailyEvaluation: (classId: string, competencyId: string, evaluations: DailyEvaluationInput[]) => void;
-  saveDemoAttendance: (classId: string, date: string, inputs: DailyAttendanceInput[], teacherId: string) => void;
+  saveDemoAttendance: (classId: string, date: string, period: AttendancePeriod, inputs: DailyAttendanceInput[], teacherId: string) => void;
+  confirmDemoAttendance: (classId: string, date: string, period: AttendancePeriod) => void;
   markAlertResolved: (id: string) => void;
   markNotificationRead: (id: string) => void;
 
@@ -235,10 +236,10 @@ export const useAppStore = create<AppStore>()(
           return { evaluations: [...s.evaluations, ...newEvals] };
         });
       },
-      saveDemoAttendance(classId, date, inputs, teacherId) {
+      saveDemoAttendance(classId, date, period, inputs, teacherId) {
         set((s) => {
           const next = s.attendance.filter(
-            (a) => !(a.classId === classId && a.date === date && inputs.some((i) => i.studentId === a.studentId))
+            (a) => !(a.classId === classId && a.date === date && a.period === period && inputs.some((i) => i.studentId === a.studentId))
           );
           const newRecords: AttendanceRecord[] = inputs.map((i) => ({
             id: generateUUID(),
@@ -246,11 +247,22 @@ export const useAppStore = create<AppStore>()(
             classId,
             teacherId,
             date,
+            period,
             status: i.status as AttendanceStatus,
+            isConfirmedByAdmin: false,
             createdAt: new Date().toISOString(),
           }));
           return { attendance: [...next, ...newRecords] };
         });
+      },
+      confirmDemoAttendance(classId, date, period) {
+        set((s) => ({
+          attendance: s.attendance.map((a) =>
+            a.classId === classId && a.date === date && a.period === period
+              ? { ...a, isConfirmedByAdmin: true }
+              : a
+          ),
+        }));
       },
       markAlertResolved(id) {
         set((s) => ({ alerts: s.alerts.map((a) => a.id === id ? { ...a, resolved: true, resolvedAt: new Date().toISOString() } : a) }));

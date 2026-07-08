@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useParent, type ParentChild } from "@/hooks/use-parent";
 import { useI18n } from "@/i18n";
-import type { Competency } from "@/types";
+import type { Competency, AttendanceStatus } from "@/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -112,15 +112,39 @@ function TimelineChart({ timeline }: { timeline: TimelinePoint[] }) {
 
 // ── Attendance section ─────────────────────────────────────────
 
-function AttendanceSummary({ todayAttendance, absenceHistory }: {
-  todayAttendance: string | null;
+function AttendanceSummary({ todayMorning, todayAfternoon, absenceHistory }: {
+  todayMorning: AttendanceStatus | null;
+  todayAfternoon: AttendanceStatus | null;
   absenceHistory: string[];
 }) {
   const { t, lang } = useI18n();
   const locale = lang === "ar" ? "ar-MA" : "fr-FR";
-  const isPresent  = todayAttendance === "present";
-  const isAbsent   = todayAttendance === "absent";
-  const isUnknown  = todayAttendance === null;
+
+  function PeriodRow({ label, status }: { label: string; status: AttendanceStatus | null }) {
+    const isPresent  = status === "present";
+    const isAbsent   = status === "absent";
+    return (
+      <div className={`flex items-center gap-3 px-4 py-3 rounded-xl border ${
+        isPresent ? "bg-green-500/8 border-green-500/25" :
+        isAbsent  ? "bg-red-500/8 border-red-500/25" :
+                    "bg-muted/30 border-border"
+      }`}>
+        {isPresent && <CheckCircle className="w-5 h-5 text-green-500 shrink-0" />}
+        {isAbsent  && <XCircle     className="w-5 h-5 text-red-500   shrink-0" />}
+        {!status   && <Clock       className="w-5 h-5 text-muted-foreground shrink-0" />}
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{label}</p>
+          <p className={`font-semibold text-sm ${
+            isPresent ? "text-green-700 dark:text-green-400" :
+            isAbsent  ? "text-red-700 dark:text-red-400" :
+                        "text-muted-foreground"
+          }`}>
+            {isPresent ? t("parent.present") : isAbsent ? t("parent.absent") : t("parent.notRecordedPeriod")}
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <Card className="border-border/50">
@@ -128,33 +152,17 @@ function AttendanceSummary({ todayAttendance, absenceHistory }: {
         <CardTitle className="text-base font-semibold flex items-center gap-2">
           <CalendarCheck className="w-4 h-4 text-primary" />
           {t("parent.attendanceToday")}
+          <span className="text-xs text-muted-foreground font-normal ms-1">
+            {new Date().toLocaleDateString(locale, { weekday: "long", day: "numeric", month: "long" })}
+          </span>
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        {/* Today's status badge */}
-        <div className={`flex items-center gap-3 px-4 py-3 rounded-xl border ${
-          isPresent ? "bg-green-500/8 border-green-500/25" :
-          isAbsent  ? "bg-red-500/8 border-red-500/25" :
-                      "bg-muted/30 border-border"
-        }`}>
-          {isPresent && <CheckCircle className="w-6 h-6 text-green-500 shrink-0" />}
-          {isAbsent  && <XCircle     className="w-6 h-6 text-red-500   shrink-0" />}
-          {isUnknown && <Clock       className="w-6 h-6 text-muted-foreground shrink-0" />}
-          <div>
-            <p className={`font-semibold text-sm ${
-              isPresent ? "text-green-700 dark:text-green-400" :
-              isAbsent  ? "text-red-700 dark:text-red-400" :
-                          "text-muted-foreground"
-            }`}>
-              {isPresent ? t("parent.present") : isAbsent ? t("parent.absent") : t("parent.notRecorded")}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              {new Date().toLocaleDateString(locale, { weekday: "long", day: "numeric", month: "long" })}
-            </p>
-          </div>
+        <div className="grid grid-cols-2 gap-2">
+          <PeriodRow label={t("parent.attendanceMorning")} status={todayMorning} />
+          <PeriodRow label={t("parent.attendanceAfternoon")} status={todayAfternoon} />
         </div>
 
-        {/* Absence history */}
         {absenceHistory.length > 0 && (
           <div>
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
@@ -172,7 +180,7 @@ function AttendanceSummary({ todayAttendance, absenceHistory }: {
             </div>
           </div>
         )}
-        {absenceHistory.length === 0 && todayAttendance !== null && (
+        {absenceHistory.length === 0 && (todayMorning !== null || todayAfternoon !== null) && (
           <p className="text-xs text-muted-foreground text-center py-1">{t("parent.noAbsence")}</p>
         )}
       </CardContent>
@@ -330,7 +338,8 @@ function ChildAnalytics({ child, competencies }: { child: ParentChild; competenc
 
       {/* Attendance */}
       <AttendanceSummary
-        todayAttendance={child.todayAttendance}
+        todayMorning={child.todayMorning}
+        todayAfternoon={child.todayAfternoon}
         absenceHistory={child.absenceHistory}
       />
     </div>

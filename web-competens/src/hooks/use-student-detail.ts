@@ -4,7 +4,7 @@ import { useAppStore } from "@/stores/app-store";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/lib/supabase";
 import { scoreToStatus, buildTimeline, type TimelinePoint } from "@/lib/eval-utils";
-import type { Student, Classe, Level, Competency, Alert, EvaluationStatus, AttendanceRecord, AttendanceStatus } from "@/types";
+import type { Student, Classe, Level, Competency, Alert, EvaluationStatus, AttendanceRecord, AttendanceStatus, AttendancePeriod } from "@/types";
 import type { DailyEvalRecord, ClassTeacher } from "@/components/DailyGranularAnalytics";
 
 export type { TimelinePoint, DailyEvalRecord, ClassTeacher };
@@ -243,7 +243,10 @@ export function useStudentDetail(studentId: string | undefined): UseStudentDetai
       setSbAttendanceHistory((attRes.data ?? []).map((a) => ({
         id: a.id, studentId: a.student_id, classId: a.class_id,
         teacherId: a.teacher_id ?? "", date: a.date,
-        status: a.status as AttendanceStatus, createdAt: a.created_at,
+        period: (a.period ?? "morning") as AttendancePeriod,
+        status: a.status as AttendanceStatus,
+        isConfirmedByAdmin: a.is_confirmed_by_admin ?? false,
+        createdAt: a.created_at,
       })));
 
       setSbClassTeachers((tcaRes.data ?? []).map((r) => ({
