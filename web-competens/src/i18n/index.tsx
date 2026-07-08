@@ -2,20 +2,13 @@ import { createContext, useContext, useState, useCallback, useEffect, type React
 import { translations, type Lang } from "./translations";
 
 const LANG_KEY = "competens-lang";
-const PICKED_KEY = "competens-lang-picked"; // session flag — gate shows once per app open
 
 type Vars = Record<string, string | number>;
 
 interface I18nContextType {
   lang: Lang;
   dir: "rtl" | "ltr";
-  /** True once the user has passed the language gate for this session. */
-  picked: boolean;
   setLang: (l: Lang) => void;
-  /** Confirm the language choice and dismiss the gate for this session. */
-  markPicked: () => void;
-  /** Re-arm the gate (e.g. on logout) so it shows again before next login. */
-  resetPicked: () => void;
   t: (key: string, vars?: Vars) => string;
 }
 
@@ -29,9 +22,6 @@ function readLang(): Lang {
 
 export function LanguageProvider({ children }: { children: ReactNode }) {
   const [lang, setLangState] = useState<Lang>(readLang);
-  const [picked, setPicked] = useState<boolean>(
-    () => typeof window !== "undefined" && sessionStorage.getItem(PICKED_KEY) === "1"
-  );
 
   const dir: "rtl" | "ltr" = lang === "ar" ? "rtl" : "ltr";
 
@@ -47,16 +37,6 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(LANG_KEY, l);
   }, []);
 
-  const markPicked = useCallback(() => {
-    sessionStorage.setItem(PICKED_KEY, "1");
-    setPicked(true);
-  }, []);
-
-  const resetPicked = useCallback(() => {
-    sessionStorage.removeItem(PICKED_KEY);
-    setPicked(false);
-  }, []);
-
   const t = useCallback((key: string, vars?: Vars): string => {
     const table = translations[lang];
     let str = table[key] ?? translations.fr[key] ?? key;
@@ -69,7 +49,7 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
   }, [lang]);
 
   return (
-    <I18nContext.Provider value={{ lang, dir, picked, setLang, markPicked, resetPicked, t }}>
+    <I18nContext.Provider value={{ lang, dir, setLang, t }}>
       {children}
     </I18nContext.Provider>
   );

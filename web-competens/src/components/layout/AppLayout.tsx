@@ -49,7 +49,7 @@ const parentMobileNavItems = [
 export default function AppLayout() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { t, lang, setLang, resetPicked } = useI18n();
+  const { t, lang, setLang } = useI18n();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [dark, setDark] = useState(() => {
     if (typeof window !== "undefined") {
@@ -73,7 +73,6 @@ export default function AppLayout() {
   const handleLogout = async () => {
     await logout();
     disableDemo();
-    resetPicked();           // re-arm the language gate for the next login
     navigate("/login", { replace: true });
   };
 

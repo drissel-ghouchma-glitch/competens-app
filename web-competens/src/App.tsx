@@ -4,8 +4,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/hooks/use-auth";
-import { LanguageProvider, useI18n } from "@/i18n";
-import LanguageGate from "@/i18n/LanguageGate";
+import { LanguageProvider } from "@/i18n";
 import AppLayout from "@/components/layout/AppLayout";
 
 import Login from "./pages/Login";
@@ -33,12 +32,7 @@ const queryClient = new QueryClient({
   },
 });
 
-/** Shows the language chooser once per session, then the routed app. */
 function AppInner() {
-  const { picked } = useI18n();
-
-  if (!picked) return <LanguageGate />;
-
   return (
     <BrowserRouter>
       <Routes>
