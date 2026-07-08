@@ -140,6 +140,11 @@ export const fr: Dict = {
   "honorRoll.noData": "Aucune donnée disponible.",
   "honorRoll.activeTeachers": "Enseignants les plus actifs",
   "honorRoll.evalCount": "{count} évaluation(s)",
+  "honorRoll.publishedStatus": "Publié — visible par les parents et les enseignants",
+  "honorRoll.hiddenStatus": "Masqué — visible uniquement par vous",
+  "honorRoll.publishAction": "Publier pour tous",
+  "honorRoll.hideAction": "Masquer",
+  "honorRoll.noBreakdown": "Aucune pénalité enregistrée.",
 
   // ── Students ────────────────────────────────────────────
   "students.title": "Élèves",
@@ -682,6 +687,11 @@ export const ar: Dict = {
   "honorRoll.noData": "لا توجد بيانات متاحة.",
   "honorRoll.activeTeachers": "الأساتذة الأكثر نشاطًا",
   "honorRoll.evalCount": "{count} تقييم",
+  "honorRoll.publishedStatus": "منشور — مرئي للأولياء والأساتذة",
+  "honorRoll.hiddenStatus": "مخفي — مرئي لك فقط",
+  "honorRoll.publishAction": "نشر للجميع",
+  "honorRoll.hideAction": "إخفاء",
+  "honorRoll.noBreakdown": "لا توجد عقوبات مسجلة.",
 
   // ── Students ────────────────────────────────────────────
   "students.title": "التلاميذ",

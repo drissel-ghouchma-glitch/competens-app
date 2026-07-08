@@ -1,17 +1,28 @@
 import { useState, useMemo } from "react";
 import { useHonorRoll } from "@/hooks/use-honor-roll";
+import { useCelebrationSettings } from "@/hooks/use-celebration-settings";
 import { useI18n } from "@/i18n";
+import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Star, Search, Trophy, UserCog, Loader2 } from "lucide-react";
+import { Star, Search, Trophy, UserCog, Loader2, ChevronDown, Eye, EyeOff } from "lucide-react";
 
-export function HonorRoll() {
-  const { t } = useI18n();
-  const { classes, honorRoll, classStats, teacherStats, loading, error } = useHonorRoll();
+interface HonorRollProps {
+  /** Admin/directeur controls: publish toggle + per-teacher penalty breakdown. */
+  isAdmin?: boolean;
+}
+
+export function HonorRoll({ isAdmin = true }: HonorRollProps) {
+  const { t, lang } = useI18n();
+  const { classes, honorRoll, classStats, teacherStats, loading, error } = useHonorRoll(lang);
+  const { isPublished, error: publishError, setPublished } = useCelebrationSettings();
   const [classFilter, setClassFilter] = useState("all");
   const [search, setSearch] = useState("");
+  const [expandedTeacherId, setExpandedTeacherId] = useState<string | null>(null);
+  const [publishing, setPublishing] = useState(false);
 
   const filteredHonorRoll = useMemo(() => {
     let list = honorRoll;
@@ -22,6 +33,15 @@ export function HonorRoll() {
     }
     return list;
   }, [honorRoll, classFilter, search]);
+
+  const handleTogglePublish = async () => {
+    setPublishing(true);
+    try {
+      await setPublished(!isPublished);
+    } finally {
+      setPublishing(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -37,6 +57,35 @@ export function HonorRoll() {
 
   return (
     <div className="space-y-6">
+      {/* Admin publish/hide control */}
+      {isAdmin && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-xl border border-border/50 bg-muted/30">
+          <div className="flex items-center gap-2 text-sm">
+            {isPublished
+              ? <Eye className="w-4 h-4 text-green-500 shrink-0" />
+              : <EyeOff className="w-4 h-4 text-muted-foreground shrink-0" />}
+            <span className="text-muted-foreground">
+              {isPublished ? t("honorRoll.publishedStatus") : t("honorRoll.hiddenStatus")}
+            </span>
+          </div>
+          <Button
+            size="sm"
+            variant={isPublished ? "outline" : "default"}
+            onClick={handleTogglePublish}
+            disabled={publishing}
+            className="gap-1.5 shrink-0"
+          >
+            {publishing
+              ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              : isPublished ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+            {isPublished ? t("honorRoll.hideAction") : t("honorRoll.publishAction")}
+          </Button>
+        </div>
+      )}
+      {isAdmin && publishError && (
+        <div className="p-3 rounded-lg bg-destructive/10 text-destructive text-sm">{publishError}</div>
+      )}
+
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
@@ -125,35 +174,67 @@ export function HonorRoll() {
         </Card>
       </div>
 
-      {/* Teacher engagement */}
-      <Card className="border-border/50">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base font-semibold flex items-center gap-2">
-            <UserCog className="w-4 h-4 text-primary" /> {t("honorRoll.activeTeachers")}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {teacherStats.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-4">{t("honorRoll.noData")}</p>
-          ) : (
-            <div className="divide-y divide-border/50">
-              {teacherStats.slice(0, 10).map((tstat, i) => (
-                <div key={tstat.teacherId} className="flex items-center justify-between gap-2 py-2.5">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className="w-5 h-5 rounded-full bg-violet-500/10 text-violet-600 text-xs font-bold flex items-center justify-center shrink-0">
-                      {i + 1}
-                    </span>
-                    <span className="text-sm font-medium truncate">{tstat.teacherName}</span>
-                  </div>
-                  <Badge variant="secondary" className="font-mono shrink-0">
-                    {t("honorRoll.evalCount", { count: tstat.count })}
-                  </Badge>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      {/* Teacher engagement — admin-only drill-down */}
+      {isAdmin && (
+        <Card className="border-border/50">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base font-semibold flex items-center gap-2">
+              <UserCog className="w-4 h-4 text-primary" /> {t("honorRoll.activeTeachers")}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {teacherStats.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-4">{t("honorRoll.noData")}</p>
+            ) : (
+              <div className="divide-y divide-border/50">
+                {teacherStats.slice(0, 10).map((tstat, i) => {
+                  const expanded = expandedTeacherId === tstat.teacherId;
+                  return (
+                    <div key={tstat.teacherId}>
+                      <button
+                        type="button"
+                        onClick={() => setExpandedTeacherId(expanded ? null : tstat.teacherId)}
+                        className="flex items-center justify-between gap-2 py-2.5 w-full text-start rounded-lg px-1.5 -mx-1.5 hover:bg-muted/40 transition-colors"
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="w-5 h-5 rounded-full bg-violet-500/10 text-violet-600 text-xs font-bold flex items-center justify-center shrink-0">
+                            {i + 1}
+                          </span>
+                          <span className="text-sm font-medium truncate">{tstat.teacherName}</span>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <Badge variant="secondary" className="font-mono">
+                            {t("honorRoll.evalCount", { count: tstat.count })}
+                          </Badge>
+                          <ChevronDown className={cn("w-3.5 h-3.5 text-muted-foreground transition-transform", expanded && "rotate-180")} />
+                        </div>
+                      </button>
+                      {expanded && (
+                        <div className="pb-3 ps-7 space-y-1.5">
+                          {tstat.breakdown.length === 0 ? (
+                            <p className="text-xs text-muted-foreground italic">{t("honorRoll.noBreakdown")}</p>
+                          ) : (
+                            tstat.breakdown.map((b) => (
+                              <div key={b.competencyId} className="flex items-center justify-between gap-3 text-xs">
+                                <span className="text-muted-foreground truncate">
+                                  {b.competencyCode ? `${b.competencyCode} — ${b.competencyTitle}` : b.competencyTitle}
+                                </span>
+                                <Badge variant="outline" className="font-mono shrink-0">
+                                  {t("honorRoll.evalCount", { count: b.count })}
+                                </Badge>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

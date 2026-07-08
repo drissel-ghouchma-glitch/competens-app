@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { useParent, type ParentChild } from "@/hooks/use-parent";
+import { useCelebrationSettings } from "@/hooks/use-celebration-settings";
 import { useI18n } from "@/i18n";
+import { HonorRoll } from "@/components/HonorRoll";
 import type { Competency, AttendanceStatus } from "@/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -350,6 +352,7 @@ function ChildAnalytics({ child, competencies }: { child: ParentChild; competenc
 
 export default function ParentDashboard() {
   const { children, competencies, loading, error } = useParent();
+  const { isPublished } = useCelebrationSettings();
   const { t } = useI18n();
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
@@ -395,6 +398,12 @@ export default function ParentDashboard() {
           <h1 className="text-2xl font-bold tracking-tight">{t("parent.headerTitle")}</h1>
           <p className="text-sm text-muted-foreground">{t("parent.headerSubtitle")}</p>
         </div>
+      </div>
+
+      {/* Célébration de réussite — only visible once the admin publishes it */}
+      {isPublished && <HonorRoll isAdmin={false} />}
+
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
 
         {/* Child selector — only if more than one child */}
         {children.length > 1 && (

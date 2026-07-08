@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { useDemoStore } from "@/stores/demo";
 import { useAppStore } from "@/stores/app-store";
 import { supabase } from "@/lib/supabase";
+import { localizeCompTitle } from "@/i18n/competency-content";
+import type { Lang } from "@/i18n/translations";
 
 export interface HonorRollStudent {
   id: string;
@@ -20,10 +22,18 @@ export interface ClassSuccessStat {
   rate: number;
 }
 
+export interface TeacherCompetencyBreakdown {
+  competencyId: string;
+  competencyCode: string;
+  competencyTitle: string;
+  count: number;
+}
+
 export interface TeacherActivityStat {
   teacherId: string;
   teacherName: string;
   count: number;
+  breakdown: TeacherCompetencyBreakdown[];
 }
 
 export interface HonorRollClass {
@@ -37,12 +47,19 @@ interface RawPenalty {
   teacherId: string | null;
 }
 
+interface CompetencyInfo {
+  id: string;
+  code: string;
+  title: string;
+  isArchived: boolean;
+}
+
 const HONOR_THRESHOLD = 90;
 
 function computeHonorRoll(
   students: { id: string; firstName: string; lastName: string; classId: string }[],
   classes: HonorRollClass[],
-  competencyIds: string[],
+  activeCompetencyIds: string[],
   penalties: RawPenalty[],
 ): { honorRoll: HonorRollStudent[]; classStats: ClassSuccessStat[] } {
   const classNameById = new Map(classes.map((c) => [c.id, c.name]));
@@ -53,7 +70,7 @@ function computeHonorRoll(
   }
 
   const allAverages = students.map((s) => {
-    const scores = competencyIds.map((cid) => {
+    const scores = activeCompetencyIds.map((cid) => {
       const count = penaltyCountByKey.get(`${s.id}__${cid}`) ?? 0;
       return Math.max(0, 100 - count);
     });
@@ -91,18 +108,40 @@ function computeHonorRoll(
 function computeTeacherActivity(
   penalties: RawPenalty[],
   teacherNameById: Map<string, string>,
+  competencyById: Map<string, CompetencyInfo>,
+  lang: Lang,
 ): TeacherActivityStat[] {
   const counts = new Map<string, number>();
+  const breakdownCounts = new Map<string, Map<string, number>>();
   for (const p of penalties) {
     if (!p.teacherId) continue;
     counts.set(p.teacherId, (counts.get(p.teacherId) ?? 0) + 1);
+    if (!breakdownCounts.has(p.teacherId)) breakdownCounts.set(p.teacherId, new Map());
+    const compCounts = breakdownCounts.get(p.teacherId)!;
+    compCounts.set(p.competencyId, (compCounts.get(p.competencyId) ?? 0) + 1);
   }
+
   return [...counts.entries()]
-    .map(([teacherId, count]) => ({
-      teacherId,
-      teacherName: teacherNameById.get(teacherId) ?? teacherId,
-      count,
-    }))
+    .map(([teacherId, count]) => {
+      const compCounts = breakdownCounts.get(teacherId) ?? new Map();
+      const breakdown: TeacherCompetencyBreakdown[] = [...compCounts.entries()]
+        .map(([competencyId, cnt]) => {
+          const comp = competencyById.get(competencyId);
+          return {
+            competencyId,
+            competencyCode: comp?.code ?? "",
+            competencyTitle: comp ? localizeCompTitle(comp.code, comp.title, lang) : competencyId,
+            count: cnt,
+          };
+        })
+        .sort((a, b) => b.count - a.count);
+      return {
+        teacherId,
+        teacherName: teacherNameById.get(teacherId) ?? teacherId,
+        count,
+        breakdown,
+      };
+    })
     .sort((a, b) => b.count - a.count);
 }
 
@@ -115,7 +154,7 @@ export interface UseHonorRollReturn {
   error: string | null;
 }
 
-export function useHonorRoll(): UseHonorRollReturn {
+export function useHonorRoll(lang: Lang = "fr"): UseHonorRollReturn {
   const isDemo = useDemoStore((s) => s.isDemoMode);
 
   // ── Demo selectors ───────────────────────────────────────
@@ -129,8 +168,14 @@ export function useHonorRoll(): UseHonorRollReturn {
     () => storeClasses.filter((c) => !c.isArchived).map((c) => ({ id: c.id, name: c.name })),
     [storeClasses]
   );
-  const demoCompetencyIds = useMemo(
+  const demoActiveCompetencyIds = useMemo(
     () => storeCompetencies.filter((c) => !c.isArchived).map((c) => c.id),
+    [storeCompetencies]
+  );
+  const demoCompetencyById = useMemo(
+    () => new Map(storeCompetencies.map((c) => [c.id, {
+      id: c.id, code: c.code, title: c.title, isArchived: c.isArchived ?? false,
+    }])),
     [storeCompetencies]
   );
   const demoPenalties = useMemo<RawPenalty[]>(
@@ -144,12 +189,12 @@ export function useHonorRoll(): UseHonorRollReturn {
     [storeTeachers]
   );
   const demoResult = useMemo(
-    () => computeHonorRoll(storeStudents, demoClasses, demoCompetencyIds, demoPenalties),
-    [storeStudents, demoClasses, demoCompetencyIds, demoPenalties]
+    () => computeHonorRoll(storeStudents, demoClasses, demoActiveCompetencyIds, demoPenalties),
+    [storeStudents, demoClasses, demoActiveCompetencyIds, demoPenalties]
   );
   const demoTeacherStats = useMemo(
-    () => computeTeacherActivity(demoPenalties, demoTeacherNameById),
-    [demoPenalties, demoTeacherNameById]
+    () => computeTeacherActivity(demoPenalties, demoTeacherNameById, demoCompetencyById, lang),
+    [demoPenalties, demoTeacherNameById, demoCompetencyById, lang]
   );
 
   // ── Supabase state ───────────────────────────────────────
@@ -168,7 +213,7 @@ export function useHonorRoll(): UseHonorRollReturn {
       const [studentsRes, classesRes, compRes, evalsRes, teachersRes] = await Promise.all([
         supabase.from("students").select("id, first_name, last_name, class_id").eq("is_archived", false),
         supabase.from("classes").select("id, name").eq("is_archived", false).order("name"),
-        supabase.from("competencies").select("id").eq("is_archived", false),
+        supabase.from("competencies").select("id, code, title, is_archived"),
         supabase.from("evaluations").select("student_id, competency_id, teacher_id"),
         supabase.from("profiles").select("id, full_name").eq("role", "professeur"),
       ]);
@@ -182,7 +227,11 @@ export function useHonorRoll(): UseHonorRollReturn {
         id: s.id, firstName: s.first_name, lastName: s.last_name, classId: s.class_id ?? "",
       }));
       const classes: HonorRollClass[] = (classesRes.data ?? []).map((c) => ({ id: c.id, name: c.name }));
-      const competencyIds = (compRes.data ?? []).map((c) => c.id);
+      const competencies: CompetencyInfo[] = (compRes.data ?? []).map((c) => ({
+        id: c.id, code: c.code, title: c.title, isArchived: c.is_archived ?? false,
+      }));
+      const activeCompetencyIds = competencies.filter((c) => !c.isArchived).map((c) => c.id);
+      const competencyById = new Map(competencies.map((c) => [c.id, c]));
       const penalties: RawPenalty[] = (evalsRes.data ?? []).map((e) => ({
         studentId: e.student_id, competencyId: e.competency_id, teacherId: e.teacher_id,
       }));
@@ -190,8 +239,8 @@ export function useHonorRoll(): UseHonorRollReturn {
         (teachersRes.data ?? []).map((t) => [t.id, t.full_name || t.id])
       );
 
-      const { honorRoll, classStats } = computeHonorRoll(students, classes, competencyIds, penalties);
-      const teacherStats = computeTeacherActivity(penalties, teacherNameById);
+      const { honorRoll, classStats } = computeHonorRoll(students, classes, activeCompetencyIds, penalties);
+      const teacherStats = computeTeacherActivity(penalties, teacherNameById, competencyById, lang);
 
       setSbClasses(classes);
       setSbHonorRoll(honorRoll);
@@ -202,7 +251,7 @@ export function useHonorRoll(): UseHonorRollReturn {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [lang]);
 
   useEffect(() => {
     if (!isDemo) fetchFromSupabase();

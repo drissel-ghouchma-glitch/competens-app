@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useDashboard } from "@/hooks/use-dashboard";
 import { useAuth } from "@/hooks/use-auth";
+import { useCelebrationSettings } from "@/hooks/use-celebration-settings";
 import { useI18n } from "@/i18n";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -19,7 +20,8 @@ import {
 export default function DashboardPage() {
   const { t } = useI18n();
   const { user } = useAuth();
-  const canSeeHonorRoll = user?.role !== "professeur";
+  const isAdminRole = user?.role !== "professeur";
+  const { isPublished } = useCelebrationSettings();
   const [showHonorRoll, setShowHonorRoll] = useState(false);
   const {
     totalStudents, totalClasses, totalTeachers, totalEvaluations,
@@ -43,7 +45,7 @@ export default function DashboardPage() {
             {loading ? t("common.loading") : activeYear ? t("dashboard.schoolYear", { name: activeYear.name }) : t("dashboard.noActiveYear")}
           </p>
         </div>
-        {canSeeHonorRoll && (
+        {isAdminRole && (
           <Button
             size="sm"
             variant={showHonorRoll ? "default" : "outline"}
@@ -56,7 +58,10 @@ export default function DashboardPage() {
         )}
       </div>
 
-      {canSeeHonorRoll && showHonorRoll && <HonorRoll />}
+      {isAdminRole && showHonorRoll && <HonorRoll isAdmin />}
+
+      {/* Teachers only ever see the celebration once the admin has published it */}
+      {!isAdminRole && isPublished && <HonorRoll isAdmin={false} />}
 
       {error && (
         <div className="p-3 rounded-lg bg-destructive/10 text-destructive text-sm">{error}</div>

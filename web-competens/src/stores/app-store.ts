@@ -34,8 +34,10 @@ interface AppStore {
   notifications: Notification[];
   teacherClassAssignments: TeacherClassAssignment[];
   attendance: AttendanceRecord[];
+  celebrationPublished: boolean;
 
   initDemoData: () => void;
+  setCelebrationPublished: (value: boolean) => void;
 
   addSchoolYear: (sy: Omit<SchoolYear, "id" | "createdAt" | "updatedAt">) => void;
   updateSchoolYear: (id: string, data: Partial<SchoolYear>) => void;
@@ -93,6 +95,11 @@ export const useAppStore = create<AppStore>()(
       notifications: [],
       teacherClassAssignments: [],
       attendance: [],
+      celebrationPublished: false,
+
+      setCelebrationPublished(value) {
+        set({ celebrationPublished: value });
+      },
 
       initDemoData() {
         if (get().initialized) return;
