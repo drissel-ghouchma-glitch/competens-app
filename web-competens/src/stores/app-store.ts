@@ -214,28 +214,25 @@ export const useAppStore = create<AppStore>()(
         const now = new Date().toISOString();
         const today = now.split("T")[0];
         set((s) => {
-          const existing = s.evaluations.filter(
-            (e) => e.classId === classId && e.competencyId === competencyId && e.date === today
-          );
-          const existingIds = new Set(existing.map((e) => e.studentId));
           const teacherId = s.classes.find((c) => c.id === classId)?.teacherId ?? "";
+          // Only insert penalty rows for students not already locked today for this teacher
+          const alreadyLocked = new Set(
+            s.evaluations
+              .filter((e) => e.competencyId === competencyId && e.date === today && e.teacherId === teacherId)
+              .map((e) => e.studentId)
+          );
           const newEvals: Evaluation[] = evals
-            .filter((ev) => !existingIds.has(ev.studentId))
+            .filter((ev) => !alreadyLocked.has(ev.studentId))
             .map((ev) => ({
               id: generateUUID(),
               studentId: ev.studentId,
               competencyId,
               teacherId,
               classId,
-              status: ev.status,
               date: today,
               createdAt: now,
             }));
-          const updated = s.evaluations.map((e) => {
-            const match = evals.find((ev) => ev.studentId === e.studentId && e.date === today && e.competencyId === competencyId);
-            return match ? { ...e, status: match.status } : e;
-          });
-          return { evaluations: [...updated, ...newEvals] };
+          return { evaluations: [...s.evaluations, ...newEvals] };
         });
       },
       saveDemoAttendance(classId, date, inputs, teacherId) {
@@ -264,19 +261,12 @@ export const useAppStore = create<AppStore>()(
 
       getStudentStats(studentId) {
         const { evaluations, competencies } = get();
-        const studentEvals = evaluations.filter((e) => e.studentId === studentId);
+        const studentPenalties = evaluations.filter((e) => e.studentId === studentId);
         return competencies.map((comp) => {
-          const ce = studentEvals.filter((e) => e.competencyId === comp.id);
-          if (ce.length === 0) {
-            return { competencyId: comp.id, competencyCode: comp.code, competencyTitle: comp.title, acquisitionRate: 100, totalEvaluations: 0, lastStatus: "acquis" as EvaluationStatus };
-          }
-          const avg = ce.reduce((sum, e) => {
-            const score = e.status === "acquis" ? 100 : e.status === "en_cours" ? 70 : 25;
-            return sum + score;
-          }, 0) / ce.length;
-          const rate = Math.round(avg);
-          const lastStatus: EvaluationStatus = rate > 90 ? "acquis" : rate >= 50 ? "en_cours" : "non_acquis";
-          return { competencyId: comp.id, competencyCode: comp.code, competencyTitle: comp.title, acquisitionRate: rate, totalEvaluations: ce.length, lastStatus };
+          const cp = studentPenalties.filter((e) => e.competencyId === comp.id);
+          const rate = Math.max(0, 100 - cp.length);
+          const lastStatus: EvaluationStatus = rate >= 90 ? "acquis" : rate > 50 ? "en_cours" : "non_acquis";
+          return { competencyId: comp.id, competencyCode: comp.code, competencyTitle: comp.title, acquisitionRate: rate, totalEvaluations: cp.length, lastStatus };
         });
       },
     }),

@@ -296,6 +296,9 @@ export const fr: Dict = {
   "schoolYears.emptyTitle": "Aucune année scolaire",
   "schoolYears.emptyHint": "Créez votre première année scolaire",
 
+  // ── Competency archive label ────────────────────────────
+  "competency.archivedLabel": "(Archivée)",
+
   // ── Evaluation ──────────────────────────────────────────
   "evaluation.title": "Évaluation quotidienne",
   "evaluation.subtitle": "Évaluez les compétences de vos élèves",
@@ -311,6 +314,10 @@ export const fr: Dict = {
   "evaluation.legendAcquired": "Compétence acquise",
   "evaluation.legendPenalty": "Point retiré (à revoir)",
   "evaluation.clickHint": "Cliquez sur un élève pour retirer un point ; cliquez à nouveau pour annuler.",
+  "evaluation.confirmTitle": "Confirmer l'enregistrement",
+  "evaluation.confirmMsg": "Êtes-vous sûr de vouloir enregistrer ces évaluations ? Cette action est définitive et vous ne pourrez plus annuler les points retirés aujourd'hui.",
+  "evaluation.confirmOk": "Oui, enregistrer",
+  "evaluation.lockHint": "Déjà enregistré aujourd'hui",
 
   // ── Attendance ──────────────────────────────────────────
   "attendance.title": "Présences",
@@ -753,6 +760,9 @@ export const ar: Dict = {
   "teachers.archiveConfirm": "أرشفة الأستاذ «{name}»؟ سيتم تعطيل حسابه مع الاحتفاظ بسجل تقييماته.",
   "teachers.archived": "تمت أرشفة {name}.",
 
+  // ── Competency archive label ────────────────────────────
+  "competency.archivedLabel": "(مؤرشفة)",
+
   // ── Competencies ────────────────────────────────────────
   "competencies.title": "الكفايات",
   "competencies.count": "{count} كفاية في المرجع",
@@ -826,6 +836,10 @@ export const ar: Dict = {
   "evaluation.legendAcquired": "كفاية مكتسبة",
   "evaluation.legendPenalty": "نقطة محذوفة (تحتاج مراجعة)",
   "evaluation.clickHint": "انقر على تلميذ لخصم نقطة؛ انقر مرة أخرى للتراجع.",
+  "evaluation.confirmTitle": "تأكيد الحفظ",
+  "evaluation.confirmMsg": "هل أنت متأكد من رغبتك في حفظ هذه التقييمات؟ هذا الإجراء نهائي ولن تتمكن من التراجع عن النقاط المسحوبة اليوم.",
+  "evaluation.confirmOk": "نعم، حفظ",
+  "evaluation.lockHint": "تم الحفظ اليوم بالفعل",
 
   // ── Attendance ──────────────────────────────────────────
   "attendance.title": "الحضور",

@@ -23,6 +23,7 @@ import type { CompetencyStat, TimelinePoint } from "@/hooks/use-student-detail";
 import type { AttendanceRecord } from "@/types";
 import { DailyGranularAnalytics } from "@/components/DailyGranularAnalytics";
 import { localizeCompTitle } from "@/i18n/competency-content";
+import { cn } from "@/lib/utils";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -202,14 +203,17 @@ function SkillGrid({ stats }: { stats: CompetencyStat[] }) {
         )}
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {stats.map((s) => (
-            <div key={s.competencyCode} className="flex items-start gap-3 p-3 rounded-xl bg-muted/40">
+            <div key={s.competencyCode} className={cn("flex items-start gap-3 p-3 rounded-xl bg-muted/40", s.isArchived && "opacity-60")}>
               <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0"
                 style={{ backgroundColor: acquisitionColor(s.acquisitionRate) }}>
                 <StatusIcon status={s.lastStatus} />
               </div>
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-foreground">{s.competencyCode}</p>
-                <p className="text-xs text-muted-foreground truncate">{localizeCompTitle(s.competencyCode, s.competencyTitle, lang)}</p>
+                <p className={cn("text-xs truncate", s.isArchived ? "text-muted-foreground/50 italic" : "text-muted-foreground")}>
+                  {localizeCompTitle(s.competencyCode, s.competencyTitle, lang)}
+                  {s.isArchived && <span className="ms-1">{t("competency.archivedLabel")}</span>}
+                </p>
                 <div className="flex items-center gap-2 mt-1.5">
                   <Progress value={s.acquisitionRate} className="h-1 flex-1" />
                   <span className="text-xs font-mono font-medium">{s.acquisitionRate}%</span>

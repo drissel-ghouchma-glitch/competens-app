@@ -3,13 +3,8 @@ import { useDemoStore } from "@/stores/demo";
 import { useAppStore } from "@/stores/app-store";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/lib/supabase";
-import { statusToScore, scoreToStatus } from "@/lib/eval-utils";
-import type { Classe, Student, Competency, EvaluationStatus, Level, DailyEvaluationInput } from "@/types";
-
-function splitFullName(n: string) {
-  const p = (n ?? "").trim().split(" ");
-  return p.length === 1 ? { firstName: p[0], lastName: "" } : { firstName: p[0], lastName: p.slice(1).join(" ") };
-}
+import { scoreToStatus } from "@/lib/eval-utils";
+import type { Classe, Student, Competency, Level, DailyEvaluationInput, StudentEvalInfo } from "@/types";
 
 export interface UseEvaluationReturn {
   classes: Classe[];
@@ -18,15 +13,17 @@ export interface UseEvaluationReturn {
   loading: boolean;
   error: string | null;
   getStudentsForClass: (classId: string) => Student[];
-  getTodayEvals: (classId: string, competencyId: string) => Record<string, EvaluationStatus>;
-  saveDailyEvaluation: (classId: string, competencyId: string, evals: DailyEvaluationInput[]) => Promise<void>;
+  /** Returns per-student { score, lockedByMe } for the selected class+competency. */
+  getEvalInfo: (classId: string, competencyId: string) => Record<string, StudentEvalInfo>;
+  /** Inserts penalty rows for the given student IDs (those with pending deductions). */
+  saveDailyEvaluation: (classId: string, competencyId: string, penalizedStudentIds: string[]) => Promise<void>;
 }
 
 export function useEvaluation(): UseEvaluationReturn {
   const isDemo = useDemoStore((s) => s.isDemoMode);
   const { user } = useAuth();
 
-  // Store selectors (always called)
+  // ── Demo store selectors (always called) ─────────────────
   const storeClasses = useAppStore((s) => s.classes);
   const storeLevels = useAppStore((s) => s.levels);
   const storeStudents = useAppStore((s) => s.students);
@@ -34,12 +31,15 @@ export function useEvaluation(): UseEvaluationReturn {
   const storeEvaluations = useAppStore((s) => s.evaluations);
   const storeSave = useAppStore((s) => s.saveDailyEvaluation);
 
-  // Supabase state
+  // ── Supabase state ────────────────────────────────────────
   const [sbClasses, setSbClasses] = useState<Classe[]>([]);
   const [sbLevels, setSbLevels] = useState<Level[]>([]);
   const [sbStudents, setSbStudents] = useState<Student[]>([]);
   const [sbCompetencies, setSbCompetencies] = useState<Competency[]>([]);
-  const [sbTodayEvals, setSbTodayEvals] = useState<Record<string, Record<string, EvaluationStatus>>>({});
+  // key = `studentId__competencyId` → penalty count (all-time, all teachers)
+  const [sbPenaltyCounts, setSbPenaltyCounts] = useState<Record<string, number>>({});
+  // keys locked today by the current teacher
+  const [sbLockedToday, setSbLockedToday] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -50,8 +50,6 @@ export function useEvaluation(): UseEvaluationReturn {
     setLoading(true);
     setError(null);
     try {
-      // For professeur: only classes from teacher_class_assignments
-      // For admin/directeur: all classes
       let classIds: string[] = [];
       if (user?.role === "professeur") {
         const { data: assignments } = await supabase
@@ -61,7 +59,6 @@ export function useEvaluation(): UseEvaluationReturn {
         classIds = (assignments ?? []).map((a) => a.class_id);
       }
 
-      // If teacher has no assignments, skip heavy queries
       if (user?.role === "professeur" && classIds.length === 0) {
         setSbClasses([]); setSbLevels([]); setSbStudents([]); setSbCompetencies([]);
         setLoading(false); return;
@@ -73,7 +70,7 @@ export function useEvaluation(): UseEvaluationReturn {
       const [classesRes, levelsRes, competenciesRes] = await Promise.all([
         classesQuery,
         supabase.from("levels").select("*").eq("is_archived", false).order("name"),
-        // Archived competencies must never reach the teacher's evaluation grid.
+        // Archived competencies are excluded from the teacher grid.
         supabase.from("competencies").select("*").eq("is_archived", false).order("order"),
       ]);
 
@@ -83,9 +80,8 @@ export function useEvaluation(): UseEvaluationReturn {
 
       const classes: Classe[] = (classesRes.data ?? []).map((c) => ({
         id: c.id, name: c.name, levelId: c.level_id ?? "",
-        capacity: c.capacity,
-        studentCount: c.student_count, isArchived: c.is_archived,
-        schoolYearId: c.school_year_id, createdAt: c.created_at,
+        capacity: c.capacity, studentCount: c.student_count,
+        isArchived: c.is_archived, schoolYearId: c.school_year_id, createdAt: c.created_at,
       }));
 
       const levels: Level[] = (levelsRes.data ?? []).map((l) => ({
@@ -96,10 +92,9 @@ export function useEvaluation(): UseEvaluationReturn {
       const competencies: Competency[] = (competenciesRes.data ?? []).map((c) => ({
         id: c.id, code: c.code, title: c.title,
         description: c.description ?? "", pedagogicalAdvice: c.pedagogical_advice ?? "",
-        order: c.order, createdAt: c.created_at,
+        order: c.order, isArchived: c.is_archived ?? false, createdAt: c.created_at,
       }));
 
-      // Fetch all students for these classes
       const allClassIds = classes.map((c) => c.id);
       let students: Student[] = [];
       if (allClassIds.length > 0) {
@@ -117,37 +112,36 @@ export function useEvaluation(): UseEvaluationReturn {
         }));
       }
 
-      // Fetch today's evaluations for these classes
-      let todayMap: Record<string, Record<string, EvaluationStatus>> = {};
-      if (allClassIds.length > 0) {
-        const { data: evalData } = await supabase
-          .from("evaluations")
-          .select("student_id, competency_id, status")
-          .in("class_id", allClassIds)
-          .eq("date", today);
-
-        for (const e of evalData ?? []) {
-          const key = `${e.student_id}__${e.competency_id}`;
-          if (!todayMap[key]) todayMap[key] = {};
-          todayMap[e.competency_id] = todayMap[e.competency_id] ?? {};
-          // Store as compKey -> studentId -> status
-          if (!todayMap[e.competency_id]) todayMap[e.competency_id] = {};
-        }
-
-        // Rebuild as { `classId_competencyId` -> { studentId -> status } }
-        todayMap = {};
-        for (const e of evalData ?? []) {
-          const key = e.competency_id;
-          if (!todayMap[key]) todayMap[key] = {};
-          todayMap[key][e.student_id] = e.status as EvaluationStatus;
-        }
-      }
-
       setSbClasses(classes);
       setSbLevels(levels);
       setSbStudents(students);
       setSbCompetencies(competencies);
-      setSbTodayEvals(todayMap);
+
+      // Pre-fetch penalty counts for all students
+      if (students.length > 0) {
+        const allStudentIds = students.map((s) => s.id);
+
+        const [penaltyRes, lockRes] = await Promise.all([
+          supabase.from("evaluations").select("student_id, competency_id").in("student_id", allStudentIds),
+          user?.id
+            ? supabase.from("evaluations").select("student_id, competency_id")
+                .in("student_id", allStudentIds).eq("date", today).eq("teacher_id", user.id)
+            : Promise.resolve({ data: [] as { student_id: string; competency_id: string }[] }),
+        ]);
+
+        const counts: Record<string, number> = {};
+        for (const row of penaltyRes.data ?? []) {
+          const key = `${row.student_id}__${row.competency_id}`;
+          counts[key] = (counts[key] ?? 0) + 1;
+        }
+        setSbPenaltyCounts(counts);
+
+        const locked = new Set(
+          ((lockRes as { data: { student_id: string; competency_id: string }[] | null }).data ?? [])
+            .map((r) => `${r.student_id}__${r.competency_id}`)
+        );
+        setSbLockedToday(locked);
+      }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Erreur de chargement");
     } finally {
@@ -159,7 +153,7 @@ export function useEvaluation(): UseEvaluationReturn {
     if (!isDemo) fetchFromSupabase();
   }, [isDemo, fetchFromSupabase]);
 
-  // ── Get students for a class ──────────────────────────────
+  // ── Get students ──────────────────────────────────────────
 
   const getStudentsDemo = useCallback(
     (classId: string) => storeStudents.filter((s) => s.classId === classId),
@@ -170,39 +164,59 @@ export function useEvaluation(): UseEvaluationReturn {
     [sbStudents]
   );
 
-  // ── Get today's evals ─────────────────────────────────────
+  // ── Get eval info ─────────────────────────────────────────
 
-  const getTodayEvalsDemo = useCallback(
-    (classId: string, competencyId: string): Record<string, EvaluationStatus> => {
-      const map: Record<string, EvaluationStatus> = {};
-      storeEvaluations
-        .filter((e) => e.classId === classId && e.competencyId === competencyId && e.date === today)
-        .forEach((e) => { map[e.studentId] = e.status; });
-      return map;
+  const getEvalInfoDemo = useCallback(
+    (classId: string, competencyId: string): Record<string, StudentEvalInfo> => {
+      const classStudents = storeStudents.filter((s) => s.classId === classId);
+      const result: Record<string, StudentEvalInfo> = {};
+      for (const student of classStudents) {
+        const penalties = storeEvaluations.filter(
+          (e) => e.studentId === student.id && e.competencyId === competencyId
+        );
+        const todayByMe = storeEvaluations.filter(
+          (e) => e.studentId === student.id && e.competencyId === competencyId &&
+                 e.date === today && e.teacherId === (user?.id ?? "")
+        );
+        result[student.id] = {
+          score: Math.max(0, 100 - penalties.length),
+          lockedByMe: todayByMe.length > 0,
+        };
+      }
+      return result;
     },
-    [storeEvaluations, today]
+    [storeStudents, storeEvaluations, today, user?.id]
   );
 
-  const getTodayEvalsReal = useCallback(
-    (_classId: string, competencyId: string): Record<string, EvaluationStatus> => {
-      return sbTodayEvals[competencyId] ?? {};
+  const getEvalInfoReal = useCallback(
+    (classId: string, competencyId: string): Record<string, StudentEvalInfo> => {
+      const classStudents = sbStudents.filter((s) => s.classId === classId);
+      const result: Record<string, StudentEvalInfo> = {};
+      for (const student of classStudents) {
+        const key = `${student.id}__${competencyId}`;
+        result[student.id] = {
+          score: Math.max(0, 100 - (sbPenaltyCounts[key] ?? 0)),
+          lockedByMe: sbLockedToday.has(key),
+        };
+      }
+      return result;
     },
-    [sbTodayEvals]
+    [sbStudents, sbPenaltyCounts, sbLockedToday]
   );
 
   // ── Save evaluation ───────────────────────────────────────
 
   const saveDemoEval = useCallback(
-    async (classId: string, competencyId: string, evals: DailyEvaluationInput[]) => {
-      storeSave(classId, competencyId, evals);
+    async (classId: string, competencyId: string, penalizedStudentIds: string[]) => {
+      const inputs: DailyEvaluationInput[] = penalizedStudentIds.map((studentId) => ({
+        studentId,
+        competencyId,
+      }));
+      storeSave(classId, competencyId, inputs);
     },
     [storeSave]
   );
 
-  // After a save, re-checks each affected student's overall score for this
-  // competency (averaged across all teachers/dates, same formula as the
-  // stats hooks) and raises a critical alert the moment it drops to the
-  // "Non acquis" threshold (≤50). Best-effort — never blocks the save.
   const checkThresholdAlerts = useCallback(
     async (competencyId: string, studentIds: string[]) => {
       if (!supabase) return;
@@ -211,23 +225,21 @@ export function useEvaluation(): UseEvaluationReturn {
 
       for (const studentId of studentIds) {
         try {
-          const { data: allEvals } = await supabase
+          const { count } = await supabase
             .from("evaluations")
-            .select("status")
+            .select("*", { count: "exact", head: true })
             .eq("student_id", studentId)
             .eq("competency_id", competencyId);
-          if (!allEvals || allEvals.length === 0) continue;
 
-          const rate = Math.round(
-            allEvals.reduce((sum, e) => sum + statusToScore(e.status as EvaluationStatus), 0) / allEvals.length
-          );
-          if (scoreToStatus(rate) !== "non_acquis") continue;
+          const score = Math.max(0, 100 - (count ?? 0));
+
+          // Trigger alerts at 91/100 (−9 points) and at ≤50 (Non acquis)
+          if (score !== 91 && score > 50) continue;
 
           const student = sbStudents.find((s) => s.id === studentId);
           const studentName = student ? `${student.firstName} ${student.lastName}` : studentId;
-          const cause = `Alerte critique : ${studentName} a chuté à ${rate}/100 en ${competency.code} — ${competency.title} (Non acquis).`;
 
-          // Avoid re-raising the same alert repeatedly the same day.
+          // Avoid duplicate alerts today for the same student+competency
           const { data: existing } = await supabase
             .from("alerts")
             .select("id")
@@ -237,15 +249,20 @@ export function useEvaluation(): UseEvaluationReturn {
             .limit(1);
           if (existing && existing.length > 0) continue;
 
+          const level = score <= 50 ? "critical" : "warning";
+          const cause = score === 91
+            ? `Alerte : ${studentName} a atteint 91/100 en ${competency.code} — ${competency.title} (−9 points).`
+            : `Alerte critique : ${studentName} a chuté à ${score}/100 en ${competency.code} — ${competency.title} (${scoreToStatus(score) === "non_acquis" ? "Non acquis" : "En cours"}).`;
+
           await supabase.from("alerts").insert({
             student_id: studentId,
-            level: "critical",
+            level,
             cause,
             date: today,
             resolved: false,
           });
         } catch {
-          // Alerting is best-effort — a failure here must not break the save.
+          // best-effort — never block the save
         }
       }
     },
@@ -253,60 +270,54 @@ export function useEvaluation(): UseEvaluationReturn {
   );
 
   const saveRealEval = useCallback(
-    async (classId: string, competencyId: string, evals: DailyEvaluationInput[]) => {
+    async (classId: string, competencyId: string, penalizedStudentIds: string[]) => {
       if (!supabase) throw new Error("Supabase non disponible");
-      if (evals.length === 0) return;
+      if (penalizedStudentIds.length === 0) return;
 
-      const studentIds = evals.map((e) => e.studentId);
-
-      // Delete existing for today (then re-insert — clean upsert)
-      await supabase
-        .from("evaluations")
-        .delete()
-        .eq("class_id", classId)
-        .eq("competency_id", competencyId)
-        .eq("date", today)
-        .in("student_id", studentIds);
-
-      const rows = evals.map((e) => ({
-        student_id: e.studentId,
-        competency_id: e.competencyId,
+      const rows = penalizedStudentIds.map((studentId) => ({
+        student_id: studentId,
+        competency_id: competencyId,
         teacher_id: user?.id ?? null,
         class_id: classId,
-        status: e.status,
         date: today,
       }));
 
       const { error: err } = await supabase.from("evaluations").insert(rows);
       if (err) throw new Error(err.message);
 
-      // Refresh today's evals
-      const { data } = await supabase
-        .from("evaluations")
-        .select("student_id, competency_id, status")
-        .in("class_id", [classId])
-        .eq("date", today);
+      // Update local penalty counts and lock state
+      setSbPenaltyCounts((prev) => {
+        const next = { ...prev };
+        for (const studentId of penalizedStudentIds) {
+          const key = `${studentId}__${competencyId}`;
+          next[key] = (next[key] ?? 0) + 1;
+        }
+        return next;
+      });
+      setSbLockedToday((prev) => {
+        const next = new Set(prev);
+        for (const studentId of penalizedStudentIds) {
+          next.add(`${studentId}__${competencyId}`);
+        }
+        return next;
+      });
 
-      const updated: Record<string, Record<string, EvaluationStatus>> = { ...sbTodayEvals };
-      for (const e of data ?? []) {
-        if (!updated[e.competency_id]) updated[e.competency_id] = {};
-        updated[e.competency_id][e.student_id] = e.status as EvaluationStatus;
-      }
-      setSbTodayEvals(updated);
-
-      await checkThresholdAlerts(competencyId, studentIds);
+      await checkThresholdAlerts(competencyId, penalizedStudentIds);
     },
-    [user?.id, today, sbTodayEvals, checkThresholdAlerts]
+    [user?.id, today, checkThresholdAlerts]
   );
 
   return {
     classes: isDemo ? storeClasses.filter((c) => !c.isArchived) : sbClasses,
     levels: isDemo ? storeLevels : sbLevels,
-    competencies: isDemo ? storeCompetencies : sbCompetencies,
+    competencies: isDemo ? storeCompetencies.filter((c) => !c.isArchived) : sbCompetencies,
     loading,
     error,
     getStudentsForClass: isDemo ? getStudentsDemo : getStudentsReal,
-    getTodayEvals: isDemo ? getTodayEvalsDemo : getTodayEvalsReal,
+    getEvalInfo: isDemo ? getEvalInfoDemo : getEvalInfoReal,
     saveDailyEvaluation: isDemo ? saveDemoEval : saveRealEval,
   };
 }
+
+// Keep a re-export of the old name for any remaining callers that might use it.
+export type { StudentEvalInfo };

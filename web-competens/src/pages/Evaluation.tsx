@@ -1,23 +1,25 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { useEvaluation } from "@/hooks/use-evaluation";
 import { useI18n } from "@/i18n";
 import { localizeCompTitle } from "@/i18n/competency-content";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ClipboardCheck, CheckCircle, MinusCircle, Save, Loader2, AlertCircle } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  ClipboardCheck, CheckCircle, MinusCircle, Save, Loader2,
+  AlertCircle, Lock,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { EvaluationStatus, DailyEvaluationInput } from "@/types";
-
-type EvalState = Record<string, EvaluationStatus>;
-
-/** On this screen a student is either at 100% (untouched / "acquis") or has
- *  a "-1" penalty applied. Any status other than "acquis" is shown as the
- *  penalty state — this also lets a pre-existing "en_cours" record (saved
- *  before this screen existed) render correctly as a penalty. */
-function isPenalized(status: EvaluationStatus | undefined): boolean {
-  return status !== undefined && status !== "acquis";
-}
 
 export default function EvaluationPage() {
   const { t, lang } = useI18n();
@@ -25,76 +27,63 @@ export default function EvaluationPage() {
   const {
     classes, levels, competencies,
     loading, error,
-    getStudentsForClass, getTodayEvals, saveDailyEvaluation,
+    getStudentsForClass, getEvalInfo, saveDailyEvaluation,
   } = useEvaluation();
 
   const [classId, setClassId] = useState("");
   const [competencyId, setCompetencyId] = useState("");
-  const [evalStates, setEvalStates] = useState<EvalState>({});
+  // studentIds with a pending -1 deduction (not yet saved)
+  const [pending, setPending] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   const selectedClass = useMemo(() => classes.find((c) => c.id === classId), [classes, classId]);
   const selectedCompetency = useMemo(() => competencies.find((c) => c.id === competencyId), [competencies, competencyId]);
   const classStudents = useMemo(() => getStudentsForClass(classId), [getStudentsForClass, classId]);
-  const todayEvals = useMemo(() => getTodayEvals(classId, competencyId), [getTodayEvals, classId, competencyId]);
-
-  useEffect(() => {
-    if (classId && competencyId) {
-      setEvalStates((prev) => ({ ...prev, ...todayEvals }));
-    }
-  }, [todayEvals, classId, competencyId]);
+  const evalInfo = useMemo(() => getEvalInfo(classId, competencyId), [getEvalInfo, classId, competencyId]);
 
   const handleClassSelect = (id: string) => {
     setClassId(id);
     setCompetencyId("");
-    setEvalStates({});
+    setPending(new Set());
     setSaveError("");
     setSaveSuccess(false);
   };
 
   const handleCompetencySelect = (id: string) => {
     setCompetencyId(id);
-    setEvalStates({});
+    setPending(new Set());
     setSaveError("");
     setSaveSuccess(false);
   };
 
-  const togglePenalty = (studentId: string) => {
-    setEvalStates((prev) => {
-      const original = todayEvals[studentId];
-      const current = prev[studentId] ?? original;
-      const next = { ...prev };
-      if (isPenalized(current)) {
-        // Undo → back to 100%
-        if (isPenalized(original)) {
-          // A penalty was already persisted today — must explicitly overwrite it on save.
-          next[studentId] = "acquis";
-        } else {
-          // Nothing persisted yet — just drop the pending edit, nothing to save.
-          delete next[studentId];
-        }
-      } else {
-        next[studentId] = "non_acquis";
-      }
+  const togglePending = (studentId: string) => {
+    const info = evalInfo[studentId];
+    if (info?.lockedByMe) return; // already saved today — cannot toggle
+    setPending((prev) => {
+      const next = new Set(prev);
+      if (next.has(studentId)) next.delete(studentId);
+      else next.add(studentId);
       return next;
     });
   };
 
-  const handleSave = async () => {
-    if (!classId || !competencyId) return;
+  const handleSaveClick = () => {
+    if (pending.size === 0) return;
+    setConfirmOpen(true);
+  };
+
+  const handleConfirm = async () => {
+    setConfirmOpen(false);
+    if (!classId || !competencyId || pending.size === 0) return;
     setSaveError("");
     setSaveSuccess(false);
     setSaving(true);
     try {
-      const input: DailyEvaluationInput[] = Object.entries(evalStates).map(([studentId, status]) => ({
-        studentId,
-        competencyId,
-        status,
-      }));
-      await saveDailyEvaluation(classId, competencyId, input);
-      setEvalStates({});
+      await saveDailyEvaluation(classId, competencyId, [...pending]);
+      setPending(new Set());
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch (e: unknown) {
@@ -103,8 +92,6 @@ export default function EvaluationPage() {
       setSaving(false);
     }
   };
-
-  const editedCount = Object.keys(evalStates).length;
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -212,11 +199,15 @@ export default function EvaluationPage() {
                 <div className="flex flex-wrap items-center gap-4 mb-2 text-xs">
                   <div className="flex items-center gap-1.5 text-muted-foreground">
                     <CheckCircle className="w-4 h-4 text-green-600" />
-                    <span className="font-bold text-green-600">100%</span> — {t("evaluation.legendAcquired")}
+                    <span className="font-bold text-green-600">100/100</span> — {t("evaluation.legendAcquired")}
                   </div>
                   <div className="flex items-center gap-1.5 text-muted-foreground">
                     <MinusCircle className="w-4 h-4 text-amber-600" />
                     <span className="font-bold text-amber-600">-1</span> — {t("evaluation.legendPenalty")}
+                  </div>
+                  <div className="flex items-center gap-1.5 text-muted-foreground">
+                    <Lock className="w-4 h-4 text-muted-foreground/60" />
+                    <span>{t("evaluation.lockHint")}</span>
                   </div>
                 </div>
                 <p className="text-[11px] text-muted-foreground mb-4">{t("evaluation.clickHint")}</p>
@@ -229,16 +220,23 @@ export default function EvaluationPage() {
                 ) : (
                   <div className="grid gap-2">
                     {classStudents.map((s, idx) => {
-                      const current = evalStates[s.id] ?? todayEvals[s.id];
-                      const penalized = isPenalized(current);
+                      const info = evalInfo[s.id] ?? { score: 100, lockedByMe: false };
+                      const isPending = pending.has(s.id);
+                      const displayScore = info.score - (isPending ? 1 : 0);
+                      const isLocked = info.lockedByMe;
+
                       return (
                         <button
                           key={s.id}
-                          onClick={() => togglePenalty(s.id)}
+                          onClick={() => togglePending(s.id)}
+                          disabled={isLocked}
                           className={cn(
                             "flex items-center gap-3 p-3 rounded-xl border-2 transition-all duration-200 text-start w-full",
-                            penalized ? "bg-amber-500/10 border-amber-500/30" : "bg-green-500/10 border-green-500/30",
-                            s.id in evalStates ? "border-current" : "border-transparent hover:border-muted-foreground/20"
+                            isLocked
+                              ? "opacity-60 cursor-not-allowed bg-muted/30 border-border/30"
+                              : isPending
+                                ? "bg-amber-500/10 border-amber-500/40 cursor-pointer"
+                                : "bg-green-500/8 border-green-500/20 hover:border-primary/30 cursor-pointer"
                           )}
                         >
                           <span className="w-7 h-7 rounded-lg bg-muted flex items-center justify-center text-xs font-mono font-bold text-muted-foreground shrink-0">
@@ -249,11 +247,18 @@ export default function EvaluationPage() {
                               {s.firstName} {s.lastName}
                             </p>
                           </div>
-                          {penalized
-                            ? <MinusCircle className="w-5 h-5 shrink-0 text-amber-600" />
-                            : <CheckCircle className="w-5 h-5 shrink-0 text-green-600" />}
-                          <span className={cn("text-sm font-bold shrink-0 tabular-nums", penalized ? "text-amber-600" : "text-green-600")}>
-                            {penalized ? "-1" : "100%"}
+                          {isLocked ? (
+                            <Lock className="w-4 h-4 shrink-0 text-muted-foreground/60" />
+                          ) : isPending ? (
+                            <MinusCircle className="w-5 h-5 shrink-0 text-amber-600" />
+                          ) : (
+                            <CheckCircle className="w-5 h-5 shrink-0 text-green-600" />
+                          )}
+                          <span className={cn(
+                            "text-sm font-bold shrink-0 tabular-nums",
+                            isLocked ? "text-muted-foreground/60" : isPending ? "text-amber-600" : "text-green-600"
+                          )}>
+                            {displayScore}/100
                           </span>
                         </button>
                       );
@@ -277,12 +282,14 @@ export default function EvaluationPage() {
                 <div className="mt-6 flex justify-end">
                   <Button
                     size="lg"
-                    onClick={handleSave}
-                    disabled={saving || editedCount === 0}
+                    onClick={handleSaveClick}
+                    disabled={saving || pending.size === 0}
                     className="gap-2 px-8"
                   >
                     {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
-                    {saving ? t("evaluation.saving") : `${t("evaluation.saveBtn")}${editedCount > 0 ? ` (${editedCount})` : ""}`}
+                    {saving
+                      ? t("evaluation.saving")
+                      : `${t("evaluation.saveBtn")}${pending.size > 0 ? ` (${pending.size})` : ""}`}
                   </Button>
                 </div>
               </CardContent>
@@ -290,6 +297,22 @@ export default function EvaluationPage() {
           )}
         </>
       )}
+
+      {/* Confirmation Dialog */}
+      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("evaluation.confirmTitle")}</AlertDialogTitle>
+            <AlertDialogDescription>{t("evaluation.confirmMsg")}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirm}>
+              {t("evaluation.confirmOk")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

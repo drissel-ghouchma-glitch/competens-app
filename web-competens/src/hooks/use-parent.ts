@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/lib/supabase";
-import { statusToScore, scoreToStatus, buildTimeline, type TimelinePoint } from "@/lib/eval-utils";
+import { scoreToStatus, buildTimeline, type TimelinePoint } from "@/lib/eval-utils";
 import type { Student, Competency, Alert, EvaluationStatus, AttendanceStatus } from "@/types";
 import type { DailyEvalRecord, ClassTeacher } from "@/components/DailyGranularAnalytics";
 
@@ -14,33 +14,31 @@ export interface ParentChildStat {
   acquisitionRate: number;
   totalEvaluations: number;
   lastStatus: EvaluationStatus;
+  isArchived: boolean;
 }
 
+// Each record = one penalty event (no status field).
 interface RawEval {
   studentId: string;
   competencyId: string;
   teacherId: string;
   teacherName: string;
-  status: EvaluationStatus;
   date: string;
 }
 
-function computeStats(evals: RawEval[], competencies: Competency[], studentId: string): ParentChildStat[] {
-  const studentEvals = evals.filter((e) => e.studentId === studentId);
+function computeStats(penalties: RawEval[], competencies: Competency[], studentId: string): ParentChildStat[] {
+  const studentPenalties = penalties.filter((p) => p.studentId === studentId);
   return competencies.map((comp) => {
-    const ce = studentEvals.filter((e) => e.competencyId === comp.id);
-    if (ce.length === 0) {
-      return { competencyId: comp.id, competencyCode: comp.code, competencyTitle: comp.title, acquisitionRate: 100, totalEvaluations: 0, lastStatus: "acquis" as EvaluationStatus };
-    }
-    const avg = ce.reduce((sum, e) => sum + statusToScore(e.status), 0) / ce.length;
-    const rate = Math.round(avg);
+    const cp = studentPenalties.filter((p) => p.competencyId === comp.id);
+    const rate = Math.max(0, 100 - cp.length);
     return {
       competencyId: comp.id,
       competencyCode: comp.code,
       competencyTitle: comp.title,
       acquisitionRate: rate,
-      totalEvaluations: ce.length,
+      totalEvaluations: cp.length,
       lastStatus: scoreToStatus(rate),
+      isArchived: comp.isArchived ?? false,
     };
   });
 }
@@ -49,13 +47,9 @@ export interface ParentChild extends Student {
   stats: ParentChildStat[];
   alerts: Alert[];
   timeline: TimelinePoint[];
-  /** Attendance status for today — null if not recorded yet */
   todayAttendance: AttendanceStatus | null;
-  /** Dates when the child was absent, most recent first */
   absenceHistory: string[];
-  /** Un-aggregated eval records for daily granular analytics */
   rawEvals: DailyEvalRecord[];
-  /** Teachers assigned to this child's class */
   classTeachers: ClassTeacher[];
 }
 
@@ -80,7 +74,6 @@ export function useParent(): UseParentReturn {
     setLoading(true);
     setError(null);
     try {
-      // 1. Get linked student IDs
       const { data: links, error: linksErr } = await supabase
         .from("parent_student")
         .select("student_id")
@@ -97,13 +90,13 @@ export function useParent(): UseParentReturn {
 
       const todayDate = new Date().toISOString().split("T")[0];
 
-      // 2. Fetch everything in parallel — evaluations include teacher names, plus attendance
       const [studentsRes, compRes, evalsRes, alertsRes, attRes] = await Promise.all([
         supabase.from("students").select("*").in("id", studentIds),
         supabase.from("competencies").select("*").order("order"),
+        // Penalty rows only — no status column
         supabase
           .from("evaluations")
-          .select("student_id, competency_id, teacher_id, status, date, profiles(full_name)")
+          .select("student_id, competency_id, teacher_id, date, profiles(full_name)")
           .in("student_id", studentIds),
         supabase
           .from("alerts")
@@ -130,19 +123,17 @@ export function useParent(): UseParentReturn {
       const comps: Competency[] = (compRes.data ?? []).map((c) => ({
         id: c.id, code: c.code, title: c.title,
         description: c.description ?? "", pedagogicalAdvice: c.pedagogical_advice ?? "",
-        order: c.order, createdAt: c.created_at,
+        order: c.order, isArchived: c.is_archived ?? false, createdAt: c.created_at,
       }));
 
       const evals: RawEval[] = (evalsRes.data ?? []).map((e) => ({
-        studentId: e.student_id,
-        competencyId: e.competency_id,
+        studentId: (e as { student_id: string }).student_id,
+        competencyId: (e as { competency_id: string }).competency_id,
         teacherId: (e as { teacher_id?: string }).teacher_id ?? "",
         teacherName: (e.profiles as { full_name?: string } | null)?.full_name ?? "",
-        status: e.status as EvaluationStatus,
-        date: e.date,
+        date: (e as { date: string }).date,
       }));
 
-      // Fetch teachers for each unique class
       const classIds = [...new Set(students.map((s) => s.classId).filter(Boolean))];
       const tcasByClass = new Map<string, ClassTeacher[]>();
       if (classIds.length > 0) {
@@ -162,7 +153,6 @@ export function useParent(): UseParentReturn {
         }
       }
 
-      // Build attendance maps
       const todayAttMap = new Map<string, AttendanceStatus>();
       const absenceMap  = new Map<string, string[]>();
       for (const a of (attRes.data ?? [])) {

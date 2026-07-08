@@ -10,7 +10,7 @@ import {
 } from "recharts";
 import { useI18n } from "@/i18n";
 import { localizeCompTitle } from "@/i18n/competency-content";
-import type { Competency, EvaluationStatus } from "@/types";
+import type { Competency } from "@/types";
 
 // ── Shared types (exported for hook consumers) ─────────────────────────────────
 
@@ -19,7 +19,6 @@ export interface DailyEvalRecord {
   competencyId: string;
   teacherId: string;
   teacherName: string;
-  status: EvaluationStatus;
   date: string;
 }
 
@@ -36,24 +35,6 @@ function barColor(rate: number) {
   return "hsl(4 77% 55%)";
 }
 
-function statusKey(s: EvaluationStatus) {
-  if (s === "acquis")   return "status.acquis";
-  if (s === "en_cours") return "status.en_cours";
-  return "status.non_acquis";
-}
-
-function statusBadgeStyle(s: EvaluationStatus): React.CSSProperties {
-  if (s === "acquis")   return { background: "hsl(122 39% 49% / 0.15)", color: "hsl(122 39% 32%)", border: "1px solid hsl(122 39% 49% / 0.3)" };
-  if (s === "en_cours") return { background: "hsl(38 92% 50% / 0.15)",  color: "hsl(38 92% 30%)",  border: "1px solid hsl(38 92% 50% / 0.3)"  };
-  return                       { background: "hsl(4 77% 55% / 0.15)",   color: "hsl(4 77% 40%)",   border: "1px solid hsl(4 77% 55% / 0.3)"   };
-}
-
-function statusToScore(s: EvaluationStatus) {
-  if (s === "acquis")   return 100;
-  if (s === "en_cours") return 70;
-  return 25;
-}
-
 // ── Level-1 Tooltip ────────────────────────────────────────────────────────────
 
 interface ChartEntry {
@@ -61,7 +42,8 @@ interface ChartEntry {
   code: string;
   title: string;
   rate: number;
-  teacherEvals: { teacherName: string; status: EvaluationStatus }[];
+  penaltyCount: number;       // penalties on selected day
+  teacherNames: string[];     // teachers who penalized on selected day
 }
 
 function DayCompTooltip({
@@ -76,15 +58,18 @@ function DayCompTooltip({
   return (
     <div className="rounded-xl border bg-popover shadow-lg p-3 text-sm min-w-[190px]">
       <p className="font-semibold text-foreground mb-1 text-xs truncate">{d.code} — {d.title}</p>
-      <p className="font-bold mb-2" style={{ color: barColor(d.rate) }}>{d.rate}%</p>
-      {d.teacherEvals.length > 0 && (
+      <p className="font-bold mb-1" style={{ color: barColor(d.rate) }}>{d.rate}/100</p>
+      <p className="text-xs text-muted-foreground mb-2">
+        {d.penaltyCount} {t("evaluation.legendPenalty").toLowerCase()} {t("daily.date").toLowerCase()}
+      </p>
+      {d.teacherNames.length > 0 && (
         <div className="space-y-1.5 border-t border-border pt-2">
           <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">{t("daily.teachers")}</p>
-          {d.teacherEvals.map((te, i) => (
+          {d.teacherNames.map((name, i) => (
             <div key={i} className="flex items-center justify-between gap-2">
-              <span className="text-xs text-foreground truncate">{te.teacherName || "—"}</span>
-              <Badge className="text-[10px] px-1.5 py-0 h-4 shrink-0" style={statusBadgeStyle(te.status)}>
-                {t(statusKey(te.status))}
+              <span className="text-xs text-foreground truncate">{name || "—"}</span>
+              <Badge className="text-[10px] px-1.5 py-0 h-4 shrink-0 bg-amber-500/10 text-amber-700 border-amber-500/20">
+                -1
               </Badge>
             </div>
           ))}
@@ -110,41 +95,54 @@ export function DailyGranularAnalytics({ studentId, rawEvals, competencies, clas
   const [selectedDate, setSelectedDate] = useState(today);
   const [selectedCompId, setSelectedCompId] = useState<string | null>(null);
 
-  // Day evals for this student
-  const dayEvals = useMemo(
-    () => rawEvals.filter((e) => e.studentId === studentId && e.date === selectedDate),
-    [rawEvals, studentId, selectedDate],
+  // Penalty records for this student
+  const studentPenalties = useMemo(
+    () => rawEvals.filter((e) => e.studentId === studentId),
+    [rawEvals, studentId],
   );
 
-  // Level-1 chart data: one bar per evaluated competency on the selected day
+  // Penalties on the selected day
+  const dayPenalties = useMemo(
+    () => studentPenalties.filter((e) => e.date === selectedDate),
+    [studentPenalties, selectedDate],
+  );
+
+  // Level-1 chart: one bar per competency that had a penalty on the selected day
   const chartData = useMemo<ChartEntry[]>(() => {
     return competencies
       .map((comp) => {
-        const ce = dayEvals.filter((e) => e.competencyId === comp.id);
-        if (ce.length === 0) return null;
-        const avg = ce.reduce((sum, e) => sum + statusToScore(e.status), 0) / ce.length;
+        const todayComp = dayPenalties.filter((e) => e.competencyId === comp.id);
+        if (todayComp.length === 0) return null;
+        // Global score = 100 - all-time penalty count for this student+competency
+        const totalPenalties = studentPenalties.filter((e) => e.competencyId === comp.id).length;
+        const globalScore = Math.max(0, 100 - totalPenalties);
         return {
           id: comp.id,
           code: comp.code,
           title: localizeCompTitle(comp.code, comp.title, lang),
-          rate: Math.round(avg),
-          teacherEvals: ce.map((e) => ({ teacherName: e.teacherName, status: e.status })),
+          rate: globalScore,
+          penaltyCount: todayComp.length,
+          teacherNames: [...new Set(todayComp.map((e) => e.teacherName).filter(Boolean))],
         };
       })
       .filter((d): d is ChartEntry => d !== null);
-  }, [dayEvals, competencies, lang]);
+  }, [dayPenalties, studentPenalties, competencies, lang]);
 
   const selectedComp = selectedCompId
     ? competencies.find((c) => c.id === selectedCompId) ?? null
     : null;
 
-  // Level-2 breakdown: each class teacher vs their eval for selected competency + day
+  // Level-2: each class teacher vs whether they penalized on this day for selected competency
   const teacherBreakdown = useMemo(() => {
     if (!selectedCompId) return [];
-    const compEvals = dayEvals.filter((e) => e.competencyId === selectedCompId);
-    const evalByTeacher = new Map(compEvals.map((e) => [e.teacherId, e]));
-    return classTeachers.map((teacher) => ({ teacher, ev: evalByTeacher.get(teacher.id) ?? null }));
-  }, [selectedCompId, dayEvals, classTeachers]);
+    const penalizedByTeacher = new Set(
+      dayPenalties.filter((e) => e.competencyId === selectedCompId).map((e) => e.teacherId)
+    );
+    return classTeachers.map((teacher) => ({
+      teacher,
+      penalized: penalizedByTeacher.has(teacher.id),
+    }));
+  }, [selectedCompId, dayPenalties, classTeachers]);
 
   const dateLabel = new Date(selectedDate + "T00:00:00").toLocaleDateString(locale, {
     weekday: "long", day: "numeric", month: "long", year: "numeric",
@@ -251,15 +249,15 @@ export function DailyGranularAnalytics({ studentId, rawEvals, competencies, clas
               </p>
             ) : (
               <div className="divide-y divide-border/50 rounded-lg overflow-hidden border border-border/40 bg-card">
-                {teacherBreakdown.map(({ teacher, ev }) => (
+                {teacherBreakdown.map(({ teacher, penalized }) => (
                   <div
                     key={teacher.id}
                     className="flex items-center justify-between px-3 py-2.5 gap-3"
                   >
                     <span className="text-sm font-medium text-foreground">{teacher.name}</span>
-                    {ev ? (
-                      <Badge className="text-xs shrink-0" style={statusBadgeStyle(ev.status)}>
-                        {t(statusKey(ev.status))}
+                    {penalized ? (
+                      <Badge className="text-xs shrink-0 bg-amber-500/10 text-amber-700 border-amber-500/20">
+                        -1
                       </Badge>
                     ) : (
                       <span

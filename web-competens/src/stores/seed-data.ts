@@ -3,7 +3,7 @@ import type {
   Competency, Evaluation, Alert, Notification,
 } from "@/types";
 
-export const COMPETENCIES_SEED: Omit<Competency, "id" | "createdAt">[] = [
+export const COMPETENCIES_SEED: Omit<Competency, "id" | "createdAt" | "isArchived">[] = [
   { code: "C1", title: "Respect des règles et de l'ordre général", description: "L'élève respecte le règlement intérieur, les consignes collectives et l'autorité de l'enseignant.", pedagogicalAdvice: "Établir des règles claires, expliciter les attentes, valoriser les comportements positifs, instaurer des rituels de classe.", order: 1 },
   { code: "C2", title: "Préparation et concentration", description: "L'élève arrive en classe avec le matériel nécessaire et se met rapidement au travail.", pedagogicalAdvice: "Instaurer une routine d'entrée en classe, vérifier le matériel, proposer des activités de transition courtes.", order: 2 },
   { code: "C3", title: "Discipline et engagement durant la leçon", description: "L'élève maintient une attitude de travail tout au long de la séance sans perturber la classe.", pedagogicalAdvice: "Varier les modalités de travail, proposer des pauses cognitives, valoriser l'effort et la persévérance.", order: 3 },
@@ -100,24 +100,26 @@ export function generateDemoData() {
   const competencies: Competency[] = COMPETENCIES_SEED.map((c) => ({
     ...c,
     id: uid(),
+    isArchived: false,
     createdAt: now.toISOString(),
   }));
 
+  // Generate penalty events (no status — each row = -1 deduction).
+  // About 0-3 penalties per student/competency to seed realistic scores.
   const evaluations: Evaluation[] = [];
-  const statuses: ("acquis" | "en_cours" | "non_acquis")[] = ["acquis", "acquis", "acquis", "en_cours", "non_acquis"];
-
   for (const student of students) {
+    const teacherId = classes.find((c) => c.id === student.classId)?.teacherId ?? teachers[0].id;
     for (const competency of competencies) {
-      for (let w = 0; w < 4; w++) {
+      const penaltyCount = Math.floor(Math.random() * 4); // 0, 1, 2, or 3
+      for (let p = 0; p < penaltyCount; p++) {
         const d = new Date(now);
-        d.setDate(d.getDate() - w * 7 - Math.floor(Math.random() * 3));
+        d.setDate(d.getDate() - p * 7 - Math.floor(Math.random() * 3));
         evaluations.push({
           id: uid(),
           studentId: student.id,
           competencyId: competency.id,
-          teacherId: classes.find((c) => c.id === student.classId)?.teacherId ?? teachers[0].id,
+          teacherId,
           classId: student.classId,
-          status: statuses[Math.floor(Math.random() * statuses.length)],
           date: d.toISOString().split("T")[0],
           createdAt: d.toISOString(),
         });

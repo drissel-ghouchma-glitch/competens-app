@@ -1,18 +1,9 @@
 import type { EvaluationStatus } from "@/types";
 
-// Numeric score assigned to each teacher-entered status.
-// These midpoints place each status squarely inside its target range.
-export function statusToScore(status: EvaluationStatus): number {
-  if (status === "acquis") return 100;
-  if (status === "en_cours") return 70; // midpoint of [50, 90]
-  return 25;                            // midpoint of [0, 50)
-}
-
-// Derives the display status from a computed rate, enforcing the agreed ranges.
-// This is the single bridge between the teacher's "100% / -1" demerit toggle
-// (Evaluation.tsx) and the Acquis/En cours/Non acquis categories shown by every
-// chart (StudentDetail, ParentDashboard, DailyGranularAnalytics). Those charts
-// are never touched directly — they always render whatever this function returns.
+// Maps a numeric score (0-100) to the display status used by all charts.
+// This is the single bridge between the penalty-count score and the
+// Acquis / En cours / Non acquis categories rendered by every chart
+// (StudentDetail, ParentDashboard, DailyGranularAnalytics).
 //   90–100  → Acquis
 //   51–89   → En cours
 //   ≤50     → Non acquis
@@ -26,26 +17,29 @@ export function scoreToStatus(rate: number): EvaluationStatus {
 
 export interface TimelinePoint {
   date: string;       // ISO "YYYY-MM-DD"
-  rate: number;       // 0-100 average score for that day
-  teachers: string[]; // unique teacher names who evaluated on that day
-  count: number;      // number of individual evaluation rows
+  rate: number;       // 100 - (penalty count on that day)
+  teachers: string[]; // unique teacher names who applied penalties that day
+  count: number;      // number of penalty events on that day
 }
 
+// Builds a timeline from raw penalty records (no status field).
+// Each record = one -1 deduction. For each date, rate = 100 - count.
+// Dates with zero penalties never appear in the timeline.
 export function buildTimeline(
-  evals: Array<{ date: string; status: EvaluationStatus; teacherName?: string }>
+  penalties: Array<{ date: string; teacherName?: string }>
 ): TimelinePoint[] {
-  const byDate: Record<string, { scores: number[]; teachers: Set<string> }> = {};
-  for (const e of evals) {
-    if (!byDate[e.date]) byDate[e.date] = { scores: [], teachers: new Set() };
-    byDate[e.date].scores.push(statusToScore(e.status));
-    if (e.teacherName) byDate[e.date].teachers.add(e.teacherName);
+  const byDate: Record<string, { count: number; teachers: Set<string> }> = {};
+  for (const p of penalties) {
+    if (!byDate[p.date]) byDate[p.date] = { count: 0, teachers: new Set() };
+    byDate[p.date].count++;
+    if (p.teacherName) byDate[p.date].teachers.add(p.teacherName);
   }
   return Object.entries(byDate)
     .sort(([a], [b]) => a.localeCompare(b))
-    .map(([date, { scores, teachers }]) => ({
+    .map(([date, { count, teachers }]) => ({
       date,
-      rate: Math.round(scores.reduce((s, v) => s + v, 0) / scores.length),
+      rate: Math.max(0, 100 - count),
       teachers: [...teachers],
-      count: scores.length,
+      count,
     }));
 }

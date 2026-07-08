@@ -3,7 +3,7 @@ import { useDemoStore } from "@/stores/demo";
 import { useAppStore } from "@/stores/app-store";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/lib/supabase";
-import { statusToScore, scoreToStatus, buildTimeline, type TimelinePoint } from "@/lib/eval-utils";
+import { scoreToStatus, buildTimeline, type TimelinePoint } from "@/lib/eval-utils";
 import type { Student, Classe, Level, Competency, Alert, EvaluationStatus, AttendanceRecord, AttendanceStatus } from "@/types";
 import type { DailyEvalRecord, ClassTeacher } from "@/components/DailyGranularAnalytics";
 
@@ -16,34 +16,31 @@ export interface CompetencyStat {
   acquisitionRate: number;
   totalEvaluations: number;
   lastStatus: EvaluationStatus;
+  isArchived: boolean;
 }
 
+// Each record = one penalty event (no status field).
 interface RawEval {
   studentId: string;
   competencyId: string;
   teacherId: string;
   teacherName: string;
-  status: EvaluationStatus;
   date: string;
 }
 
-function computeStats(evals: RawEval[], competencies: Competency[], studentId: string): CompetencyStat[] {
-  const studentEvals = evals.filter((e) => e.studentId === studentId);
+function computeStats(penalties: RawEval[], competencies: Competency[], studentId: string): CompetencyStat[] {
+  const studentPenalties = penalties.filter((p) => p.studentId === studentId);
   return competencies.map((comp) => {
-    const ce = studentEvals.filter((e) => e.competencyId === comp.id);
-    if (ce.length === 0) {
-      // No evaluations yet → default 100% (acquis)
-      return { competencyId: comp.id, competencyCode: comp.code, competencyTitle: comp.title, acquisitionRate: 100, totalEvaluations: 0, lastStatus: "acquis" as EvaluationStatus };
-    }
-    const avg = ce.reduce((sum, e) => sum + statusToScore(e.status), 0) / ce.length;
-    const rate = Math.round(avg);
+    const cp = studentPenalties.filter((p) => p.competencyId === comp.id);
+    const rate = Math.max(0, 100 - cp.length);
     return {
       competencyId: comp.id,
       competencyCode: comp.code,
       competencyTitle: comp.title,
       acquisitionRate: rate,
-      totalEvaluations: ce.length,
+      totalEvaluations: cp.length,
       lastStatus: scoreToStatus(rate),
+      isArchived: comp.isArchived ?? false,
     };
   });
 }
@@ -53,24 +50,16 @@ export interface UseStudentDetailReturn {
   classe: Classe | null;
   level: Level | null;
   competencies: Competency[];
-  /** Stats filtered to the current teacher's evaluations (or all evals for admin/directeur) */
   myStats: CompetencyStat[];
-  /** All-teacher stats — only populated for admin/directeur */
   globalStats: CompetencyStat[];
   alerts: Alert[];
-  /** Chronological evolution — for admin/directeur and parents */
   timeline: TimelinePoint[];
-  /** Attendance history for this student, most recent first */
   attendanceHistory: AttendanceRecord[];
-  /** Classes list for the edit dropdown (admin only) */
   classes: Classe[];
-  /** Un-aggregated evaluation records for daily granular analytics */
   rawEvals: DailyEvalRecord[];
-  /** Teachers assigned to this student's class */
   classTeachers: ClassTeacher[];
   loading: boolean;
   error: string | null;
-  /** Update student — only available for admin/directeur */
   updateStudent: (data: Partial<Pick<Student, "firstName" | "lastName" | "birthDate" | "gender" | "classId">>) => Promise<void>;
   refetch: () => Promise<void>;
 }
@@ -79,7 +68,7 @@ export function useStudentDetail(studentId: string | undefined): UseStudentDetai
   const isDemo = useDemoStore((s) => s.isDemoMode);
   const { user } = useAuth();
 
-  // ── Demo selectors (always called) ──────────────────────
+  // ── Demo selectors ───────────────────────────────────────
   const storeStudents = useAppStore((s) => s.students);
   const storeClasses = useAppStore((s) => s.classes);
   const storeLevels = useAppStore((s) => s.levels);
@@ -107,18 +96,19 @@ export function useStudentDetail(studentId: string | undefined): UseStudentDetai
     [storeAlerts, studentId]
   );
   const demoRawEvals = useMemo(
-    () => storeEvaluations.map((e) => {
-      const t = storeTeachers.find((x) => x.id === e.teacherId);
-      return {
-        studentId: e.studentId,
-        competencyId: e.competencyId,
-        teacherId: e.teacherId,
-        teacherName: t ? `${t.firstName} ${t.lastName}` : "",
-        status: e.status,
-        date: e.date,
-      };
-    }),
-    [storeEvaluations, storeTeachers]
+    () => storeEvaluations
+      .filter((e) => e.studentId === studentId)
+      .map((e) => {
+        const t = storeTeachers.find((x) => x.id === e.teacherId);
+        return {
+          studentId: e.studentId,
+          competencyId: e.competencyId,
+          teacherId: e.teacherId,
+          teacherName: t ? `${t.firstName} ${t.lastName}` : "",
+          date: e.date,
+        };
+      }),
+    [storeEvaluations, storeTeachers, studentId]
   );
   const demoMyEvals = useMemo(
     () => user?.role === "professeur"
@@ -137,7 +127,7 @@ export function useStudentDetail(studentId: string | undefined): UseStudentDetai
     [demoRawEvals, storeCompetencies, studentId, user?.role]
   );
   const demoTimeline = useMemo(
-    () => studentId ? buildTimeline(demoRawEvals.filter((e) => e.studentId === studentId)) : [],
+    () => studentId ? buildTimeline(demoRawEvals) : [],
     [demoRawEvals, studentId]
   );
   const demoAttendanceHistory = useMemo(
@@ -145,11 +135,11 @@ export function useStudentDetail(studentId: string | undefined): UseStudentDetai
     [storeAttendance, studentId]
   );
   const demoClassTeachers = useMemo<ClassTeacher[]>(() => {
-    const ids = new Set(demoRawEvals.filter((e) => e.studentId === studentId).map((e) => e.teacherId));
+    const ids = new Set(demoRawEvals.map((e) => e.teacherId));
     return storeTeachers
       .filter((t) => ids.has(t.id))
       .map((t) => ({ id: t.id, name: `${t.firstName} ${t.lastName}` }));
-  }, [demoRawEvals, storeTeachers, studentId]);
+  }, [demoRawEvals, storeTeachers]);
 
   // ── Supabase state ───────────────────────────────────────
   const [sbStudent, setSbStudent] = useState<Student | null>(null);
@@ -182,14 +172,13 @@ export function useStudentDetail(studentId: string | undefined): UseStudentDetai
 
   const mapEval = (e: {
     student_id: string; competency_id: string; teacher_id: string;
-    status: string; date: string;
+    date: string;
     profiles: { full_name?: string } | null;
   }): RawEval => ({
     studentId: e.student_id,
     competencyId: e.competency_id,
     teacherId: e.teacher_id,
     teacherName: e.profiles?.full_name ?? "",
-    status: e.status as EvaluationStatus,
     date: e.date,
   });
 
@@ -198,12 +187,8 @@ export function useStudentDetail(studentId: string | undefined): UseStudentDetai
     setLoading(true);
     setError(null);
     try {
-      // 1. Student
       const { data: stuData, error: stuErr } = await supabase
-        .from("students")
-        .select("*")
-        .eq("id", studentId)
-        .single();
+        .from("students").select("*").eq("id", studentId).single();
       if (stuErr) throw stuErr;
 
       const student: Student = {
@@ -214,7 +199,6 @@ export function useStudentDetail(studentId: string | undefined): UseStudentDetai
       };
       setSbStudent(student);
 
-      // 2. Classes + competencies + alerts + attendance + class teachers
       const [classesRes, compRes, alertsRes, attRes, tcaRes] = await Promise.all([
         supabase.from("classes").select("*, levels(*)").eq("is_archived", false).order("name"),
         supabase.from("competencies").select("*").order("order"),
@@ -245,7 +229,7 @@ export function useStudentDetail(studentId: string | undefined): UseStudentDetai
       const competencies: Competency[] = (compRes.data ?? []).map((c) => ({
         id: c.id, code: c.code, title: c.title,
         description: c.description ?? "", pedagogicalAdvice: c.pedagogical_advice ?? "",
-        order: c.order, createdAt: c.created_at,
+        order: c.order, isArchived: c.is_archived ?? false, createdAt: c.created_at,
       }));
       setSbCompetencies(competencies);
 
@@ -267,10 +251,10 @@ export function useStudentDetail(studentId: string | undefined): UseStudentDetai
         name: (r.profiles as { full_name?: string } | null)?.full_name ?? r.teacher_id,
       })));
 
-      // 3. Evaluations — always fetch all for timeline; filter by teacher for myStats
+      // Fetch penalty records (no status column)
       const evalsBase = supabase
         .from("evaluations")
-        .select("student_id, competency_id, teacher_id, status, date, profiles(full_name)")
+        .select("student_id, competency_id, teacher_id, date, profiles(full_name)")
         .eq("student_id", studentId);
 
       if (user?.role === "professeur" && user?.id) {
@@ -278,7 +262,7 @@ export function useStudentDetail(studentId: string | undefined): UseStudentDetai
           evalsBase.eq("teacher_id", user.id),
           supabase
             .from("evaluations")
-            .select("student_id, competency_id, teacher_id, status, date, profiles(full_name)")
+            .select("student_id, competency_id, teacher_id, date, profiles(full_name)")
             .eq("student_id", studentId),
         ]);
         setSbMyEvals((myRes.data ?? []).map(mapEval));
@@ -299,8 +283,6 @@ export function useStudentDetail(studentId: string | undefined): UseStudentDetai
   useEffect(() => {
     if (!isDemo) fetchFromSupabase();
   }, [isDemo, fetchFromSupabase]);
-
-  // ── Update student (admin/directeur only) ────────────────
 
   const updateStudentReal = useCallback(
     async (data: Partial<Pick<Student, "firstName" | "lastName" | "birthDate" | "gender" | "classId">>) => {

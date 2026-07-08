@@ -80,18 +80,22 @@ export interface Competency {
   description: string;
   pedagogicalAdvice: string;
   order: number;
+  isArchived: boolean;
   createdAt: string;
 }
 
+// Display-only type — used for chart category mapping.
+// No longer stored in the DB; derived from globalScore via scoreToStatus().
 export type EvaluationStatus = "acquis" | "en_cours" | "non_acquis";
 
+// A row in the evaluations table now represents a single -1 penalty event.
+// Global score for a student / competency = 100 - COUNT(rows).
 export interface Evaluation {
   id: string;
   studentId: string;
   competencyId: string;
   teacherId: string;
   classId: string;
-  status: EvaluationStatus;
   date: string;
   createdAt: string;
 }
@@ -100,6 +104,12 @@ export interface EvaluationWithDetails extends Evaluation {
   student?: Student;
   competency?: Competency;
   teacher?: Teacher;
+}
+
+// Per-student info returned by the evaluation hook for the teacher grid.
+export interface StudentEvalInfo {
+  score: number;        // 100 - total penalty count (all-time, all teachers)
+  lockedByMe: boolean;  // current teacher already saved today for this student+competency
 }
 
 export interface Alert {
@@ -125,10 +135,10 @@ export interface Notification {
   createdAt: string;
 }
 
+// Payload for inserting a penalty event: teacher selects which students to penalize.
 export interface DailyEvaluationInput {
   studentId: string;
   competencyId: string;
-  status: EvaluationStatus;
 }
 
 export interface StudentStats {
