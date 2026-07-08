@@ -1,12 +1,15 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useDashboard } from "@/hooks/use-dashboard";
+import { useAuth } from "@/hooks/use-auth";
 import { useI18n } from "@/i18n";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { HonorRoll } from "@/components/HonorRoll";
 import {
   Users, Building2, UserCog, ClipboardCheck, TrendingUp,
-  Bell, ArrowRight, ChevronRight, Activity, Loader2,
+  Bell, ArrowRight, ChevronRight, Activity, Loader2, Star,
 } from "lucide-react";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -15,6 +18,9 @@ import {
 
 export default function DashboardPage() {
   const { t } = useI18n();
+  const { user } = useAuth();
+  const canSeeHonorRoll = user?.role !== "professeur";
+  const [showHonorRoll, setShowHonorRoll] = useState(false);
   const {
     totalStudents, totalClasses, totalTeachers, totalEvaluations,
     activeYear, weeklyData, alerts, loading, error,
@@ -37,7 +43,20 @@ export default function DashboardPage() {
             {loading ? t("common.loading") : activeYear ? t("dashboard.schoolYear", { name: activeYear.name }) : t("dashboard.noActiveYear")}
           </p>
         </div>
+        {canSeeHonorRoll && (
+          <Button
+            size="sm"
+            variant={showHonorRoll ? "default" : "outline"}
+            onClick={() => setShowHonorRoll((v) => !v)}
+            className="gap-1.5 shrink-0"
+          >
+            <Star className={showHonorRoll ? "w-3.5 h-3.5 fill-current" : "w-3.5 h-3.5"} />
+            {t("honorRoll.title")}
+          </Button>
+        )}
       </div>
+
+      {canSeeHonorRoll && showHonorRoll && <HonorRoll />}
 
       {error && (
         <div className="p-3 rounded-lg bg-destructive/10 text-destructive text-sm">{error}</div>

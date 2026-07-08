@@ -212,6 +212,13 @@ create policy "profiles: self read" on public.profiles
 create policy "profiles: admin/directeur read all" on public.profiles
   for select using (public.current_user_role() in ('admin', 'directeur'));
 
+-- Any active user (parent, teacher) can read teacher names — needed so that
+-- joins like teacher_class_assignments.profiles(full_name) or
+-- evaluations.profiles(full_name) resolve to a name instead of falling back
+-- to the raw teacher_id UUID in the UI.
+create policy "profiles: active users read teacher names" on public.profiles
+  for select using (public.current_user_status() = 'active' and role = 'professeur');
+
 -- Admin can update any profile (for approvals)
 create policy "profiles: admin update" on public.profiles
   for update using (public.current_user_role() = 'admin');

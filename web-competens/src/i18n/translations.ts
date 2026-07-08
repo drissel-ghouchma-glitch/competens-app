@@ -131,6 +131,16 @@ export const fr: Dict = {
   "dashboard.evaluate": "Évaluer",
   "dashboard.competencies": "Compétences",
 
+  // ── Honor Roll (Célébration de réussite) ────────────────
+  "honorRoll.title": "Célébration de réussite",
+  "honorRoll.searchPlaceholder": "Rechercher un élève…",
+  "honorRoll.allClasses": "Toutes les classes",
+  "honorRoll.empty": "Aucun élève ne correspond aux critères pour le moment.",
+  "honorRoll.topClasses": "Classes les plus performantes",
+  "honorRoll.noData": "Aucune donnée disponible.",
+  "honorRoll.activeTeachers": "Enseignants les plus actifs",
+  "honorRoll.evalCount": "{count} évaluation(s)",
+
   // ── Students ────────────────────────────────────────────
   "students.title": "Élèves",
   "students.enrolled": "{count} élèves inscrits",
@@ -662,6 +672,16 @@ export const ar: Dict = {
   "dashboard.access": "الدخول",
   "dashboard.evaluate": "قيّم",
   "dashboard.competencies": "الكفايات",
+
+  // ── Honor Roll (Célébration de réussite) ────────────────
+  "honorRoll.title": "احتفاء بالنجاح",
+  "honorRoll.searchPlaceholder": "البحث عن تلميذ…",
+  "honorRoll.allClasses": "جميع الأقسام",
+  "honorRoll.empty": "لا يوجد تلميذ يطابق المعايير حاليًا.",
+  "honorRoll.topClasses": "الأقسام الأكثر تفوقًا",
+  "honorRoll.noData": "لا توجد بيانات متاحة.",
+  "honorRoll.activeTeachers": "الأساتذة الأكثر نشاطًا",
+  "honorRoll.evalCount": "{count} تقييم",
 
   // ── Students ────────────────────────────────────────────
   "students.title": "التلاميذ",
