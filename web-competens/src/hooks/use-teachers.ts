@@ -19,13 +19,15 @@ export interface UseTeachersReturn {
   classes: Classe[];
   /** teacherId → classIds[] — from teacher_class_assignments in real mode */
   teacherAssignedClassIds: Record<string, string[]>;
+  /** teacherId -> classId for the class where the teacher is the principal teacher. */
+  primaryClassByTeacherId: Record<string, string>;
   loading: boolean;
   error: string | null;
   canAddManually: boolean;
   refetch: () => Promise<void>;
   updateTeacher: (
     id: string,
-    data: { firstName?: string; lastName?: string; phone?: string; assignedClassIds?: string[] }
+    data: { firstName?: string; lastName?: string; phone?: string; assignedClassIds?: string[]; primaryClassId?: string | null }
   ) => Promise<void>;
   archiveTeacher: (id: string) => Promise<void>;
 }
@@ -45,6 +47,7 @@ export function useTeachers(): UseTeachersReturn {
   const [sbTeachers, setSbTeachers] = useState<Teacher[]>([]);
   const [sbClasses, setSbClasses] = useState<Classe[]>([]);
   const [sbAssignments, setSbAssignments] = useState<Record<string, string[]>>({});
+  const [sbPrimaryClasses, setSbPrimaryClasses] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -62,7 +65,7 @@ export function useTeachers(): UseTeachersReturn {
           .order("full_name"),
         supabase
           .from("classes")
-          .select("id, name, level_id, capacity, student_count, is_archived, school_year_id, created_at")
+          .select("id, name, level_id, teacher_id, capacity, student_count, is_archived, school_year_id, created_at")
           .eq("is_archived", false)
           .order("name"),
         supabase
@@ -91,6 +94,7 @@ export function useTeachers(): UseTeachersReturn {
         id: c.id,
         name: c.name,
         levelId: c.level_id ?? "",
+        teacherId: c.teacher_id ?? undefined,
         capacity: c.capacity,
         studentCount: c.student_count,
         isArchived: c.is_archived,
@@ -105,9 +109,15 @@ export function useTeachers(): UseTeachersReturn {
         assignmentsMap[row.teacher_id].push(row.class_id);
       }
 
+      const primaryClassesMap: Record<string, string> = {};
+      for (const classe of classes) {
+        if (classe.teacherId) primaryClassesMap[classe.teacherId] = classe.id;
+      }
+
       setSbTeachers(teachers);
       setSbClasses(classes);
       setSbAssignments(assignmentsMap);
+      setSbPrimaryClasses(primaryClassesMap);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Erreur de chargement des professeurs");
     } finally {
@@ -124,7 +134,7 @@ export function useTeachers(): UseTeachersReturn {
   const updateTeacherReal = useCallback(
     async (
       id: string,
-      data: { firstName?: string; lastName?: string; phone?: string; assignedClassIds?: string[] }
+      data: { firstName?: string; lastName?: string; phone?: string; assignedClassIds?: string[]; primaryClassId?: string | null }
     ) => {
       if (!supabase) return;
 
@@ -158,6 +168,32 @@ export function useTeachers(): UseTeachersReturn {
         }
       }
 
+      // 3. A principal teacher is stored separately on classes.teacher_id.
+      if (data.primaryClassId !== undefined) {
+        const { error: clearErr } = await supabase
+          .from("classes")
+          .update({ teacher_id: null })
+          .eq("teacher_id", id);
+        if (clearErr) throw new Error(clearErr.message);
+
+        if (data.primaryClassId) {
+          const { error: principalErr } = await supabase
+            .from("classes")
+            .update({ teacher_id: id })
+            .eq("id", data.primaryClassId);
+          if (principalErr) throw new Error(principalErr.message);
+
+          // Principal teachers must also have normal access to their class.
+          const { error: accessErr } = await supabase
+            .from("teacher_class_assignments")
+            .upsert(
+              { teacher_id: id, class_id: data.primaryClassId },
+              { onConflict: "teacher_id,class_id" }
+            );
+          if (accessErr) throw new Error(accessErr.message);
+        }
+      }
+
       await fetchFromSupabase();
     },
     [sbTeachers, fetchFromSupabase]
@@ -176,6 +212,11 @@ export function useTeachers(): UseTeachersReturn {
         .delete()
         .eq("teacher_id", id);
       if (delErr) throw new Error(delErr.message);
+      const { error: clearPrincipalErr } = await supabase
+        .from("classes")
+        .update({ teacher_id: null })
+        .eq("teacher_id", id);
+      if (clearPrincipalErr) throw new Error(clearPrincipalErr.message);
       // Suspend the profile
       const { error: err } = await supabase
         .from("profiles")
@@ -192,7 +233,7 @@ export function useTeachers(): UseTeachersReturn {
   const updateTeacherDemo = useCallback(
     async (
       id: string,
-      data: { firstName?: string; lastName?: string; phone?: string; assignedClassIds?: string[] }
+      data: { firstName?: string; lastName?: string; phone?: string; assignedClassIds?: string[]; primaryClassId?: string | null }
     ) => {
       storeUpdateTeacher(id, { firstName: data.firstName, lastName: data.lastName, phone: data.phone });
       if (data.assignedClassIds !== undefined) {
@@ -200,6 +241,17 @@ export function useTeachers(): UseTeachersReturn {
         const current = storeTeacherClassAssignments.filter((a) => a.teacherId === id);
         current.forEach((a) => storeUnassignTeacherFromClass(id, a.classId));
         data.assignedClassIds.forEach((classId) => storeAssignTeacherToClass(id, classId));
+      }
+      if (data.primaryClassId !== undefined) {
+        storeClasses.forEach((classe) => {
+          if (classe.teacherId === id && classe.id !== data.primaryClassId) {
+            useAppStore.getState().updateClass(classe.id, { teacherId: undefined });
+          }
+        });
+        if (data.primaryClassId) {
+          useAppStore.getState().updateClass(data.primaryClassId, { teacherId: id });
+          storeAssignTeacherToClass(id, data.primaryClassId);
+        }
       }
     },
     [storeUpdateTeacher, storeTeacherClassAssignments, storeAssignTeacherToClass, storeUnassignTeacherFromClass]
@@ -216,11 +268,16 @@ export function useTeachers(): UseTeachersReturn {
     if (!demoAssignmentsMap[a.teacherId]) demoAssignmentsMap[a.teacherId] = [];
     demoAssignmentsMap[a.teacherId].push(a.classId);
   }
+  const demoPrimaryClassesMap: Record<string, string> = {};
+  for (const classe of storeClasses) {
+    if (classe.teacherId) demoPrimaryClassesMap[classe.teacherId] = classe.id;
+  }
 
   return {
     teachers: isDemo ? storeTeachers : sbTeachers,
     classes: isDemo ? storeClasses : sbClasses,
     teacherAssignedClassIds: isDemo ? demoAssignmentsMap : sbAssignments,
+    primaryClassByTeacherId: isDemo ? demoPrimaryClassesMap : sbPrimaryClasses,
     loading,
     error,
     canAddManually: isDemo,

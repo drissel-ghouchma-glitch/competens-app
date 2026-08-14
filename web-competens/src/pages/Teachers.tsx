@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   UserCog, Plus, Mail, Phone, Edit, Archive, Building2, Search, Info, Loader2,
 } from "lucide-react";
@@ -21,7 +22,7 @@ import {
 import type { Teacher } from "@/types";
 
 export default function TeachersPage() {
-  const { teachers, classes, teacherAssignedClassIds, loading, error, canAddManually, updateTeacher, archiveTeacher } = useTeachers();
+  const { teachers, classes, teacherAssignedClassIds, primaryClassByTeacherId, loading, error, canAddManually, updateTeacher, archiveTeacher } = useTeachers();
   const { user } = useAuth();
   const { t } = useI18n();
 
@@ -38,6 +39,7 @@ export default function TeachersPage() {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [selectedClassIds, setSelectedClassIds] = useState<string[]>([]);
+  const [primaryClassId, setPrimaryClassId] = useState("none");
   const [search, setSearch] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
@@ -71,7 +73,10 @@ export default function TeachersPage() {
     setSaving(true);
     try {
       if (editId) {
-        await updateTeacher(editId, { firstName, lastName, phone, assignedClassIds: selectedClassIds });
+        await updateTeacher(editId, {
+          firstName, lastName, phone, assignedClassIds: selectedClassIds,
+          ...(user?.role === "admin" ? { primaryClassId: primaryClassId === "none" ? null : primaryClassId } : {}),
+        });
       } else if (canAddManually) {
         storeAddTeacher({ firstName, lastName, email, phone });
       }
@@ -90,6 +95,7 @@ export default function TeachersPage() {
     setEmail(teacher.email);
     setPhone(teacher.phone ?? "");
     setSelectedClassIds(teacherAssignedClassIds[teacher.id] ?? []);
+    setPrimaryClassId(primaryClassByTeacherId[teacher.id] ?? "none");
     setSaveError("");
     setOpen(true);
   };
@@ -102,6 +108,7 @@ export default function TeachersPage() {
     setEmail("");
     setPhone("");
     setSelectedClassIds([]);
+    setPrimaryClassId("none");
     setSaveError("");
   };
 
@@ -164,6 +171,9 @@ export default function TeachersPage() {
                     onToggle={toggleClass}
                   />
                 )}
+                {editId && user?.role === "admin" && (
+                  <PrincipalClassSelector classes={classes} value={primaryClassId} onChange={setPrimaryClassId} />
+                )}
                 <Button
                   onClick={handleSubmit}
                   className="w-full"
@@ -208,6 +218,7 @@ export default function TeachersPage() {
           {filteredTeachers.map((teacher) => {
             const assignedClassIds = teacherAssignedClassIds[teacher.id] ?? [];
             const assignedClasses = classes.filter((c) => assignedClassIds.includes(c.id));
+            const primaryClass = classes.find((c) => c.id === primaryClassByTeacherId[teacher.id]);
             return (
               <Card key={teacher.id} className="border-border/50 group">
                 <CardContent className="p-4">
@@ -264,6 +275,11 @@ export default function TeachersPage() {
                   ) : (
                     <p className="text-xs text-muted-foreground italic">{t("teachers.noClassAssigned")}</p>
                   )}
+                  {primaryClass && (
+                    <Badge className="mt-2 bg-amber-500/10 text-amber-700 border-amber-500/20 hover:bg-amber-500/10">
+                      {t("teachers.principalBadge", { name: primaryClass.name })}
+                    </Badge>
+                  )}
                 </CardContent>
               </Card>
             );
@@ -318,6 +334,10 @@ export default function TeachersPage() {
                 onToggle={toggleClass}
               />
 
+              {user?.role === "admin" && (
+                <PrincipalClassSelector classes={classes} value={primaryClassId} onChange={setPrimaryClassId} />
+              )}
+
               <Button onClick={handleSubmit} className="w-full" disabled={saving || !firstName}>
                 {saving ? <Loader2 className="w-4 h-4 animate-spin me-2" /> : null}
                 {t("common.saveChanges")}
@@ -331,6 +351,31 @@ export default function TeachersPage() {
 }
 
 // ── Class multi-selector component ────────────────────────────────────────────
+
+interface PrincipalClassSelectorProps {
+  classes: Array<{ id: string; name: string }>;
+  value: string;
+  onChange: (id: string) => void;
+}
+
+function PrincipalClassSelector({ classes, value, onChange }: PrincipalClassSelectorProps) {
+  const { t } = useI18n();
+  return (
+    <div className="space-y-2 rounded-lg border border-amber-500/20 bg-amber-500/5 p-3">
+      <Label>{t("teachers.principalClass")}</Label>
+      <Select value={value} onValueChange={onChange}>
+        <SelectTrigger><SelectValue placeholder={t("teachers.selectPrincipalClass")} /></SelectTrigger>
+        <SelectContent>
+          <SelectItem value="none">{t("teachers.noPrincipalClass")}</SelectItem>
+          {classes.map((classe) => (
+            <SelectItem key={classe.id} value={classe.id}>{classe.name}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <p className="text-xs text-muted-foreground">{t("teachers.principalClassHint")}</p>
+    </div>
+  );
+}
 
 interface ClassSelectorProps {
   classes: Array<{ id: string; name: string }>;

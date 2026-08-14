@@ -252,6 +252,11 @@ export const fr: Dict = {
   "teachers.noClassCreateFirst": "Aucune classe disponible — créez des classes d'abord.",
   "teachers.archiveConfirm": "Archiver le professeur « {name} » ? Son compte sera désactivé mais son historique d'évaluations sera conservé.",
   "teachers.archived": "{name} archivé(e).",
+  "teachers.principalClass": "Professeur principal d’une classe",
+  "teachers.selectPrincipalClass": "Choisir une classe",
+  "teachers.noPrincipalClass": "Aucune classe principale",
+  "teachers.principalClassHint": "Cette classe sera ajoutée automatiquement aux classes accessibles au professeur.",
+  "teachers.principalBadge": "Professeur principal · {name}",
 
   // ── Competencies ────────────────────────────────────────
   "competencies.title": "Compétences",
@@ -799,6 +804,11 @@ export const ar: Dict = {
   "teachers.noClassCreateFirst": "لا يوجد قسم متاح — أنشئ الأقسام أولاً.",
   "teachers.archiveConfirm": "أرشفة الأستاذ «{name}»؟ سيتم تعطيل حسابه مع الاحتفاظ بسجل تقييماته.",
   "teachers.archived": "تمت أرشفة {name}.",
+  "teachers.principalClass": "الأستاذ الرئيسي لقسم",
+  "teachers.selectPrincipalClass": "اختر قسمًا",
+  "teachers.noPrincipalClass": "ليس أستاذًا رئيسيًا لأي قسم",
+  "teachers.principalClassHint": "سيُضاف هذا القسم تلقائيًا إلى الأقسام التي يمكن للأستاذ الوصول إليها.",
+  "teachers.principalBadge": "الأستاذ الرئيسي · {name}",
 
   // ── Competency archive label ────────────────────────────
   "competency.archivedLabel": "(مؤرشفة)",
