@@ -43,6 +43,14 @@ const mobileNavItems = [
   { to: "/alerts", icon: Bell, labelKey: "nav.alerts" },
 ];
 
+const teacherMobileNavItems = [
+  { to: "/dashboard", icon: LayoutDashboard, labelKey: "nav.home" },
+  { to: "/classes", icon: Building2, labelKey: "nav.classes" },
+  { to: "/evaluation", icon: ClipboardCheck, labelKey: "nav.evaluate" },
+  { to: "/principal-classes", icon: Trophy, labelKey: "nav.principalClasses" },
+  { to: "/alerts", icon: Bell, labelKey: "nav.alerts" },
+];
+
 const parentMobileNavItems = [
   { to: "/parent", icon: Home, labelKey: "nav.children" },
 ];
@@ -278,7 +286,7 @@ export default function AppLayout() {
       {/* Mobile Bottom Nav */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-card/90 backdrop-blur-xl border-t border-border">
         <div className="flex items-center justify-around h-16 px-2">
-          {(role === "parent" ? parentMobileNavItems : mobileNavItems).map((item) => (
+          {(role === "parent" ? parentMobileNavItems : role === "professeur" ? teacherMobileNavItems : mobileNavItems).map((item) => (
             <NavLink
               key={item.to}
               to={item.to}

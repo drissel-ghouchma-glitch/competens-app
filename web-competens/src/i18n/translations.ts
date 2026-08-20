@@ -278,6 +278,7 @@ export const fr: Dict = {
   "teachers.noPrincipalClass": "Aucune classe principale",
   "teachers.principalClassHint": "Cette classe sera ajoutée automatiquement aux classes accessibles au professeur.",
   "teachers.principalBadge": "Professeur principal · {name}",
+  "teachers.assignPrincipalClass": "Définir la classe principale",
 
   // ── Competencies ────────────────────────────────────────
   "competencies.title": "Compétences",
@@ -851,6 +852,7 @@ export const ar: Dict = {
   "teachers.noPrincipalClass": "ليس أستاذًا رئيسيًا لأي قسم",
   "teachers.principalClassHint": "سيُضاف هذا القسم تلقائيًا إلى الأقسام التي يمكن للأستاذ الوصول إليها.",
   "teachers.principalBadge": "الأستاذ الرئيسي · {name}",
+  "teachers.assignPrincipalClass": "تحديد القسم الرئيسي",
 
   // ── Competency archive label ────────────────────────────
   "competency.archivedLabel": "(مؤرشفة)",

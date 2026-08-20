@@ -13,7 +13,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-  UserCog, Plus, Mail, Phone, Edit, Archive, Building2, Search, Info, Loader2,
+  UserCog, Plus, Mail, Phone, Edit, Archive, Building2, Search, Info, Loader2, Trophy,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -31,6 +31,7 @@ export default function TeachersPage() {
   const isDemo = useDemoStore((s) => s.isDemoMode);
 
   const canManage = user?.role === "admin" || user?.role === "directeur";
+  const canAssignPrincipal = user?.role === "admin";
 
   const [open, setOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
@@ -239,7 +240,7 @@ export default function TeachersPage() {
                         )}
                       </div>
                     </div>
-                    <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100">
+                    <div className={cn("flex items-center gap-0.5", canAssignPrincipal ? "opacity-100" : "opacity-0 group-hover:opacity-100")}>
                       <Button
                         variant="ghost"
                         size="icon"
@@ -279,6 +280,17 @@ export default function TeachersPage() {
                     <Badge className="mt-2 bg-amber-500/10 text-amber-700 border-amber-500/20 hover:bg-amber-500/10">
                       {t("teachers.principalBadge", { name: primaryClass.name })}
                     </Badge>
+                  )}
+                  {canAssignPrincipal && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full mt-3 gap-2"
+                      onClick={() => handleEdit(teacher)}
+                    >
+                      <Trophy className="w-4 h-4 text-amber-500" />
+                      {t("teachers.assignPrincipalClass")}
+                    </Button>
                   )}
                 </CardContent>
               </Card>
