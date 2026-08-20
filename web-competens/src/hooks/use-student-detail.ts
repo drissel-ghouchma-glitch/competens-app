@@ -3,9 +3,10 @@ import { useDemoStore } from "@/stores/demo";
 import { useAppStore } from "@/stores/app-store";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/lib/supabase";
-import { scoreToStatus, buildTimeline, type TimelinePoint } from "@/lib/eval-utils";
-import type { Student, Classe, Level, Competency, Alert, EvaluationStatus, AttendanceRecord, AttendanceStatus, AttendancePeriod } from "@/types";
+import { scoreToStatus, buildTimeline, competencyScoreFromLedger, type PenaltyLedgerEvent, type TimelinePoint } from "@/lib/eval-utils";
+import type { Student, Classe, Level, Competency, Alert, EvaluationStatus, AttendanceRecord, AttendanceStatus, AttendancePeriod, SkillRecoveryAction } from "@/types";
 import type { DailyEvalRecord, ClassTeacher } from "@/components/DailyGranularAnalytics";
+import type { RecoverySubmission } from "@/components/SkillRecoveryDialog";
 
 export type { TimelinePoint, DailyEvalRecord, ClassTeacher };
 
@@ -20,19 +21,21 @@ export interface CompetencyStat {
 }
 
 // Each record = one penalty event (no status field).
-interface RawEval {
+interface RawEval extends PenaltyLedgerEvent {
+  id: string;
   studentId: string;
   competencyId: string;
   teacherId: string;
   teacherName: string;
   date: string;
+  createdAt: string;
 }
 
-function computeStats(penalties: RawEval[], competencies: Competency[], studentId: string): CompetencyStat[] {
+function computeStats(penalties: RawEval[], recoveries: SkillRecoveryAction[], competencies: Competency[], studentId: string): CompetencyStat[] {
   const studentPenalties = penalties.filter((p) => p.studentId === studentId);
   return competencies.map((comp) => {
     const cp = studentPenalties.filter((p) => p.competencyId === comp.id);
-    const rate = Math.max(0, 100 - cp.length);
+    const rate = competencyScoreFromLedger(penalties, recoveries, studentId, comp.id);
     return {
       competencyId: comp.id,
       competencyCode: comp.code,
@@ -57,10 +60,12 @@ export interface UseStudentDetailReturn {
   attendanceHistory: AttendanceRecord[];
   classes: Classe[];
   rawEvals: DailyEvalRecord[];
+  recoveryActions: SkillRecoveryAction[];
   classTeachers: ClassTeacher[];
   loading: boolean;
   error: string | null;
   updateStudent: (data: Partial<Pick<Student, "firstName" | "lastName" | "birthDate" | "gender" | "classId">>) => Promise<void>;
+  createRecoveryAction: (submission: RecoverySubmission) => Promise<void>;
   refetch: () => Promise<void>;
 }
 
@@ -74,10 +79,12 @@ export function useStudentDetail(studentId: string | undefined): UseStudentDetai
   const storeLevels = useAppStore((s) => s.levels);
   const storeCompetencies = useAppStore((s) => s.competencies);
   const storeEvaluations = useAppStore((s) => s.evaluations);
+  const storeRecoveries = useAppStore((s) => s.skillRecoveryActions);
   const storeTeachers = useAppStore((s) => s.teachers);
   const storeAlerts = useAppStore((s) => s.alerts);
   const storeAttendance = useAppStore((s) => s.attendance);
   const storeUpdateStudent = useAppStore((s) => s.updateStudent);
+  const addDemoRecovery = useAppStore((s) => s.addDemoSkillRecoveryAction);
 
   const demoStudent = useMemo(
     () => storeStudents.find((s) => s.id === studentId) ?? null,
@@ -101,14 +108,20 @@ export function useStudentDetail(studentId: string | undefined): UseStudentDetai
       .map((e) => {
         const t = storeTeachers.find((x) => x.id === e.teacherId);
         return {
+          id: e.id,
           studentId: e.studentId,
           competencyId: e.competencyId,
           teacherId: e.teacherId,
           teacherName: t ? `${t.firstName} ${t.lastName}` : "",
           date: e.date,
+          createdAt: e.createdAt,
         };
       }),
     [storeEvaluations, storeTeachers, studentId]
+  );
+  const demoRecoveries = useMemo(
+    () => storeRecoveries.filter((action) => action.studentId === studentId),
+    [storeRecoveries, studentId]
   );
   const demoMyEvals = useMemo(
     () => user?.role === "professeur"
@@ -117,14 +130,12 @@ export function useStudentDetail(studentId: string | undefined): UseStudentDetai
     [demoRawEvals, user?.role, user?.id]
   );
   const demoMyStats = useMemo(
-    () => studentId ? computeStats(demoMyEvals, storeCompetencies, studentId) : [],
-    [demoMyEvals, storeCompetencies, studentId]
+    () => studentId ? computeStats(demoMyEvals, user?.role === "professeur" ? [] : demoRecoveries, storeCompetencies, studentId) : [],
+    [demoMyEvals, demoRecoveries, storeCompetencies, studentId, user?.role]
   );
   const demoGlobalStats = useMemo(
-    () => (studentId && user?.role !== "professeur")
-      ? computeStats(demoRawEvals, storeCompetencies, studentId)
-      : [],
-    [demoRawEvals, storeCompetencies, studentId, user?.role]
+    () => studentId ? computeStats(demoRawEvals, demoRecoveries, storeCompetencies, studentId) : [],
+    [demoRawEvals, demoRecoveries, storeCompetencies, studentId]
   );
   const demoTimeline = useMemo(
     () => studentId ? buildTimeline(demoRawEvals) : [],
@@ -150,20 +161,19 @@ export function useStudentDetail(studentId: string | undefined): UseStudentDetai
   const [sbClasses, setSbClasses] = useState<Classe[]>([]);
   const [sbMyEvals, setSbMyEvals] = useState<RawEval[]>([]);
   const [sbAllEvals, setSbAllEvals] = useState<RawEval[]>([]);
+  const [sbRecoveries, setSbRecoveries] = useState<SkillRecoveryAction[]>([]);
   const [sbAttendanceHistory, setSbAttendanceHistory] = useState<AttendanceRecord[]>([]);
   const [sbClassTeachers, setSbClassTeachers] = useState<ClassTeacher[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const sbMyStats = useMemo(
-    () => studentId ? computeStats(sbMyEvals, sbCompetencies, studentId) : [],
-    [sbMyEvals, sbCompetencies, studentId]
+    () => studentId ? computeStats(sbMyEvals, user?.role === "professeur" ? [] : sbRecoveries, sbCompetencies, studentId) : [],
+    [sbMyEvals, sbRecoveries, sbCompetencies, studentId, user?.role]
   );
   const sbGlobalStats = useMemo(
-    () => (studentId && user?.role !== "professeur")
-      ? computeStats(sbAllEvals, sbCompetencies, studentId)
-      : [],
-    [sbAllEvals, sbCompetencies, studentId, user?.role]
+    () => studentId ? computeStats(sbAllEvals, sbRecoveries, sbCompetencies, studentId) : [],
+    [sbAllEvals, sbRecoveries, sbCompetencies, studentId]
   );
   const sbTimeline = useMemo(
     () => buildTimeline(sbAllEvals.filter((e) => e.studentId === studentId)),
@@ -172,14 +182,27 @@ export function useStudentDetail(studentId: string | undefined): UseStudentDetai
 
   const mapEval = (e: {
     student_id: string; competency_id: string; teacher_id: string;
-    date: string;
+    date: string; created_at: string; id: string;
     profiles: { full_name?: string } | null;
   }): RawEval => ({
+    id: e.id,
     studentId: e.student_id,
     competencyId: e.competency_id,
     teacherId: e.teacher_id,
     teacherName: e.profiles?.full_name ?? "",
     date: e.date,
+    createdAt: e.created_at,
+  });
+
+  const mapRecovery = (row: {
+    id: string; student_id: string; competency_id: string; class_id: string; action_type: "increase" | "reset_to_100";
+    previous_score: number; new_score: number; meeting_date: string; student_reason: string; meeting_notes: string;
+    created_by: string; created_at: string; profiles: { full_name?: string } | null;
+  }): SkillRecoveryAction => ({
+    id: row.id, studentId: row.student_id, competencyId: row.competency_id, classId: row.class_id,
+    actionType: row.action_type, previousScore: row.previous_score, newScore: row.new_score,
+    meetingDate: row.meeting_date, studentReason: row.student_reason, meetingNotes: row.meeting_notes,
+    createdBy: row.created_by, createdByName: row.profiles?.full_name, createdAt: row.created_at,
   });
 
   const fetchFromSupabase = useCallback(async () => {
@@ -213,7 +236,7 @@ export function useStudentDetail(studentId: string | undefined): UseStudentDetai
       if (compRes.error) throw compRes.error;
 
       const classes: Classe[] = (classesRes.data ?? []).map((c) => ({
-        id: c.id, name: c.name, levelId: c.level_id ?? "",
+        id: c.id, name: c.name, levelId: c.level_id ?? "", teacherId: c.teacher_id ?? undefined,
         capacity: c.capacity, studentCount: c.student_count,
         isArchived: c.is_archived, schoolYearId: c.school_year_id, createdAt: c.created_at,
       }));
@@ -257,7 +280,7 @@ export function useStudentDetail(studentId: string | undefined): UseStudentDetai
       // Fetch penalty records (no status column)
       const evalsBase = supabase
         .from("evaluations")
-        .select("student_id, competency_id, teacher_id, date, profiles(full_name)")
+        .select("id, student_id, competency_id, teacher_id, date, created_at, profiles(full_name)")
         .eq("student_id", studentId);
 
       if (user?.role === "professeur" && user?.id) {
@@ -265,7 +288,7 @@ export function useStudentDetail(studentId: string | undefined): UseStudentDetai
           evalsBase.eq("teacher_id", user.id),
           supabase
             .from("evaluations")
-            .select("student_id, competency_id, teacher_id, date, profiles(full_name)")
+            .select("id, student_id, competency_id, teacher_id, date, created_at, profiles(full_name)")
             .eq("student_id", studentId),
         ]);
         setSbMyEvals((myRes.data ?? []).map(mapEval));
@@ -276,6 +299,14 @@ export function useStudentDetail(studentId: string | undefined): UseStudentDetai
         setSbAllEvals(allEvals);
         setSbMyEvals(allEvals);
       }
+
+      const { data: recoveryData, error: recoveryError } = await supabase
+        .from("skill_recovery_actions")
+        .select("id, student_id, competency_id, class_id, action_type, previous_score, new_score, meeting_date, student_reason, meeting_notes, created_by, created_at, profiles(full_name)")
+        .eq("student_id", studentId)
+        .order("meeting_date");
+      if (recoveryError) throw recoveryError;
+      setSbRecoveries((recoveryData ?? []).map((row) => mapRecovery(row as Parameters<typeof mapRecovery>[0])));
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Erreur de chargement");
     } finally {
@@ -310,6 +341,36 @@ export function useStudentDetail(studentId: string | undefined): UseStudentDetai
     [studentId, storeUpdateStudent]
   );
 
+  const createRecoveryAction = useCallback(async (submission: RecoverySubmission) => {
+    const currentStudent = isDemo ? demoStudent : sbStudent;
+    const currentClass = isDemo ? demoClasse : sbClasse;
+    if (!currentStudent || !currentClass) throw new Error("Student class is unavailable.");
+    const isAllowed = user?.role === "admin" || user?.role === "directeur" || (user?.role === "professeur" && currentClass.teacherId === user.id);
+    if (!isAllowed) throw new Error("You are not authorised to recover this skill.");
+    const allPenalties = isDemo ? demoRawEvals : sbAllEvals;
+    const allRecoveries = isDemo ? demoRecoveries : sbRecoveries;
+    const currentScore = competencyScoreFromLedger(allPenalties, allRecoveries, currentStudent.id, submission.competencyId);
+    if (submission.newScore <= currentScore) throw new Error("The new score must be strictly greater than the current score.");
+    if (submission.actionType === "reset_to_100" && submission.newScore !== 100) throw new Error("A reset must set the score to 100.");
+    if (isDemo) {
+      addDemoRecovery({
+        studentId: currentStudent.id, competencyId: submission.competencyId, classId: currentClass.id,
+        actionType: submission.actionType, previousScore: currentScore, newScore: submission.newScore,
+        meetingDate: submission.meetingDate, studentReason: submission.studentReason, meetingNotes: submission.meetingNotes,
+        createdBy: user?.id ?? currentClass.teacherId ?? "demo-admin", createdByName: user?.fullName,
+      });
+      return;
+    }
+    if (!supabase) throw new Error("Supabase is unavailable.");
+    const { error: rpcError } = await supabase.rpc("create_skill_recovery_action", {
+      p_student_id: currentStudent.id, p_competency_id: submission.competencyId, p_action_type: submission.actionType,
+      p_new_score: submission.newScore, p_meeting_date: submission.meetingDate,
+      p_student_reason: submission.studentReason, p_meeting_notes: submission.meetingNotes,
+    });
+    if (rpcError) throw new Error(rpcError.message);
+    await fetchFromSupabase();
+  }, [isDemo, demoStudent, sbStudent, demoClasse, sbClasse, user, demoRawEvals, sbAllEvals, demoRecoveries, sbRecoveries, addDemoRecovery, fetchFromSupabase]);
+
   return {
     student: isDemo ? demoStudent : sbStudent,
     classe: isDemo ? demoClasse : sbClasse,
@@ -322,10 +383,12 @@ export function useStudentDetail(studentId: string | undefined): UseStudentDetai
     attendanceHistory: isDemo ? demoAttendanceHistory : sbAttendanceHistory,
     classes: isDemo ? storeClasses : sbClasses,
     rawEvals: isDemo ? demoRawEvals : sbAllEvals,
+    recoveryActions: isDemo ? demoRecoveries : sbRecoveries,
     classTeachers: isDemo ? demoClassTeachers : sbClassTeachers,
     loading,
     error,
     updateStudent: isDemo ? updateStudentDemo : updateStudentReal,
+    createRecoveryAction,
     refetch: fetchFromSupabase,
   };
 }

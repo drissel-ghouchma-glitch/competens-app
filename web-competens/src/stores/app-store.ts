@@ -5,6 +5,7 @@ import type {
   Competency, Evaluation, EvaluationStatus,
   Alert, Notification, TeacherClassAssignment, DailyEvaluationInput,
   AttendanceRecord, DailyAttendanceInput, AttendanceStatus, AttendancePeriod,
+  SkillRecoveryAction,
 } from "@/types";
 import { generateDemoData } from "./seed-data";
 
@@ -30,6 +31,7 @@ interface AppStore {
   teachers: Teacher[];
   competencies: Competency[];
   evaluations: Evaluation[];
+  skillRecoveryActions: SkillRecoveryAction[];
   alerts: Alert[];
   notifications: Notification[];
   teacherClassAssignments: TeacherClassAssignment[];
@@ -69,6 +71,7 @@ interface AppStore {
   deleteCompetency: (id: string) => void;
 
   saveDailyEvaluation: (classId: string, competencyId: string, evaluations: DailyEvaluationInput[]) => void;
+  addDemoSkillRecoveryAction: (action: Omit<SkillRecoveryAction, "id" | "createdAt">) => void;
   saveDemoAttendance: (classId: string, date: string, period: AttendancePeriod, inputs: DailyAttendanceInput[], teacherId: string) => void;
   confirmDemoAttendance: (classId: string, date: string, period: AttendancePeriod) => void;
   markAlertResolved: (id: string) => void;
@@ -91,6 +94,7 @@ export const useAppStore = create<AppStore>()(
       teachers: [],
       competencies: [],
       evaluations: [],
+      skillRecoveryActions: [],
       alerts: [],
       notifications: [],
       teacherClassAssignments: [],
@@ -243,6 +247,14 @@ export const useAppStore = create<AppStore>()(
           return { evaluations: [...s.evaluations, ...newEvals] };
         });
       },
+      addDemoSkillRecoveryAction(action) {
+        set((s) => ({
+          skillRecoveryActions: [
+            ...s.skillRecoveryActions,
+            { ...action, id: generateUUID(), createdAt: new Date().toISOString() },
+          ],
+        }));
+      },
       saveDemoAttendance(classId, date, period, inputs, teacherId) {
         set((s) => {
           const next = s.attendance.filter(
@@ -279,11 +291,20 @@ export const useAppStore = create<AppStore>()(
       },
 
       getStudentStats(studentId) {
-        const { evaluations, competencies } = get();
+        const { evaluations, competencies, skillRecoveryActions } = get();
         const studentPenalties = evaluations.filter((e) => e.studentId === studentId);
         return competencies.map((comp) => {
           const cp = studentPenalties.filter((e) => e.competencyId === comp.id);
-          const rate = Math.max(0, 100 - cp.length);
+          const recoveries = skillRecoveryActions.filter(
+            (action) => action.studentId === studentId && action.competencyId === comp.id
+          );
+          const ledger = [
+            ...cp.map((event) => ({ date: event.date, createdAt: event.createdAt, type: "penalty" as const })),
+            ...recoveries.map((action) => ({ date: action.meetingDate, createdAt: action.createdAt, type: action.actionType, newScore: action.newScore })),
+          ].sort((left, right) => left.date.localeCompare(right.date) || left.createdAt.localeCompare(right.createdAt));
+          const rate = ledger.reduce((score, event) => event.type === "penalty"
+            ? Math.max(0, score - 1)
+            : event.newScore ?? score, 100);
           const lastStatus: EvaluationStatus = rate >= 90 ? "acquis" : rate > 50 ? "en_cours" : "non_acquis";
           return { competencyId: comp.id, competencyCode: comp.code, competencyTitle: comp.title, acquisitionRate: rate, totalEvaluations: cp.length, lastStatus };
         });

@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/lib/supabase";
-import { scoreToStatus, buildTimeline, type TimelinePoint } from "@/lib/eval-utils";
-import type { Student, Competency, Alert, EvaluationStatus, AttendanceStatus } from "@/types";
+import { scoreToStatus, buildTimeline, competencyScoreFromLedger, type PenaltyLedgerEvent, type TimelinePoint } from "@/lib/eval-utils";
+import type { Student, Competency, Alert, EvaluationStatus, AttendanceStatus, SkillRecoveryAction } from "@/types";
 import type { DailyEvalRecord, ClassTeacher } from "@/components/DailyGranularAnalytics";
 
 export type { TimelinePoint, DailyEvalRecord, ClassTeacher };
@@ -18,19 +18,20 @@ export interface ParentChildStat {
 }
 
 // Each record = one penalty event (no status field).
-interface RawEval {
+interface RawEval extends PenaltyLedgerEvent {
   studentId: string;
   competencyId: string;
   teacherId: string;
   teacherName: string;
   date: string;
+  createdAt: string;
 }
 
-function computeStats(penalties: RawEval[], competencies: Competency[], studentId: string): ParentChildStat[] {
+function computeStats(penalties: RawEval[], recoveries: SkillRecoveryAction[], competencies: Competency[], studentId: string): ParentChildStat[] {
   const studentPenalties = penalties.filter((p) => p.studentId === studentId);
   return competencies.map((comp) => {
     const cp = studentPenalties.filter((p) => p.competencyId === comp.id);
-    const rate = Math.max(0, 100 - cp.length);
+    const rate = competencyScoreFromLedger(penalties, recoveries, studentId, comp.id);
     return {
       competencyId: comp.id,
       competencyCode: comp.code,
@@ -53,6 +54,7 @@ export interface ParentChild extends Student {
   todayAfternoon: AttendanceStatus | null;
   absenceHistory: string[];
   rawEvals: DailyEvalRecord[];
+  recoveryActions: SkillRecoveryAction[];
   classTeachers: ClassTeacher[];
 }
 
@@ -93,13 +95,17 @@ export function useParent(): UseParentReturn {
 
       const todayDate = new Date().toISOString().split("T")[0];
 
-      const [studentsRes, compRes, evalsRes, alertsRes, attRes] = await Promise.all([
+      const [studentsRes, compRes, evalsRes, recoveryRes, alertsRes, attRes] = await Promise.all([
         supabase.from("students").select("*").in("id", studentIds),
         supabase.from("competencies").select("*").order("order"),
         // Penalty rows only — no status column
         supabase
           .from("evaluations")
-          .select("student_id, competency_id, teacher_id, date, profiles(full_name)")
+          .select("student_id, competency_id, teacher_id, date, created_at, profiles(full_name)")
+          .in("student_id", studentIds),
+        supabase
+          .from("skill_recovery_actions")
+          .select("id, student_id, competency_id, class_id, action_type, previous_score, new_score, meeting_date, student_reason, meeting_notes, created_by, created_at, profiles(full_name)")
           .in("student_id", studentIds),
         supabase
           .from("alerts")
@@ -117,6 +123,8 @@ export function useParent(): UseParentReturn {
 
       if (studentsRes.error) throw studentsRes.error;
       if (compRes.error) throw compRes.error;
+      if (evalsRes.error) throw evalsRes.error;
+      if (recoveryRes.error) throw recoveryRes.error;
 
       const students: Student[] = (studentsRes.data ?? []).map((s) => ({
         id: s.id, firstName: s.first_name, lastName: s.last_name,
@@ -137,6 +145,15 @@ export function useParent(): UseParentReturn {
         teacherId: (e as { teacher_id?: string }).teacher_id ?? "",
         teacherName: (e.profiles as { full_name?: string } | null)?.full_name ?? "",
         date: (e as { date: string }).date,
+        createdAt: (e as { created_at: string }).created_at,
+      }));
+
+      const recoveries: SkillRecoveryAction[] = (recoveryRes.data ?? []).map((row) => ({
+        id: row.id, studentId: row.student_id, competencyId: row.competency_id, classId: row.class_id,
+        actionType: row.action_type as "increase" | "reset_to_100", previousScore: row.previous_score, newScore: row.new_score,
+        meetingDate: row.meeting_date, studentReason: row.student_reason, meetingNotes: row.meeting_notes,
+        createdBy: row.created_by, createdByName: (row.profiles as { full_name?: string } | null)?.full_name,
+        createdAt: row.created_at,
       }));
 
       const classIds = [...new Set(students.map((s) => s.classId).filter(Boolean))];
@@ -194,13 +211,14 @@ export function useParent(): UseParentReturn {
 
       const enriched: ParentChild[] = students.map((s) => ({
         ...s,
-        stats: computeStats(evals, comps, s.id),
+        stats: computeStats(evals, recoveries, comps, s.id),
         alerts: alertsMap.get(s.id) ?? [],
         timeline: buildTimeline(evals.filter((e) => e.studentId === s.id)),
         todayMorning: morningMap.get(s.id) ?? null,
         todayAfternoon: afternoonMap.get(s.id) ?? null,
         absenceHistory: absenceMap.get(s.id) ?? [],
         rawEvals: evals.filter((e) => e.studentId === s.id),
+        recoveryActions: recoveries.filter((action) => action.studentId === s.id),
         classTeachers: tcasByClass.get(s.classId) ?? [],
       }));
 

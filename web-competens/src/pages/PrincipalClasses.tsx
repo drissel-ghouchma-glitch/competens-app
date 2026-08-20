@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import { useMemo, useState } from "react";
 import { GraduationCap, Loader2, RefreshCw, ShieldAlert, Trophy, Users } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useDemoStore } from "@/stores/demo";
@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { SkillRecoveryDialog } from "@/components/SkillRecoveryDialog";
+import { SkillHistoryChart } from "@/components/SkillHistoryChart";
 
 const beltConfig: Array<{ belt: Belt; dotClass: string; cardClass: string; scoreClass: string }> = [
   { belt: "white", dotClass: "bg-white border border-slate-300", cardClass: "border-slate-300 bg-slate-50/70 dark:bg-slate-950/20", scoreClass: "text-slate-700 dark:text-slate-200" },
@@ -22,8 +24,14 @@ export default function PrincipalClassesPage() {
   const { t } = useI18n();
   const {
     principalClasses, selectedClass, selectedClassId, setSelectedClassId,
-    beltGroups, loading, error, refetch,
+    competencies, penalties, recoveries, studentScores, beltGroups, loading, error, createRecoveryAction, refetch,
   } = usePrincipalClasses();
+  const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
+  const [recoveryOpen, setRecoveryOpen] = useState(false);
+  const selectedStudent = useMemo(
+    () => studentScores.find((student) => student.id === selectedStudentId) ?? null,
+    [studentScores, selectedStudentId]
+  );
 
   if (!isDemo && user?.role !== "professeur") {
     return (
@@ -109,21 +117,46 @@ export default function PrincipalClassesPage() {
                     {students.length === 0 ? (
                       <p className="text-sm text-muted-foreground italic py-5 text-center">{t("principalClasses.noStudents")}</p>
                     ) : students.map((student) => (
-                      <Link
+                      <button
                         key={student.id}
-                        to={`/students/${student.id}`}
-                        className="flex items-center justify-between gap-2 rounded-lg bg-background/70 p-2.5 hover:bg-background transition-colors"
+                        type="button"
+                        onClick={() => { setSelectedStudentId(student.id); setRecoveryOpen(true); }}
+                        className="flex w-full items-center justify-between gap-2 rounded-lg bg-background/70 p-2.5 text-start hover:bg-background transition-colors"
                       >
                         <span className="text-sm font-medium truncate">{student.firstName} {student.lastName}</span>
                         <span className={cn("text-sm font-bold shrink-0", scoreClass)}>{student.score}%</span>
-                      </Link>
+                      </button>
                     ))}
                   </CardContent>
                 </Card>
               );
             })}
           </div>
+
+          {selectedStudent && (
+            <div className="space-y-3">
+              <div className="flex flex-col gap-2 rounded-xl border bg-muted/30 p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="font-semibold">{selectedStudent.firstName} {selectedStudent.lastName}</p>
+                  <p className="text-sm text-muted-foreground">{t("principalClasses.selectedStudentHint")}</p>
+                </div>
+                <Button onClick={() => setRecoveryOpen(true)}>{t("skillRecovery.open")}</Button>
+              </div>
+              <SkillHistoryChart studentId={selectedStudent.id} competencies={competencies} penalties={penalties} recoveries={recoveries} />
+            </div>
+          )}
         </>
+      )}
+
+      {selectedStudent && (
+        <SkillRecoveryDialog
+          open={recoveryOpen}
+          onOpenChange={setRecoveryOpen}
+          studentName={`${selectedStudent.firstName} ${selectedStudent.lastName}`}
+          competencies={competencies}
+          skills={selectedStudent.skills}
+          onSubmit={(submission) => createRecoveryAction(selectedStudent, submission)}
+        />
       )}
     </div>
   );

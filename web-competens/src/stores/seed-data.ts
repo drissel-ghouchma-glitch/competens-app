@@ -155,5 +155,5 @@ export function generateDemoData() {
     });
   }
 
-  return { schoolYears: [schoolYear], levels, classes, students, teachers: teachers.map((t) => ({ ...t })), competencies, evaluations, alerts, notifications };
+  return { schoolYears: [schoolYear], levels, classes, students, teachers: teachers.map((t) => ({ ...t })), competencies, evaluations, skillRecoveryActions: [], alerts, notifications };
 }

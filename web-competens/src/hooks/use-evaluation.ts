@@ -3,8 +3,8 @@ import { useDemoStore } from "@/stores/demo";
 import { useAppStore } from "@/stores/app-store";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/lib/supabase";
-import { scoreToStatus } from "@/lib/eval-utils";
-import type { Classe, Student, Competency, Level, DailyEvaluationInput, StudentEvalInfo } from "@/types";
+import { competencyScoreFromLedger, scoreToStatus, type PenaltyLedgerEvent } from "@/lib/eval-utils";
+import type { Classe, Student, Competency, Level, DailyEvaluationInput, SkillRecoveryAction, StudentEvalInfo } from "@/types";
 
 export interface UseEvaluationReturn {
   classes: Classe[];
@@ -29,6 +29,7 @@ export function useEvaluation(): UseEvaluationReturn {
   const storeStudents = useAppStore((s) => s.students);
   const storeCompetencies = useAppStore((s) => s.competencies);
   const storeEvaluations = useAppStore((s) => s.evaluations);
+  const storeRecoveries = useAppStore((s) => s.skillRecoveryActions);
   const storeSave = useAppStore((s) => s.saveDailyEvaluation);
 
   // ── Supabase state ────────────────────────────────────────
@@ -37,7 +38,8 @@ export function useEvaluation(): UseEvaluationReturn {
   const [sbStudents, setSbStudents] = useState<Student[]>([]);
   const [sbCompetencies, setSbCompetencies] = useState<Competency[]>([]);
   // key = `studentId__competencyId` → penalty count (all-time, all teachers)
-  const [sbPenaltyCounts, setSbPenaltyCounts] = useState<Record<string, number>>({});
+  const [sbPenalties, setSbPenalties] = useState<PenaltyLedgerEvent[]>([]);
+  const [sbRecoveries, setSbRecoveries] = useState<SkillRecoveryAction[]>([]);
   // keys locked today by the current teacher
   const [sbLockedToday, setSbLockedToday] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
@@ -60,7 +62,7 @@ export function useEvaluation(): UseEvaluationReturn {
       }
 
       if (user?.role === "professeur" && classIds.length === 0) {
-        setSbClasses([]); setSbLevels([]); setSbStudents([]); setSbCompetencies([]);
+        setSbClasses([]); setSbLevels([]); setSbStudents([]); setSbCompetencies([]); setSbPenalties([]); setSbRecoveries([]);
         setLoading(false); return;
       }
 
@@ -121,20 +123,26 @@ export function useEvaluation(): UseEvaluationReturn {
       if (students.length > 0) {
         const allStudentIds = students.map((s) => s.id);
 
-        const [penaltyRes, lockRes] = await Promise.all([
-          supabase.from("evaluations").select("student_id, competency_id").in("student_id", allStudentIds),
+        const [penaltyRes, recoveryRes, lockRes] = await Promise.all([
+          supabase.from("evaluations").select("student_id, competency_id, date, created_at").in("student_id", allStudentIds),
+          supabase.from("skill_recovery_actions").select("id, student_id, competency_id, class_id, action_type, previous_score, new_score, meeting_date, student_reason, meeting_notes, created_by, created_at").in("student_id", allStudentIds),
           user?.id
             ? supabase.from("evaluations").select("student_id, competency_id")
                 .in("student_id", allStudentIds).eq("date", today).eq("teacher_id", user.id)
             : Promise.resolve({ data: [] as { student_id: string; competency_id: string }[] }),
         ]);
 
-        const counts: Record<string, number> = {};
-        for (const row of penaltyRes.data ?? []) {
-          const key = `${row.student_id}__${row.competency_id}`;
-          counts[key] = (counts[key] ?? 0) + 1;
-        }
-        setSbPenaltyCounts(counts);
+        if (penaltyRes.error) throw penaltyRes.error;
+        if (recoveryRes.error) throw recoveryRes.error;
+        setSbPenalties((penaltyRes.data ?? []).map((row) => ({
+          studentId: row.student_id, competencyId: row.competency_id, date: row.date, createdAt: row.created_at,
+        })));
+        setSbRecoveries((recoveryRes.data ?? []).map((row) => ({
+          id: row.id, studentId: row.student_id, competencyId: row.competency_id, classId: row.class_id,
+          actionType: row.action_type as "increase" | "reset_to_100", previousScore: row.previous_score, newScore: row.new_score,
+          meetingDate: row.meeting_date, studentReason: row.student_reason, meetingNotes: row.meeting_notes,
+          createdBy: row.created_by, createdAt: row.created_at,
+        })));
 
         const locked = new Set(
           ((lockRes as { data: { student_id: string; competency_id: string }[] | null }).data ?? [])
@@ -179,13 +187,13 @@ export function useEvaluation(): UseEvaluationReturn {
                  e.date === today && e.teacherId === (user?.id ?? "")
         );
         result[student.id] = {
-          score: Math.max(0, 100 - penalties.length),
+          score: competencyScoreFromLedger(penalties, storeRecoveries, student.id, competencyId),
           lockedByMe: todayByMe.length > 0,
         };
       }
       return result;
     },
-    [storeStudents, storeEvaluations, today, user?.id]
+    [storeStudents, storeEvaluations, storeRecoveries, today, user?.id]
   );
 
   const getEvalInfoReal = useCallback(
@@ -193,15 +201,14 @@ export function useEvaluation(): UseEvaluationReturn {
       const classStudents = sbStudents.filter((s) => s.classId === classId);
       const result: Record<string, StudentEvalInfo> = {};
       for (const student of classStudents) {
-        const key = `${student.id}__${competencyId}`;
         result[student.id] = {
-          score: Math.max(0, 100 - (sbPenaltyCounts[key] ?? 0)),
-          lockedByMe: sbLockedToday.has(key),
+          score: competencyScoreFromLedger(sbPenalties, sbRecoveries, student.id, competencyId),
+          lockedByMe: sbLockedToday.has(`${student.id}__${competencyId}`),
         };
       }
       return result;
     },
-    [sbStudents, sbPenaltyCounts, sbLockedToday]
+    [sbStudents, sbPenalties, sbRecoveries, sbLockedToday]
   );
 
   // ── Save evaluation ───────────────────────────────────────
@@ -225,13 +232,22 @@ export function useEvaluation(): UseEvaluationReturn {
 
       for (const studentId of studentIds) {
         try {
-          const { count } = await supabase
-            .from("evaluations")
-            .select("*", { count: "exact", head: true })
-            .eq("student_id", studentId)
-            .eq("competency_id", competencyId);
-
-          const score = Math.max(0, 100 - (count ?? 0));
+          const [penaltyRes, recoveryRes] = await Promise.all([
+            supabase.from("evaluations").select("student_id, competency_id, date, created_at").eq("student_id", studentId).eq("competency_id", competencyId),
+            supabase.from("skill_recovery_actions").select("id, student_id, competency_id, class_id, action_type, previous_score, new_score, meeting_date, student_reason, meeting_notes, created_by, created_at").eq("student_id", studentId).eq("competency_id", competencyId),
+          ]);
+          if (penaltyRes.error || recoveryRes.error) continue;
+          const score = competencyScoreFromLedger(
+            (penaltyRes.data ?? []).map((row) => ({ studentId: row.student_id, competencyId: row.competency_id, date: row.date, createdAt: row.created_at })),
+            (recoveryRes.data ?? []).map((row) => ({
+              id: row.id, studentId: row.student_id, competencyId: row.competency_id, classId: row.class_id,
+              actionType: row.action_type as "increase" | "reset_to_100", previousScore: row.previous_score, newScore: row.new_score,
+              meetingDate: row.meeting_date, studentReason: row.student_reason, meetingNotes: row.meeting_notes,
+              createdBy: row.created_by, createdAt: row.created_at,
+            })),
+            studentId,
+            competencyId,
+          );
 
           // Trigger alerts at 91/100 (−9 points) and at ≤50 (Non acquis)
           if (score !== 91 && score > 50) continue;
@@ -285,15 +301,14 @@ export function useEvaluation(): UseEvaluationReturn {
       const { error: err } = await supabase.from("evaluations").insert(rows);
       if (err) throw new Error(err.message);
 
-      // Update local penalty counts and lock state
-      setSbPenaltyCounts((prev) => {
-        const next = { ...prev };
-        for (const studentId of penalizedStudentIds) {
-          const key = `${studentId}__${competencyId}`;
-          next[key] = (next[key] ?? 0) + 1;
-        }
-        return next;
-      });
+      // Add the new immutable penalty events to the local ledger immediately.
+      const createdAt = new Date().toISOString();
+      setSbPenalties((prev) => [
+        ...prev,
+        ...penalizedStudentIds.map((studentId) => ({
+          studentId, competencyId, date: today, createdAt,
+        })),
+      ]);
       setSbLockedToday((prev) => {
         const next = new Set(prev);
         for (const studentId of penalizedStudentIds) {

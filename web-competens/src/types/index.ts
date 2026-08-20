@@ -88,8 +88,8 @@ export interface Competency {
 // No longer stored in the DB; derived from globalScore via scoreToStatus().
 export type EvaluationStatus = "acquis" | "en_cours" | "non_acquis";
 
-// A row in the evaluations table now represents a single -1 penalty event.
-// Global score for a student / competency = 100 - COUNT(rows).
+// A row in the evaluations table represents a single -1 penalty event.
+// The current score is calculated from the chronological penalty/recovery ledger.
 export interface Evaluation {
   id: string;
   studentId: string;
@@ -106,9 +106,32 @@ export interface EvaluationWithDetails extends Evaluation {
   teacher?: Teacher;
 }
 
+/**
+ * An immutable follow-up event created after a recovery meeting.  Penalty
+ * rows remain untouched; this event is applied after the earlier events in
+ * the student's competency ledger.
+ */
+export type SkillRecoveryActionType = "increase" | "reset_to_100";
+
+export interface SkillRecoveryAction {
+  id: string;
+  studentId: string;
+  competencyId: string;
+  classId: string;
+  actionType: SkillRecoveryActionType;
+  previousScore: number;
+  newScore: number;
+  meetingDate: string;
+  studentReason: string;
+  meetingNotes: string;
+  createdBy: string;
+  createdByName?: string;
+  createdAt: string;
+}
+
 // Per-student info returned by the evaluation hook for the teacher grid.
 export interface StudentEvalInfo {
-  score: number;        // 100 - total penalty count (all-time, all teachers)
+  score: number;        // Current value from the all-time chronological ledger.
   lockedByMe: boolean;  // current teacher already saved today for this student+competency
 }
 

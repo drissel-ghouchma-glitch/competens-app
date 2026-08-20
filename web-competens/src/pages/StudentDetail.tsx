@@ -22,6 +22,9 @@ import {
 import type { CompetencyStat, TimelinePoint } from "@/hooks/use-student-detail";
 import type { AttendanceRecord } from "@/types";
 import { DailyGranularAnalytics } from "@/components/DailyGranularAnalytics";
+import { SkillHistoryChart } from "@/components/SkillHistoryChart";
+import { SkillRecoveryDialog } from "@/components/SkillRecoveryDialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { localizeCompTitle } from "@/i18n/competency-content";
 import { cn } from "@/lib/utils";
 
@@ -128,7 +131,11 @@ function TimelineChart({ timeline }: { timeline: TimelinePoint[] }) {
 
 // ── Stats panels (shared between roles) ──────────────────────────────────────
 
-function RadarPanel({ stats, title }: { stats: CompetencyStat[]; title?: string }) {
+function RadarPanel({ stats, title, studentId, competencies, penalties, recoveries }: {
+  stats: CompetencyStat[]; title?: string; studentId?: string; competencies?: import("@/types").Competency[];
+  penalties?: import("@/components/DailyGranularAnalytics").DailyEvalRecord[];
+  recoveries?: import("@/types").SkillRecoveryAction[];
+}) {
   const { t } = useI18n();
   const data = stats.map((s) => ({ subject: s.competencyCode, value: s.acquisitionRate, fullMark: 100 }));
   if (data.length === 0) return (
@@ -147,16 +154,40 @@ function RadarPanel({ stats, title }: { stats: CompetencyStat[]; title?: string 
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="h-[300px] md:h-[360px]">
-          <ResponsiveContainer width="100%" height="100%">
-            <RadarChart data={data} cx="50%" cy="50%" outerRadius="75%">
-              <PolarGrid stroke="hsl(var(--border))" />
-              <PolarAngleAxis dataKey="subject" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
-              <PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fontSize: 10 }} />
-              <Radar name="rate" dataKey="value" stroke="hsl(220 99% 62%)" fill="hsl(220 99% 62%)" fillOpacity={0.2} />
-            </RadarChart>
-          </ResponsiveContainer>
-        </div>
+        {studentId && competencies && penalties && recoveries ? (
+          <Tabs defaultValue="radar">
+            <TabsList className="mb-3">
+              <TabsTrigger value="radar">{t("skillHistory.radarTab")}</TabsTrigger>
+              <TabsTrigger value="history">{t("skillHistory.historyTab")}</TabsTrigger>
+            </TabsList>
+            <TabsContent value="radar" className="mt-0">
+              <div className="h-[300px] md:h-[360px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <RadarChart data={data} cx="50%" cy="50%" outerRadius="75%">
+                    <PolarGrid stroke="hsl(var(--border))" />
+                    <PolarAngleAxis dataKey="subject" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
+                    <PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fontSize: 10 }} />
+                    <Radar name="rate" dataKey="value" stroke="hsl(220 99% 62%)" fill="hsl(220 99% 62%)" fillOpacity={0.2} />
+                  </RadarChart>
+                </ResponsiveContainer>
+              </div>
+            </TabsContent>
+            <TabsContent value="history" className="mt-0">
+              <SkillHistoryChart studentId={studentId} competencies={competencies} penalties={penalties} recoveries={recoveries} />
+            </TabsContent>
+          </Tabs>
+        ) : (
+          <div className="h-[300px] md:h-[360px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <RadarChart data={data} cx="50%" cy="50%" outerRadius="75%">
+                <PolarGrid stroke="hsl(var(--border))" />
+                <PolarAngleAxis dataKey="subject" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
+                <PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fontSize: 10 }} />
+                <Radar name="rate" dataKey="value" stroke="hsl(220 99% 62%)" fill="hsl(220 99% 62%)" fillOpacity={0.2} />
+              </RadarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
@@ -291,8 +322,8 @@ export default function StudentDetailPage() {
   const {
     student, classe, level, competencies,
     myStats, globalStats, alerts, timeline, attendanceHistory, classes,
-    rawEvals, classTeachers,
-    loading, error, updateStudent,
+    rawEvals, recoveryActions, classTeachers,
+    loading, error, updateStudent, createRecoveryAction,
   } = useStudentDetail(id);
 
   // Admin edit state
@@ -307,8 +338,11 @@ export default function StudentDetailPage() {
 
   // Admin analytics toggle
   const [showGlobal, setShowGlobal] = useState(false);
+  const [recoveryOpen, setRecoveryOpen] = useState(false);
 
   const pendingAlerts = alerts.filter((a) => !a.resolved).length;
+  const isPrincipalTeacher = role === "professeur" && classe?.teacherId === user?.id;
+  const canRecover = role === "admin" || role === "directeur" || isPrincipalTeacher;
   const displayStats = (role !== "professeur" && showGlobal) ? globalStats : myStats;
 
   const startEdit = () => {
@@ -376,7 +410,8 @@ export default function StudentDetailPage() {
   // ═════════════════════════════════════════════════════════
   // TEACHER VIEW — read-only, only their own evaluations
   // ═════════════════════════════════════════════════════════
-  if (role === "professeur") {
+  if (role === "professeur" || role === "parent") {
+    const readOnlyStats = role === "parent" ? globalStats : myStats;
     return (
       <div className="space-y-6 animate-in fade-in duration-500">
         {/* Header */}
@@ -394,7 +429,7 @@ export default function StudentDetailPage() {
               {pendingAlerts > 0 && <Badge className="bg-destructive/10 text-destructive border-destructive/20">{t("studentDetail.alerts", { count: pendingAlerts })}</Badge>}
             </div>
             <p className="mt-2 text-xs text-muted-foreground italic flex items-center gap-1">
-              <Eye className="w-3.5 h-3.5" /> {t("studentDetail.teacherViewNote")}
+              <Eye className="w-3.5 h-3.5" /> {role === "parent" ? t("studentDetail.parentViewNote") : t("studentDetail.teacherViewNote")}
             </p>
           </div>
         </div>
@@ -415,11 +450,17 @@ export default function StudentDetailPage() {
         {/* Stats */}
         <div className="grid lg:grid-cols-3 gap-4 md:gap-6">
           <div className="lg:col-span-2">
-            <RadarPanel stats={myStats} title={t("studentDetail.myRadar")} />
+            <RadarPanel stats={readOnlyStats} title={role === "parent" ? t("studentDetail.radarGlobal") : t("studentDetail.myRadar")} studentId={student.id} competencies={competencies} penalties={rawEvals} recoveries={recoveryActions} />
           </div>
-          <SummaryPanel stats={myStats} />
+          <SummaryPanel stats={readOnlyStats} />
         </div>
-        <SkillGrid stats={myStats} />
+        <SkillGrid stats={readOnlyStats} />
+        {canRecover && (
+          <div className="flex justify-end">
+            <Button onClick={() => setRecoveryOpen(true)} className="gap-2"><TrendingUp className="h-4 w-4" />{t("skillRecovery.open")}</Button>
+          </div>
+        )}
+        <SkillRecoveryDialog open={recoveryOpen} onOpenChange={setRecoveryOpen} studentName={`${student.firstName} ${student.lastName}`} competencies={competencies} skills={globalStats} onSubmit={createRecoveryAction} />
       </div>
     );
   }
@@ -499,9 +540,12 @@ export default function StudentDetailPage() {
                     {pendingAlerts > 0 && <Badge className="bg-destructive/10 text-destructive border-destructive/20">{t("studentDetail.alerts", { count: pendingAlerts })}</Badge>}
                   </div>
                 </div>
-                <Button size="sm" variant="outline" onClick={startEdit} className="gap-1.5 shrink-0">
-                  <Edit className="w-3.5 h-3.5" /> {t("studentDetail.edit")}
-                </Button>
+                <div className="flex gap-2 shrink-0">
+                  {canRecover && <Button size="sm" onClick={() => setRecoveryOpen(true)} className="gap-1.5"><TrendingUp className="w-3.5 h-3.5" /> {t("skillRecovery.open")}</Button>}
+                  <Button size="sm" variant="outline" onClick={startEdit} className="gap-1.5">
+                    <Edit className="w-3.5 h-3.5" /> {t("studentDetail.edit")}
+                  </Button>
+                </div>
               </div>
             </>
           )}
@@ -556,6 +600,10 @@ export default function StudentDetailPage() {
           <RadarPanel
             stats={displayStats}
             title={showGlobal ? t("studentDetail.radarGlobal") : t("studentDetail.radarDefault")}
+            studentId={student.id}
+            competencies={competencies}
+            penalties={rawEvals}
+            recoveries={recoveryActions}
           />
         </div>
         <SummaryPanel stats={displayStats} />
@@ -571,10 +619,12 @@ export default function StudentDetailPage() {
           rawEvals={rawEvals}
           competencies={competencies}
           classTeachers={classTeachers}
+          recoveryActions={recoveryActions}
         />
       )}
 
       <AttendanceHistoryCard history={attendanceHistory} />
+      <SkillRecoveryDialog open={recoveryOpen} onOpenChange={setRecoveryOpen} studentName={`${student.firstName} ${student.lastName}`} competencies={competencies} skills={globalStats} onSubmit={createRecoveryAction} />
     </div>
   );
 }

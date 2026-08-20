@@ -2,8 +2,10 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { useDemoStore } from "@/stores/demo";
 import { useAppStore } from "@/stores/app-store";
 import { supabase } from "@/lib/supabase";
+import { competencyScoreFromLedger, type PenaltyLedgerEvent } from "@/lib/eval-utils";
 import { localizeCompTitle } from "@/i18n/competency-content";
 import type { Lang } from "@/i18n/translations";
+import type { SkillRecoveryAction } from "@/types";
 
 export interface HonorRollStudent {
   id: string;
@@ -41,7 +43,7 @@ export interface HonorRollClass {
   name: string;
 }
 
-interface RawPenalty {
+interface RawPenalty extends PenaltyLedgerEvent {
   studentId: string;
   competencyId: string;
   teacherId: string | null;
@@ -61,18 +63,12 @@ function computeHonorRoll(
   classes: HonorRollClass[],
   activeCompetencyIds: string[],
   penalties: RawPenalty[],
+  recoveries: SkillRecoveryAction[],
 ): { honorRoll: HonorRollStudent[]; classStats: ClassSuccessStat[] } {
   const classNameById = new Map(classes.map((c) => [c.id, c.name]));
-  const penaltyCountByKey = new Map<string, number>();
-  for (const p of penalties) {
-    const key = `${p.studentId}__${p.competencyId}`;
-    penaltyCountByKey.set(key, (penaltyCountByKey.get(key) ?? 0) + 1);
-  }
-
   const allAverages = students.map((s) => {
     const scores = activeCompetencyIds.map((cid) => {
-      const count = penaltyCountByKey.get(`${s.id}__${cid}`) ?? 0;
-      return Math.max(0, 100 - count);
+      return competencyScoreFromLedger(penalties, recoveries, s.id, cid);
     });
     const average = scores.length > 0
       ? Math.round(scores.reduce((sum, v) => sum + v, 0) / scores.length)
@@ -162,6 +158,7 @@ export function useHonorRoll(lang: Lang = "fr"): UseHonorRollReturn {
   const storeClasses = useAppStore((s) => s.classes);
   const storeCompetencies = useAppStore((s) => s.competencies);
   const storeEvaluations = useAppStore((s) => s.evaluations);
+  const storeRecoveries = useAppStore((s) => s.skillRecoveryActions);
   const storeTeachers = useAppStore((s) => s.teachers);
 
   const demoClasses = useMemo<HonorRollClass[]>(
@@ -180,7 +177,7 @@ export function useHonorRoll(lang: Lang = "fr"): UseHonorRollReturn {
   );
   const demoPenalties = useMemo<RawPenalty[]>(
     () => storeEvaluations.map((e) => ({
-      studentId: e.studentId, competencyId: e.competencyId, teacherId: e.teacherId,
+      studentId: e.studentId, competencyId: e.competencyId, teacherId: e.teacherId, date: e.date, createdAt: e.createdAt,
     })),
     [storeEvaluations]
   );
@@ -189,8 +186,8 @@ export function useHonorRoll(lang: Lang = "fr"): UseHonorRollReturn {
     [storeTeachers]
   );
   const demoResult = useMemo(
-    () => computeHonorRoll(storeStudents, demoClasses, demoActiveCompetencyIds, demoPenalties),
-    [storeStudents, demoClasses, demoActiveCompetencyIds, demoPenalties]
+    () => computeHonorRoll(storeStudents, demoClasses, demoActiveCompetencyIds, demoPenalties, storeRecoveries),
+    [storeStudents, demoClasses, demoActiveCompetencyIds, demoPenalties, storeRecoveries]
   );
   const demoTeacherStats = useMemo(
     () => computeTeacherActivity(demoPenalties, demoTeacherNameById, demoCompetencyById, lang),
@@ -210,11 +207,12 @@ export function useHonorRoll(lang: Lang = "fr"): UseHonorRollReturn {
     setLoading(true);
     setError(null);
     try {
-      const [studentsRes, classesRes, compRes, evalsRes, teachersRes] = await Promise.all([
+      const [studentsRes, classesRes, compRes, evalsRes, recoveriesRes, teachersRes] = await Promise.all([
         supabase.from("students").select("id, first_name, last_name, class_id").eq("is_archived", false),
         supabase.from("classes").select("id, name").eq("is_archived", false).order("name"),
         supabase.from("competencies").select("id, code, title, is_archived"),
-        supabase.from("evaluations").select("student_id, competency_id, teacher_id"),
+        supabase.from("evaluations").select("student_id, competency_id, teacher_id, date, created_at"),
+        supabase.from("skill_recovery_actions").select("id, student_id, competency_id, class_id, action_type, previous_score, new_score, meeting_date, student_reason, meeting_notes, created_by, created_at"),
         supabase.from("profiles").select("id, full_name").eq("role", "professeur"),
       ]);
 
@@ -222,6 +220,7 @@ export function useHonorRoll(lang: Lang = "fr"): UseHonorRollReturn {
       if (classesRes.error) throw classesRes.error;
       if (compRes.error) throw compRes.error;
       if (evalsRes.error) throw evalsRes.error;
+      if (recoveriesRes.error) throw recoveriesRes.error;
 
       const students = (studentsRes.data ?? []).map((s) => ({
         id: s.id, firstName: s.first_name, lastName: s.last_name, classId: s.class_id ?? "",
@@ -233,13 +232,19 @@ export function useHonorRoll(lang: Lang = "fr"): UseHonorRollReturn {
       const activeCompetencyIds = competencies.filter((c) => !c.isArchived).map((c) => c.id);
       const competencyById = new Map(competencies.map((c) => [c.id, c]));
       const penalties: RawPenalty[] = (evalsRes.data ?? []).map((e) => ({
-        studentId: e.student_id, competencyId: e.competency_id, teacherId: e.teacher_id,
+        studentId: e.student_id, competencyId: e.competency_id, teacherId: e.teacher_id, date: e.date, createdAt: e.created_at,
+      }));
+      const recoveries: SkillRecoveryAction[] = (recoveriesRes.data ?? []).map((row) => ({
+        id: row.id, studentId: row.student_id, competencyId: row.competency_id, classId: row.class_id,
+        actionType: row.action_type as "increase" | "reset_to_100", previousScore: row.previous_score, newScore: row.new_score,
+        meetingDate: row.meeting_date, studentReason: row.student_reason, meetingNotes: row.meeting_notes,
+        createdBy: row.created_by, createdAt: row.created_at,
       }));
       const teacherNameById = new Map(
         (teachersRes.data ?? []).map((t) => [t.id, t.full_name || t.id])
       );
 
-      const { honorRoll, classStats } = computeHonorRoll(students, classes, activeCompetencyIds, penalties);
+      const { honorRoll, classStats } = computeHonorRoll(students, classes, activeCompetencyIds, penalties, recoveries);
       const teacherStats = computeTeacherActivity(penalties, teacherNameById, competencyById, lang);
 
       setSbClasses(classes);

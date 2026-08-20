@@ -18,6 +18,8 @@ import {
 } from "recharts";
 import type { TimelinePoint } from "@/hooks/use-parent";
 import { DailyGranularAnalytics } from "@/components/DailyGranularAnalytics";
+import { SkillHistoryChart } from "@/components/SkillHistoryChart";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { localizeCompTitle } from "@/i18n/competency-content";
 import { cn } from "@/lib/utils";
 
@@ -254,16 +256,27 @@ function ChildAnalytics({ child, competencies }: { child: ParentChild; competenc
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="h-[280px] md:h-[320px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <RadarChart data={radarData} cx="50%" cy="50%" outerRadius="72%">
-                    <PolarGrid stroke="hsl(var(--border))" />
-                    <PolarAngleAxis dataKey="subject" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
-                    <PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fontSize: 10 }} />
-                    <Radar name="rate" dataKey="value" stroke="hsl(220 99% 62%)" fill="hsl(220 99% 62%)" fillOpacity={0.2} />
-                  </RadarChart>
-                </ResponsiveContainer>
-              </div>
+              <Tabs defaultValue="radar">
+                <TabsList className="mb-3">
+                  <TabsTrigger value="radar">{t("skillHistory.radarTab")}</TabsTrigger>
+                  <TabsTrigger value="history">{t("skillHistory.historyTab")}</TabsTrigger>
+                </TabsList>
+                <TabsContent value="radar" className="mt-0">
+                  <div className="h-[280px] md:h-[320px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <RadarChart data={radarData} cx="50%" cy="50%" outerRadius="72%">
+                        <PolarGrid stroke="hsl(var(--border))" />
+                        <PolarAngleAxis dataKey="subject" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
+                        <PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fontSize: 10 }} />
+                        <Radar name="rate" dataKey="value" stroke="hsl(220 99% 62%)" fill="hsl(220 99% 62%)" fillOpacity={0.2} />
+                      </RadarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </TabsContent>
+                <TabsContent value="history" className="mt-0">
+                  <SkillHistoryChart studentId={child.id} competencies={competencies} penalties={child.rawEvals} recoveries={child.recoveryActions} />
+                </TabsContent>
+              </Tabs>
             </CardContent>
           </Card>
 
@@ -336,6 +349,7 @@ function ChildAnalytics({ child, competencies }: { child: ParentChild; competenc
         rawEvals={child.rawEvals}
         competencies={competencies}
         classTeachers={child.classTeachers}
+        recoveryActions={child.recoveryActions}
       />
 
       {/* Attendance */}

@@ -10,7 +10,8 @@ import {
 } from "recharts";
 import { useI18n } from "@/i18n";
 import { localizeCompTitle } from "@/i18n/competency-content";
-import type { Competency } from "@/types";
+import { competencyScoreFromLedger } from "@/lib/eval-utils";
+import type { Competency, SkillRecoveryAction } from "@/types";
 
 // ── Shared types (exported for hook consumers) ─────────────────────────────────
 
@@ -86,9 +87,10 @@ interface Props {
   rawEvals: DailyEvalRecord[];
   competencies: Competency[];
   classTeachers: ClassTeacher[];
+  recoveryActions?: SkillRecoveryAction[];
 }
 
-export function DailyGranularAnalytics({ studentId, rawEvals, competencies, classTeachers }: Props) {
+export function DailyGranularAnalytics({ studentId, rawEvals, competencies, classTeachers, recoveryActions = [] }: Props) {
   const { t, lang } = useI18n();
   const locale = lang === "ar" ? "ar-MA" : "fr-FR";
   const today = new Date().toISOString().split("T")[0];
@@ -113,9 +115,7 @@ export function DailyGranularAnalytics({ studentId, rawEvals, competencies, clas
       .map((comp) => {
         const todayComp = dayPenalties.filter((e) => e.competencyId === comp.id);
         if (todayComp.length === 0) return null;
-        // Global score = 100 - all-time penalty count for this student+competency
-        const totalPenalties = studentPenalties.filter((e) => e.competencyId === comp.id).length;
-        const globalScore = Math.max(0, 100 - totalPenalties);
+        const globalScore = competencyScoreFromLedger(studentPenalties, recoveryActions, studentId, comp.id);
         return {
           id: comp.id,
           code: comp.code,
@@ -126,7 +126,7 @@ export function DailyGranularAnalytics({ studentId, rawEvals, competencies, clas
         };
       })
       .filter((d): d is ChartEntry => d !== null);
-  }, [dayPenalties, studentPenalties, competencies, lang]);
+  }, [dayPenalties, studentPenalties, recoveryActions, studentId, competencies, lang]);
 
   const selectedComp = selectedCompId
     ? competencies.find((c) => c.id === selectedCompId) ?? null
