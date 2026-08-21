@@ -3,6 +3,7 @@ import { useDemoStore } from "@/stores/demo";
 import { useAppStore } from "@/stores/app-store";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/lib/supabase";
+import { isMissingSkillRecoveryTable } from "@/lib/skill-recovery";
 import { scoreToStatus, buildTimeline, competencyScoreFromLedger, type PenaltyLedgerEvent, type TimelinePoint } from "@/lib/eval-utils";
 import type { Student, Classe, Level, Competency, Alert, EvaluationStatus, AttendanceRecord, AttendanceStatus, AttendancePeriod, SkillRecoveryAction } from "@/types";
 import type { DailyEvalRecord, ClassTeacher } from "@/components/DailyGranularAnalytics";
@@ -305,8 +306,8 @@ export function useStudentDetail(studentId: string | undefined): UseStudentDetai
         .select("id, student_id, competency_id, class_id, action_type, previous_score, new_score, meeting_date, student_reason, meeting_notes, created_by, created_at, profiles(full_name)")
         .eq("student_id", studentId)
         .order("meeting_date");
-      if (recoveryError) throw recoveryError;
-      setSbRecoveries((recoveryData ?? []).map((row) => mapRecovery(row as Parameters<typeof mapRecovery>[0])));
+      if (recoveryError && !isMissingSkillRecoveryTable(recoveryError)) throw recoveryError;
+      setSbRecoveries(recoveryError ? [] : (recoveryData ?? []).map((row) => mapRecovery(row as Parameters<typeof mapRecovery>[0])));
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Erreur de chargement");
     } finally {

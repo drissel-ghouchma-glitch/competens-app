@@ -3,6 +3,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useDemoStore } from "@/stores/demo";
 import { useAppStore } from "@/stores/app-store";
 import { supabase } from "@/lib/supabase";
+import { isMissingSkillRecoveryTable } from "@/lib/skill-recovery";
 import { competencyScoreFromLedger, type PenaltyLedgerEvent } from "@/lib/eval-utils";
 import type { Classe, Competency, SkillRecoveryAction, Student } from "@/types";
 import type { RecoverySubmission } from "@/components/SkillRecoveryDialog";
@@ -145,7 +146,7 @@ export function usePrincipalClasses() {
       if (studentsResult.error) throw studentsResult.error;
       if (competenciesResult.error) throw competenciesResult.error;
       if (evaluationsResult.error) throw evaluationsResult.error;
-      if (recoveriesResult.error) throw recoveriesResult.error;
+      if (recoveriesResult.error && !isMissingSkillRecoveryTable(recoveriesResult.error)) throw recoveriesResult.error;
 
       setSbStudents((studentsResult.data ?? []).map(mapStudent));
       setSbCompetencies((competenciesResult.data ?? []).map((competency) => ({
@@ -158,7 +159,7 @@ export function usePrincipalClasses() {
         date: evaluation.date, createdAt: evaluation.created_at, teacherId: evaluation.teacher_id,
         teacherName: (evaluation.profiles as { full_name?: string } | null)?.full_name,
       })));
-      setSbRecoveries((recoveriesResult.data ?? []).map((row) => mapRecovery(row as Parameters<typeof mapRecovery>[0])));
+      setSbRecoveries(recoveriesResult.error ? [] : (recoveriesResult.data ?? []).map((row) => mapRecovery(row as Parameters<typeof mapRecovery>[0])));
     } catch (cause: unknown) {
       setError(cause instanceof Error ? cause.message : "Unable to load class analytics.");
     } finally {

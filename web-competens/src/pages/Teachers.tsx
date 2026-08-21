@@ -20,6 +20,7 @@ import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog";
 import type { Teacher } from "@/types";
+import { cn } from "@/lib/utils";
 
 export default function TeachersPage() {
   const { teachers, classes, teacherAssignedClassIds, primaryClassByTeacherId, loading, error, canAddManually, updateTeacher, archiveTeacher } = useTeachers();

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { useDemoStore } from "@/stores/demo";
 import { useAppStore } from "@/stores/app-store";
 import { supabase } from "@/lib/supabase";
+import { isMissingSkillRecoveryTable } from "@/lib/skill-recovery";
 import { competencyScoreFromLedger, type PenaltyLedgerEvent } from "@/lib/eval-utils";
 import { localizeCompTitle } from "@/i18n/competency-content";
 import type { Lang } from "@/i18n/translations";
@@ -220,7 +221,7 @@ export function useHonorRoll(lang: Lang = "fr"): UseHonorRollReturn {
       if (classesRes.error) throw classesRes.error;
       if (compRes.error) throw compRes.error;
       if (evalsRes.error) throw evalsRes.error;
-      if (recoveriesRes.error) throw recoveriesRes.error;
+      if (recoveriesRes.error && !isMissingSkillRecoveryTable(recoveriesRes.error)) throw recoveriesRes.error;
 
       const students = (studentsRes.data ?? []).map((s) => ({
         id: s.id, firstName: s.first_name, lastName: s.last_name, classId: s.class_id ?? "",
@@ -234,7 +235,7 @@ export function useHonorRoll(lang: Lang = "fr"): UseHonorRollReturn {
       const penalties: RawPenalty[] = (evalsRes.data ?? []).map((e) => ({
         studentId: e.student_id, competencyId: e.competency_id, teacherId: e.teacher_id, date: e.date, createdAt: e.created_at,
       }));
-      const recoveries: SkillRecoveryAction[] = (recoveriesRes.data ?? []).map((row) => ({
+      const recoveries: SkillRecoveryAction[] = recoveriesRes.error ? [] : (recoveriesRes.data ?? []).map((row) => ({
         id: row.id, studentId: row.student_id, competencyId: row.competency_id, classId: row.class_id,
         actionType: row.action_type as "increase" | "reset_to_100", previousScore: row.previous_score, newScore: row.new_score,
         meetingDate: row.meeting_date, studentReason: row.student_reason, meetingNotes: row.meeting_notes,

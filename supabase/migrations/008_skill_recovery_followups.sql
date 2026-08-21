@@ -67,22 +67,9 @@ CREATE POLICY "skill recoveries: authorised history read"
     )
   );
 
--- The history tooltip identifies the person who recorded an authorised action.
--- RLS on skill_recovery_actions keeps this limited to recovery events the
--- current user is already allowed to read.
-DROP POLICY IF EXISTS "profiles: active users read recovery actor names" ON public.profiles;
-CREATE POLICY "profiles: active users read recovery actor names"
-  ON public.profiles
-  FOR SELECT
-  TO authenticated
-  USING (
-    public.current_user_status() = 'active'
-    AND EXISTS (
-      SELECT 1
-      FROM public.skill_recovery_actions r
-      WHERE r.created_by = profiles.id
-    )
-  );
+-- Actor names rely on the existing profile-read policies. Do not add a
+-- profiles policy that queries this RLS-protected ledger here: it can create
+-- an RLS recursion while Supabase resolves the embedded profiles relation.
 
 -- Teachers assigned to a class may read the historical penalty ledger for
 -- their students. This adds read access only; their existing write policy

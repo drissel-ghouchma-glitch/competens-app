@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/lib/supabase";
+import { isMissingSkillRecoveryTable } from "@/lib/skill-recovery";
 import { scoreToStatus, buildTimeline, competencyScoreFromLedger, type PenaltyLedgerEvent, type TimelinePoint } from "@/lib/eval-utils";
 import type { Student, Competency, Alert, EvaluationStatus, AttendanceStatus, SkillRecoveryAction } from "@/types";
 import type { DailyEvalRecord, ClassTeacher } from "@/components/DailyGranularAnalytics";
@@ -124,7 +125,7 @@ export function useParent(): UseParentReturn {
       if (studentsRes.error) throw studentsRes.error;
       if (compRes.error) throw compRes.error;
       if (evalsRes.error) throw evalsRes.error;
-      if (recoveryRes.error) throw recoveryRes.error;
+      if (recoveryRes.error && !isMissingSkillRecoveryTable(recoveryRes.error)) throw recoveryRes.error;
 
       const students: Student[] = (studentsRes.data ?? []).map((s) => ({
         id: s.id, firstName: s.first_name, lastName: s.last_name,
@@ -148,7 +149,7 @@ export function useParent(): UseParentReturn {
         createdAt: (e as { created_at: string }).created_at,
       }));
 
-      const recoveries: SkillRecoveryAction[] = (recoveryRes.data ?? []).map((row) => ({
+      const recoveries: SkillRecoveryAction[] = recoveryRes.error ? [] : (recoveryRes.data ?? []).map((row) => ({
         id: row.id, studentId: row.student_id, competencyId: row.competency_id, classId: row.class_id,
         actionType: row.action_type as "increase" | "reset_to_100", previousScore: row.previous_score, newScore: row.new_score,
         meetingDate: row.meeting_date, studentReason: row.student_reason, meetingNotes: row.meeting_notes,

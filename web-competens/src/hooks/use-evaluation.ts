@@ -3,6 +3,7 @@ import { useDemoStore } from "@/stores/demo";
 import { useAppStore } from "@/stores/app-store";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/lib/supabase";
+import { isMissingSkillRecoveryTable } from "@/lib/skill-recovery";
 import { competencyScoreFromLedger, scoreToStatus, type PenaltyLedgerEvent } from "@/lib/eval-utils";
 import type { Classe, Student, Competency, Level, DailyEvaluationInput, SkillRecoveryAction, StudentEvalInfo } from "@/types";
 
@@ -133,11 +134,11 @@ export function useEvaluation(): UseEvaluationReturn {
         ]);
 
         if (penaltyRes.error) throw penaltyRes.error;
-        if (recoveryRes.error) throw recoveryRes.error;
+        if (recoveryRes.error && !isMissingSkillRecoveryTable(recoveryRes.error)) throw recoveryRes.error;
         setSbPenalties((penaltyRes.data ?? []).map((row) => ({
           studentId: row.student_id, competencyId: row.competency_id, date: row.date, createdAt: row.created_at,
         })));
-        setSbRecoveries((recoveryRes.data ?? []).map((row) => ({
+        setSbRecoveries(recoveryRes.error ? [] : (recoveryRes.data ?? []).map((row) => ({
           id: row.id, studentId: row.student_id, competencyId: row.competency_id, classId: row.class_id,
           actionType: row.action_type as "increase" | "reset_to_100", previousScore: row.previous_score, newScore: row.new_score,
           meetingDate: row.meeting_date, studentReason: row.student_reason, meetingNotes: row.meeting_notes,
@@ -236,10 +237,10 @@ export function useEvaluation(): UseEvaluationReturn {
             supabase.from("evaluations").select("student_id, competency_id, date, created_at").eq("student_id", studentId).eq("competency_id", competencyId),
             supabase.from("skill_recovery_actions").select("id, student_id, competency_id, class_id, action_type, previous_score, new_score, meeting_date, student_reason, meeting_notes, created_by, created_at").eq("student_id", studentId).eq("competency_id", competencyId),
           ]);
-          if (penaltyRes.error || recoveryRes.error) continue;
+          if (penaltyRes.error || (recoveryRes.error && !isMissingSkillRecoveryTable(recoveryRes.error))) continue;
           const score = competencyScoreFromLedger(
             (penaltyRes.data ?? []).map((row) => ({ studentId: row.student_id, competencyId: row.competency_id, date: row.date, createdAt: row.created_at })),
-            (recoveryRes.data ?? []).map((row) => ({
+            recoveryRes.error ? [] : (recoveryRes.data ?? []).map((row) => ({
               id: row.id, studentId: row.student_id, competencyId: row.competency_id, classId: row.class_id,
               actionType: row.action_type as "increase" | "reset_to_100", previousScore: row.previous_score, newScore: row.new_score,
               meetingDate: row.meeting_date, studentReason: row.student_reason, meetingNotes: row.meeting_notes,
