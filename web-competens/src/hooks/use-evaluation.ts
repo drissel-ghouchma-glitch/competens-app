@@ -26,6 +26,7 @@ export function useEvaluation(): UseEvaluationReturn {
 
   // ── Demo store selectors (always called) ─────────────────
   const storeClasses = useAppStore((s) => s.classes);
+  const storeSchoolYears = useAppStore((s) => s.schoolYears);
   const storeLevels = useAppStore((s) => s.levels);
   const storeStudents = useAppStore((s) => s.students);
   const storeCompetencies = useAppStore((s) => s.competencies);
@@ -47,12 +48,32 @@ export function useEvaluation(): UseEvaluationReturn {
   const [error, setError] = useState<string | null>(null);
 
   const today = new Date().toISOString().split("T")[0];
+  const demoActiveYearId = useMemo(
+    () => storeSchoolYears.find((year) => year.isActive && !year.isClosed)?.id,
+    [storeSchoolYears],
+  );
+  const demoClasses = useMemo(
+    () => storeClasses.filter((classe) => !classe.isArchived && classe.schoolYearId === demoActiveYearId),
+    [storeClasses, demoActiveYearId],
+  );
 
   const fetchFromSupabase = useCallback(async () => {
     if (!supabase) return;
     setLoading(true);
     setError(null);
     try {
+      const { data: activeYear, error: activeYearError } = await supabase
+        .from("school_years")
+        .select("id")
+        .eq("is_active", true)
+        .eq("is_closed", false)
+        .maybeSingle();
+      if (activeYearError) throw activeYearError;
+      if (!activeYear) {
+        setSbClasses([]); setSbLevels([]); setSbStudents([]); setSbCompetencies([]); setSbPenalties([]); setSbRecoveries([]);
+        return;
+      }
+
       let classIds: string[] = [];
       if (user?.role === "professeur") {
         const { data: assignments } = await supabase
@@ -67,7 +88,7 @@ export function useEvaluation(): UseEvaluationReturn {
         setLoading(false); return;
       }
 
-      let classesQuery = supabase.from("classes").select("*").eq("is_archived", false).order("name");
+      let classesQuery = supabase.from("classes").select("*").eq("is_archived", false).eq("school_year_id", activeYear.id).order("name");
       if (user?.role === "professeur") classesQuery = classesQuery.in("id", classIds);
 
       const [classesRes, levelsRes, competenciesRes] = await Promise.all([
@@ -125,11 +146,11 @@ export function useEvaluation(): UseEvaluationReturn {
         const allStudentIds = students.map((s) => s.id);
 
         const [penaltyRes, recoveryRes, lockRes] = await Promise.all([
-          supabase.from("evaluations").select("student_id, competency_id, date, created_at").in("student_id", allStudentIds),
-          supabase.from("skill_recovery_actions").select("id, student_id, competency_id, class_id, action_type, previous_score, new_score, meeting_date, student_reason, meeting_notes, created_by, created_at").in("student_id", allStudentIds),
+          supabase.from("evaluations").select("student_id, competency_id, date, created_at").in("student_id", allStudentIds).in("class_id", allClassIds),
+          supabase.from("skill_recovery_actions").select("id, student_id, competency_id, class_id, action_type, previous_score, new_score, meeting_date, student_reason, meeting_notes, created_by, created_at").in("student_id", allStudentIds).in("class_id", allClassIds),
           user?.id
             ? supabase.from("evaluations").select("student_id, competency_id")
-                .in("student_id", allStudentIds).eq("date", today).eq("teacher_id", user.id)
+                .in("student_id", allStudentIds).in("class_id", allClassIds).eq("date", today).eq("teacher_id", user.id)
             : Promise.resolve({ data: [] as { student_id: string; competency_id: string }[] }),
         ]);
 
@@ -181,14 +202,19 @@ export function useEvaluation(): UseEvaluationReturn {
       const result: Record<string, StudentEvalInfo> = {};
       for (const student of classStudents) {
         const penalties = storeEvaluations.filter(
-          (e) => e.studentId === student.id && e.competencyId === competencyId
+          (e) => e.studentId === student.id && e.competencyId === competencyId && e.classId === classId
         );
         const todayByMe = storeEvaluations.filter(
           (e) => e.studentId === student.id && e.competencyId === competencyId &&
-                 e.date === today && e.teacherId === (user?.id ?? "")
+                 e.classId === classId && e.date === today && e.teacherId === (user?.id ?? "")
         );
         result[student.id] = {
-          score: competencyScoreFromLedger(penalties, storeRecoveries, student.id, competencyId),
+          score: competencyScoreFromLedger(
+            penalties,
+            storeRecoveries.filter((action) => action.classId === classId),
+            student.id,
+            competencyId,
+          ),
           lockedByMe: todayByMe.length > 0,
         };
       }
@@ -233,9 +259,11 @@ export function useEvaluation(): UseEvaluationReturn {
 
       for (const studentId of studentIds) {
         try {
+          const student = sbStudents.find((item) => item.id === studentId);
+          if (!student?.classId) continue;
           const [penaltyRes, recoveryRes] = await Promise.all([
-            supabase.from("evaluations").select("student_id, competency_id, date, created_at").eq("student_id", studentId).eq("competency_id", competencyId),
-            supabase.from("skill_recovery_actions").select("id, student_id, competency_id, class_id, action_type, previous_score, new_score, meeting_date, student_reason, meeting_notes, created_by, created_at").eq("student_id", studentId).eq("competency_id", competencyId),
+            supabase.from("evaluations").select("student_id, competency_id, date, created_at").eq("student_id", studentId).eq("competency_id", competencyId).eq("class_id", student.classId),
+            supabase.from("skill_recovery_actions").select("id, student_id, competency_id, class_id, action_type, previous_score, new_score, meeting_date, student_reason, meeting_notes, created_by, created_at").eq("student_id", studentId).eq("competency_id", competencyId).eq("class_id", student.classId),
           ]);
           if (penaltyRes.error || (recoveryRes.error && !isMissingSkillRecoveryTable(recoveryRes.error))) continue;
           const score = competencyScoreFromLedger(
@@ -253,7 +281,6 @@ export function useEvaluation(): UseEvaluationReturn {
           // Trigger alerts at 91/100 (−9 points) and at ≤50 (Non acquis)
           if (score !== 91 && score > 50) continue;
 
-          const student = sbStudents.find((s) => s.id === studentId);
           const studentName = student ? `${student.firstName} ${student.lastName}` : studentId;
 
           // Avoid duplicate alerts today for the same student+competency
@@ -324,7 +351,7 @@ export function useEvaluation(): UseEvaluationReturn {
   );
 
   return {
-    classes: isDemo ? storeClasses.filter((c) => !c.isArchived) : sbClasses,
+    classes: isDemo ? demoClasses : sbClasses,
     levels: isDemo ? storeLevels : sbLevels,
     competencies: isDemo ? storeCompetencies.filter((c) => !c.isArchived) : sbCompetencies,
     loading,

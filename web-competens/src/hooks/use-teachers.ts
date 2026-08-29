@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useDemoStore } from "@/stores/demo";
 import { useAppStore } from "@/stores/app-store";
 import { supabase } from "@/lib/supabase";
@@ -38,11 +38,20 @@ export function useTeachers(): UseTeachersReturn {
   // Always call store hooks (React rules of hooks)
   const storeTeachers = useAppStore((s) => s.teachers);
   const storeClasses = useAppStore((s) => s.classes);
+  const storeSchoolYears = useAppStore((s) => s.schoolYears);
   const storeTeacherClassAssignments = useAppStore((s) => s.teacherClassAssignments);
   const storeUpdateTeacher = useAppStore((s) => s.updateTeacher);
   const storeDeleteTeacher = useAppStore((s) => s.deleteTeacher);
   const storeAssignTeacherToClass = useAppStore((s) => s.assignTeacherToClass);
   const storeUnassignTeacherFromClass = useAppStore((s) => s.unassignTeacherFromClass);
+  const demoActiveYearId = useMemo(
+    () => storeSchoolYears.find((year) => year.isActive && !year.isClosed)?.id,
+    [storeSchoolYears],
+  );
+  const demoClasses = useMemo(
+    () => storeClasses.filter((classe) => classe.schoolYearId === demoActiveYearId),
+    [storeClasses, demoActiveYearId],
+  );
 
   const [sbTeachers, setSbTeachers] = useState<Teacher[]>([]);
   const [sbClasses, setSbClasses] = useState<Classe[]>([]);
@@ -65,8 +74,10 @@ export function useTeachers(): UseTeachersReturn {
           .order("full_name"),
         supabase
           .from("classes")
-          .select("id, name, level_id, teacher_id, capacity, student_count, is_archived, school_year_id, created_at")
+          .select("id, name, level_id, teacher_id, capacity, student_count, is_archived, school_year_id, created_at, school_years!inner(is_active,is_closed)")
           .eq("is_archived", false)
+          .eq("school_years.is_active", true)
+          .eq("school_years.is_closed", false)
           .order("name"),
         supabase
           .from("teacher_class_assignments")
@@ -106,7 +117,7 @@ export function useTeachers(): UseTeachersReturn {
       const assignmentsMap: Record<string, string[]> = {};
       for (const row of assignmentsRes.data ?? []) {
         if (!assignmentsMap[row.teacher_id]) assignmentsMap[row.teacher_id] = [];
-        assignmentsMap[row.teacher_id].push(row.class_id);
+        if (classes.some((classe) => classe.id === row.class_id)) assignmentsMap[row.teacher_id].push(row.class_id);
       }
 
       const primaryClassesMap: Record<string, string> = {};
@@ -155,11 +166,15 @@ export function useTeachers(): UseTeachersReturn {
 
       // 2. Sync class assignments (delete all, then re-insert selected)
       if (data.assignedClassIds !== undefined) {
-        const { error: delErr } = await supabase
-          .from("teacher_class_assignments")
-          .delete()
-          .eq("teacher_id", id);
-        if (delErr) throw new Error(delErr.message);
+        const activeClassIds = sbClasses.map((classe) => classe.id);
+        if (activeClassIds.length > 0) {
+          const { error: delErr } = await supabase
+            .from("teacher_class_assignments")
+            .delete()
+            .eq("teacher_id", id)
+            .in("class_id", activeClassIds);
+          if (delErr) throw new Error(delErr.message);
+        }
 
         if (data.assignedClassIds.length > 0) {
           const rows = data.assignedClassIds.map((classId) => ({ teacher_id: id, class_id: classId }));
@@ -170,11 +185,14 @@ export function useTeachers(): UseTeachersReturn {
 
       // 3. A principal teacher is stored separately on classes.teacher_id.
       if (data.primaryClassId !== undefined) {
-        const { error: clearErr } = await supabase
-          .from("classes")
-          .update({ teacher_id: null })
-          .eq("teacher_id", id);
-        if (clearErr) throw new Error(clearErr.message);
+        const activePrincipalClassIds = sbClasses.filter((classe) => classe.teacherId === id).map((classe) => classe.id);
+        if (activePrincipalClassIds.length > 0) {
+          const { error: clearErr } = await supabase
+            .from("classes")
+            .update({ teacher_id: null })
+            .in("id", activePrincipalClassIds);
+          if (clearErr) throw new Error(clearErr.message);
+        }
 
         if (data.primaryClassId) {
           const { error: principalErr } = await supabase
@@ -196,7 +214,7 @@ export function useTeachers(): UseTeachersReturn {
 
       await fetchFromSupabase();
     },
-    [sbTeachers, fetchFromSupabase]
+    [sbTeachers, sbClasses, fetchFromSupabase]
   );
 
   // ── Real archive ──────────────────────────────────────────
@@ -207,16 +225,21 @@ export function useTeachers(): UseTeachersReturn {
     async (id: string) => {
       if (!supabase) throw new Error("Supabase non disponible");
       // Remove class assignments so classes appear unassigned
-      const { error: delErr } = await supabase
-        .from("teacher_class_assignments")
-        .delete()
-        .eq("teacher_id", id);
-      if (delErr) throw new Error(delErr.message);
-      const { error: clearPrincipalErr } = await supabase
-        .from("classes")
-        .update({ teacher_id: null })
-        .eq("teacher_id", id);
-      if (clearPrincipalErr) throw new Error(clearPrincipalErr.message);
+      const activeClassIds = sbClasses.map((classe) => classe.id);
+      if (activeClassIds.length > 0) {
+        const { error: delErr } = await supabase
+          .from("teacher_class_assignments")
+          .delete()
+          .eq("teacher_id", id)
+          .in("class_id", activeClassIds);
+        if (delErr) throw new Error(delErr.message);
+        const { error: clearPrincipalErr } = await supabase
+          .from("classes")
+          .update({ teacher_id: null })
+          .eq("teacher_id", id)
+          .in("id", activeClassIds);
+        if (clearPrincipalErr) throw new Error(clearPrincipalErr.message);
+      }
       // Suspend the profile
       const { error: err } = await supabase
         .from("profiles")
@@ -225,7 +248,7 @@ export function useTeachers(): UseTeachersReturn {
       if (err) throw new Error(err.message);
       await fetchFromSupabase();
     },
-    [fetchFromSupabase]
+    [fetchFromSupabase, sbClasses]
   );
 
   // ── Demo update ───────────────────────────────────────────
@@ -238,12 +261,12 @@ export function useTeachers(): UseTeachersReturn {
       storeUpdateTeacher(id, { firstName: data.firstName, lastName: data.lastName, phone: data.phone });
       if (data.assignedClassIds !== undefined) {
         // Sync demo assignments: unassign all current, then assign selected
-        const current = storeTeacherClassAssignments.filter((a) => a.teacherId === id);
+        const current = storeTeacherClassAssignments.filter((a) => a.teacherId === id && demoClasses.some((classe) => classe.id === a.classId));
         current.forEach((a) => storeUnassignTeacherFromClass(id, a.classId));
         data.assignedClassIds.forEach((classId) => storeAssignTeacherToClass(id, classId));
       }
       if (data.primaryClassId !== undefined) {
-        storeClasses.forEach((classe) => {
+        demoClasses.forEach((classe) => {
           if (classe.teacherId === id && classe.id !== data.primaryClassId) {
             useAppStore.getState().updateClass(classe.id, { teacherId: undefined });
           }
@@ -254,7 +277,7 @@ export function useTeachers(): UseTeachersReturn {
         }
       }
     },
-    [storeUpdateTeacher, storeTeacherClassAssignments, storeAssignTeacherToClass, storeUnassignTeacherFromClass]
+    [storeUpdateTeacher, storeTeacherClassAssignments, storeAssignTeacherToClass, storeUnassignTeacherFromClass, demoClasses]
   );
 
   const archiveTeacherDemo = useCallback(
@@ -264,18 +287,18 @@ export function useTeachers(): UseTeachersReturn {
 
   // Build demo assignments map
   const demoAssignmentsMap: Record<string, string[]> = {};
-  for (const a of storeTeacherClassAssignments) {
+  for (const a of storeTeacherClassAssignments.filter((assignment) => demoClasses.some((classe) => classe.id === assignment.classId))) {
     if (!demoAssignmentsMap[a.teacherId]) demoAssignmentsMap[a.teacherId] = [];
     demoAssignmentsMap[a.teacherId].push(a.classId);
   }
   const demoPrimaryClassesMap: Record<string, string> = {};
-  for (const classe of storeClasses) {
+  for (const classe of demoClasses) {
     if (classe.teacherId) demoPrimaryClassesMap[classe.teacherId] = classe.id;
   }
 
   return {
     teachers: isDemo ? storeTeachers : sbTeachers,
-    classes: isDemo ? storeClasses : sbClasses,
+    classes: isDemo ? demoClasses : sbClasses,
     teacherAssignedClassIds: isDemo ? demoAssignmentsMap : sbAssignments,
     primaryClassByTeacherId: isDemo ? demoPrimaryClassesMap : sbPrimaryClasses,
     loading,

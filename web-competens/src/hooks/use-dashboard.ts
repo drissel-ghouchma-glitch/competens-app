@@ -28,12 +28,24 @@ export function useDashboard(): DashboardData {
   const storeSchoolYears = useAppStore((s) => s.schoolYears);
 
   const storeActiveYear = useMemo(() => storeSchoolYears.find((y) => y.isActive), [storeSchoolYears]);
+  const storeActiveClassIds = useMemo(
+    () => new Set(storeClasses.filter((classe) => classe.schoolYearId === storeActiveYear?.id && !classe.isArchived).map((classe) => classe.id)),
+    [storeClasses, storeActiveYear?.id],
+  );
+  const storeActiveStudents = useMemo(
+    () => storeStudents.filter((student) => storeActiveClassIds.has(student.classId)),
+    [storeStudents, storeActiveClassIds],
+  );
+  const storeActiveEvaluations = useMemo(
+    () => storeEvaluations.filter((evaluation) => storeActiveClassIds.has(evaluation.classId)),
+    [storeEvaluations, storeActiveClassIds],
+  );
   const storeActiveAlerts = useMemo(
     () =>
       storeAlerts
-        .filter((a) => !a.resolved)
-        .map((a) => ({ ...a, student: storeStudents.find((s) => s.id === a.studentId) })),
-    [storeAlerts, storeStudents]
+        .filter((a) => !a.resolved && storeActiveStudents.some((student) => student.id === a.studentId))
+        .map((a) => ({ ...a, student: storeActiveStudents.find((s) => s.id === a.studentId) })),
+    [storeAlerts, storeActiveStudents]
   );
 
   const storeWeeklyData = useMemo(() => {
@@ -44,11 +56,11 @@ export function useDashboard(): DashboardData {
       const dateStr = d.toISOString().split("T")[0];
       days.push({
         day: d.toLocaleDateString("fr-FR", { weekday: "short" }),
-        count: storeEvaluations.filter((e) => e.date === dateStr).length,
+        count: storeActiveEvaluations.filter((e) => e.date === dateStr).length,
       });
     }
     return days;
-  }, [storeEvaluations]);
+  }, [storeActiveEvaluations]);
 
   // Supabase state
   const [sbData, setSbData] = useState({
@@ -78,21 +90,38 @@ export function useDashboard(): DashboardData {
       const startDate = days[0];
       const today = days[6];
 
+      const { data: yearData, error: yearError } = await supabase
+        .from("school_years")
+        .select("*")
+        .eq("is_active", true)
+        .eq("is_closed", false)
+        .maybeSingle();
+      if (yearError) throw yearError;
+      const activeYear: SchoolYear | undefined = yearData
+        ? {
+            id: yearData.id, name: yearData.name, startDate: yearData.start_date,
+            endDate: yearData.end_date, isActive: yearData.is_active,
+            isClosed: yearData.is_closed, createdAt: yearData.created_at, updatedAt: yearData.updated_at,
+          }
+        : undefined;
+      const { data: activeClasses, error: classesError } = activeYear
+        ? await supabase.from("classes").select("id").eq("school_year_id", activeYear.id).eq("is_archived", false)
+        : { data: [], error: null };
+      if (classesError) throw classesError;
+      const classIds = (activeClasses ?? []).map((classe) => classe.id);
+      const scopedClassIds = classIds.length > 0 ? classIds : ["00000000-0000-0000-0000-000000000000"];
+
       const [
         studentsRes,
-        classesRes,
         teachersRes,
         evaluationsCountRes,
-        yearRes,
         weeklyEvalsRes,
         alertsRes,
       ] = await Promise.all([
-        supabase.from("students").select("*", { count: "exact", head: true }),
-        supabase.from("classes").select("*", { count: "exact", head: true }).eq("is_archived", false),
+        supabase.from("students").select("*", { count: "exact", head: true }).eq("is_archived", false).in("class_id", scopedClassIds),
         supabase.from("profiles").select("*", { count: "exact", head: true }).eq("role", "professeur").eq("status", "active"),
-        supabase.from("evaluations").select("*", { count: "exact", head: true }),
-        supabase.from("school_years").select("*").eq("is_active", true).limit(1),
-        supabase.from("evaluations").select("date").gte("date", startDate).lte("date", today),
+        supabase.from("evaluations").select("*", { count: "exact", head: true }).in("class_id", scopedClassIds),
+        supabase.from("evaluations").select("date").in("class_id", scopedClassIds).gte("date", startDate).lte("date", today),
         supabase.from("alerts").select("*, students(id, first_name, last_name, class_id)").eq("resolved", false).order("created_at", { ascending: false }).limit(5),
       ]);
 
@@ -106,18 +135,11 @@ export function useDashboard(): DashboardData {
         count: evalsByDay[d] ?? 0,
       }));
 
-      // Active year
-      const yr = yearRes.data?.[0];
-      const activeYear: SchoolYear | undefined = yr
-        ? {
-            id: yr.id, name: yr.name, startDate: yr.start_date,
-            endDate: yr.end_date, isActive: yr.is_active,
-            isClosed: yr.is_closed, createdAt: yr.created_at, updatedAt: yr.updated_at,
-          }
-        : undefined;
-
       // Alerts with student names
-      const alerts: (Alert & { student?: Student })[] = (alertsRes.data ?? []).map((a) => {
+      const alerts: (Alert & { student?: Student })[] = (alertsRes.data ?? []).filter((a) => {
+        const linkedStudent = a.students as { class_id?: string } | null;
+        return Boolean(linkedStudent?.class_id && classIds.includes(linkedStudent.class_id));
+      }).map((a) => {
         const s = a.students as { id: string; first_name: string; last_name: string; class_id: string } | null;
         return {
           id: a.id,
@@ -144,7 +166,7 @@ export function useDashboard(): DashboardData {
 
       setSbData({
         totalStudents: studentsRes.count ?? 0,
-        totalClasses: classesRes.count ?? 0,
+        totalClasses: classIds.length,
         totalTeachers: teachersRes.count ?? 0,
         totalEvaluations: evaluationsCountRes.count ?? 0,
         activeYear,
@@ -164,10 +186,10 @@ export function useDashboard(): DashboardData {
 
   if (isDemo) {
     return {
-      totalStudents: storeStudents.length,
-      totalClasses: storeClasses.length,
+      totalStudents: storeActiveStudents.length,
+      totalClasses: storeActiveClassIds.size,
       totalTeachers: storeTeachers.length,
-      totalEvaluations: storeEvaluations.length,
+      totalEvaluations: storeActiveEvaluations.length,
       activeYear: storeActiveYear,
       weeklyData: storeWeeklyData,
       alerts: storeActiveAlerts,

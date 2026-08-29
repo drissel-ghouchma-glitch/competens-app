@@ -67,6 +67,7 @@ export default function ClassesPage() {
           .from("classes")
           .select("id, name, level_id, capacity, student_count, is_archived, school_year_id, created_at")
           .eq("is_archived", false)
+          .eq("school_year_id", activeYear?.id ?? "00000000-0000-0000-0000-000000000000")
           .order("name"),
         supabase
           .from("teacher_class_assignments")
@@ -74,7 +75,7 @@ export default function ClassesPage() {
           .eq("teacher_id", user.id),
       ]);
 
-      let allClasses: Classe[] = (classesRes.data ?? []).map((c) => ({
+      const allClasses: Classe[] = (classesRes.data ?? []).map((c) => ({
         id: c.id, name: c.name, levelId: c.level_id ?? "",
         capacity: c.capacity, studentCount: c.student_count,
         isArchived: c.is_archived, schoolYearId: c.school_year_id, createdAt: c.created_at,

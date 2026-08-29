@@ -27,6 +27,7 @@ export function useAttendance(): UseAttendanceReturn {
 
   // ── Demo store selectors ──────────────────────────────────
   const storeClasses = useAppStore((s) => s.classes);
+  const storeSchoolYears = useAppStore((s) => s.schoolYears);
   const storeStudents = useAppStore((s) => s.students);
   const storeAttendance = useAppStore((s) => s.attendance);
   const storeSaveAttendance = useAppStore((s) => s.saveDemoAttendance);
@@ -47,6 +48,17 @@ export function useAttendance(): UseAttendanceReturn {
     setLoading(true);
     setError(null);
     try {
+      const { data: activeYear, error: activeYearError } = await supabase
+        .from("school_years")
+        .select("id")
+        .eq("is_active", true)
+        .eq("is_closed", false)
+        .maybeSingle();
+      if (activeYearError) throw activeYearError;
+      if (!activeYear) {
+        setSbClasses([]); setSbStudents([]); return;
+      }
+
       let classIds: string[] = [];
       if (user?.role === "professeur") {
         const { data: asgn } = await supabase
@@ -59,7 +71,7 @@ export function useAttendance(): UseAttendanceReturn {
         }
       }
 
-      let classQ = supabase.from("classes").select("*").eq("is_archived", false).order("name");
+      let classQ = supabase.from("classes").select("*").eq("is_archived", false).eq("school_year_id", activeYear.id).order("name");
       if (user?.role === "professeur") classQ = classQ.in("id", classIds);
 
       const [classesRes] = await Promise.all([classQ]);
@@ -194,7 +206,7 @@ export function useAttendance(): UseAttendanceReturn {
   );
 
   const getStudentsForClassDemo = useCallback((classId: string) => {
-    let students = storeStudents.filter((s) => s.classId === classId);
+    const students = storeStudents.filter((s) => s.classId === classId);
     if (user?.role === "professeur") {
       const assignedClassIds = storeAssignments.filter((a) => a.teacherId === user.id).map((a) => a.classId);
       if (!assignedClassIds.includes(classId)) return [];
@@ -204,6 +216,8 @@ export function useAttendance(): UseAttendanceReturn {
 
   const demoClasses = storeClasses.filter((c) => {
     if (c.isArchived) return false;
+    const activeYearId = storeSchoolYears.find((year) => year.isActive && !year.isClosed)?.id;
+    if (c.schoolYearId !== activeYearId) return false;
     if (user?.role === "professeur") {
       return storeAssignments.some((a) => a.teacherId === user.id && a.classId === c.id);
     }

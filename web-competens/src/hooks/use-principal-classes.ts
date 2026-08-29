@@ -70,6 +70,7 @@ export function usePrincipalClasses() {
   const { user } = useAuth();
   const isDemo = useDemoStore((s) => s.isDemoMode);
   const storeClasses = useAppStore((s) => s.classes);
+  const storeSchoolYears = useAppStore((s) => s.schoolYears);
   const storeStudents = useAppStore((s) => s.students);
   const storeCompetencies = useAppStore((s) => s.competencies);
   const storeEvaluations = useAppStore((s) => s.evaluations);
@@ -87,11 +88,15 @@ export function usePrincipalClasses() {
   const [error, setError] = useState<string | null>(null);
 
   const demoTeacherId = user?.id ?? storeClasses.find((classe) => classe.teacherId)?.teacherId;
+  const demoActiveYearId = useMemo(
+    () => storeSchoolYears.find((year) => year.isActive && !year.isClosed)?.id,
+    [storeSchoolYears],
+  );
   const principalClasses = useMemo(() => {
     const source = isDemo ? storeClasses : sbClasses;
     const teacherId = isDemo ? demoTeacherId : user?.id;
-    return source.filter((classe) => !classe.isArchived && classe.teacherId === teacherId);
-  }, [isDemo, storeClasses, sbClasses, demoTeacherId, user?.id]);
+    return source.filter((classe) => !classe.isArchived && classe.teacherId === teacherId && (!isDemo || classe.schoolYearId === demoActiveYearId));
+  }, [isDemo, storeClasses, sbClasses, demoTeacherId, user?.id, demoActiveYearId]);
 
   useEffect(() => {
     setSelectedClassId((current) => current && principalClasses.some((classe) => classe.id === current)
@@ -106,9 +111,11 @@ export function usePrincipalClasses() {
     try {
       const { data, error: classesError } = await supabase
         .from("classes")
-        .select("id, name, level_id, teacher_id, capacity, student_count, is_archived, school_year_id, created_at")
+        .select("id, name, level_id, teacher_id, capacity, student_count, is_archived, school_year_id, created_at, school_years!inner(is_active,is_closed)")
         .eq("teacher_id", user.id)
         .eq("is_archived", false)
+        .eq("school_years.is_active", true)
+        .eq("school_years.is_closed", false)
         .order("name");
       if (classesError) throw classesError;
       setSbClasses((data ?? []).map((classe) => ({

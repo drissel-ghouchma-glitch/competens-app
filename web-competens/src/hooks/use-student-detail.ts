@@ -5,7 +5,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/lib/supabase";
 import { isMissingSkillRecoveryTable } from "@/lib/skill-recovery";
 import { scoreToStatus, buildTimeline, competencyScoreFromLedger, type PenaltyLedgerEvent, type TimelinePoint } from "@/lib/eval-utils";
-import type { Student, Classe, Level, Competency, Alert, EvaluationStatus, AttendanceRecord, AttendanceStatus, AttendancePeriod, SkillRecoveryAction } from "@/types";
+import type { Student, Classe, Level, Competency, Alert, EvaluationStatus, AttendanceRecord, AttendanceStatus, AttendancePeriod, SkillRecoveryAction, EnrollmentStatus } from "@/types";
 import type { DailyEvalRecord, ClassTeacher } from "@/components/DailyGranularAnalytics";
 import type { RecoverySubmission } from "@/components/SkillRecoveryDialog";
 
@@ -21,6 +21,18 @@ export interface CompetencyStat {
   isArchived: boolean;
 }
 
+export interface AcademicHistoryItem {
+  id: string;
+  schoolYearId: string;
+  schoolYearName: string;
+  classId?: string;
+  className: string;
+  levelCode: string;
+  status: EnrollmentStatus;
+  startedAt: string;
+  endedAt?: string;
+}
+
 // Each record = one penalty event (no status field).
 interface RawEval extends PenaltyLedgerEvent {
   id: string;
@@ -28,6 +40,7 @@ interface RawEval extends PenaltyLedgerEvent {
   competencyId: string;
   teacherId: string;
   teacherName: string;
+  classId: string;
   date: string;
   createdAt: string;
 }
@@ -63,6 +76,7 @@ export interface UseStudentDetailReturn {
   rawEvals: DailyEvalRecord[];
   recoveryActions: SkillRecoveryAction[];
   classTeachers: ClassTeacher[];
+  academicHistory: AcademicHistoryItem[];
   loading: boolean;
   error: string | null;
   updateStudent: (data: Partial<Pick<Student, "firstName" | "lastName" | "birthDate" | "gender" | "classId">>) => Promise<void>;
@@ -84,6 +98,8 @@ export function useStudentDetail(studentId: string | undefined): UseStudentDetai
   const storeTeachers = useAppStore((s) => s.teachers);
   const storeAlerts = useAppStore((s) => s.alerts);
   const storeAttendance = useAppStore((s) => s.attendance);
+  const storeEnrollments = useAppStore((s) => s.studentEnrollments);
+  const storeSchoolYears = useAppStore((s) => s.schoolYears);
   const storeUpdateStudent = useAppStore((s) => s.updateStudent);
   const addDemoRecovery = useAppStore((s) => s.addDemoSkillRecoveryAction);
 
@@ -105,7 +121,7 @@ export function useStudentDetail(studentId: string | undefined): UseStudentDetai
   );
   const demoRawEvals = useMemo(
     () => storeEvaluations
-      .filter((e) => e.studentId === studentId)
+      .filter((e) => e.studentId === studentId && e.classId === demoStudent?.classId)
       .map((e) => {
         const t = storeTeachers.find((x) => x.id === e.teacherId);
         return {
@@ -114,15 +130,16 @@ export function useStudentDetail(studentId: string | undefined): UseStudentDetai
           competencyId: e.competencyId,
           teacherId: e.teacherId,
           teacherName: t ? `${t.firstName} ${t.lastName}` : "",
+          classId: e.classId,
           date: e.date,
           createdAt: e.createdAt,
         };
       }),
-    [storeEvaluations, storeTeachers, studentId]
+    [storeEvaluations, storeTeachers, studentId, demoStudent?.classId]
   );
   const demoRecoveries = useMemo(
-    () => storeRecoveries.filter((action) => action.studentId === studentId),
-    [storeRecoveries, studentId]
+    () => storeRecoveries.filter((action) => action.studentId === studentId && action.classId === demoStudent?.classId),
+    [storeRecoveries, studentId, demoStudent?.classId]
   );
   const demoMyEvals = useMemo(
     () => user?.role === "professeur"
@@ -143,8 +160,8 @@ export function useStudentDetail(studentId: string | undefined): UseStudentDetai
     [demoRawEvals, studentId]
   );
   const demoAttendanceHistory = useMemo(
-    () => storeAttendance.filter((a) => a.studentId === studentId).sort((a, b) => b.date.localeCompare(a.date)),
-    [storeAttendance, studentId]
+    () => storeAttendance.filter((a) => a.studentId === studentId && a.classId === demoStudent?.classId).sort((a, b) => b.date.localeCompare(a.date)),
+    [storeAttendance, studentId, demoStudent?.classId]
   );
   const demoClassTeachers = useMemo<ClassTeacher[]>(() => {
     const ids = new Set(demoRawEvals.map((e) => e.teacherId));
@@ -152,6 +169,26 @@ export function useStudentDetail(studentId: string | undefined): UseStudentDetai
       .filter((t) => ids.has(t.id))
       .map((t) => ({ id: t.id, name: `${t.firstName} ${t.lastName}` }));
   }, [demoRawEvals, storeTeachers]);
+  const demoAcademicHistory = useMemo<AcademicHistoryItem[]>(() => storeEnrollments
+    .filter((enrollment) => enrollment.studentId === studentId)
+    .map((enrollment) => {
+      const historyClass = storeClasses.find((classe) => classe.id === enrollment.classId);
+      const historyLevel = storeLevels.find((level) => level.id === historyClass?.levelId);
+      const year = storeSchoolYears.find((schoolYear) => schoolYear.id === enrollment.schoolYearId);
+      return {
+        id: enrollment.id,
+        schoolYearId: enrollment.schoolYearId,
+        schoolYearName: year?.name ?? "—",
+        classId: enrollment.classId,
+        className: historyClass?.name ?? "—",
+        levelCode: historyLevel?.code ?? "",
+        status: enrollment.status,
+        startedAt: enrollment.startedAt,
+        endedAt: enrollment.endedAt,
+      };
+    })
+    .sort((left, right) => right.startedAt.localeCompare(left.startedAt)),
+  [storeEnrollments, storeClasses, storeLevels, storeSchoolYears, studentId]);
 
   // ── Supabase state ───────────────────────────────────────
   const [sbStudent, setSbStudent] = useState<Student | null>(null);
@@ -165,6 +202,7 @@ export function useStudentDetail(studentId: string | undefined): UseStudentDetai
   const [sbRecoveries, setSbRecoveries] = useState<SkillRecoveryAction[]>([]);
   const [sbAttendanceHistory, setSbAttendanceHistory] = useState<AttendanceRecord[]>([]);
   const [sbClassTeachers, setSbClassTeachers] = useState<ClassTeacher[]>([]);
+  const [sbAcademicHistory, setSbAcademicHistory] = useState<AcademicHistoryItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -183,7 +221,7 @@ export function useStudentDetail(studentId: string | undefined): UseStudentDetai
 
   const mapEval = (e: {
     student_id: string; competency_id: string; teacher_id: string;
-    date: string; created_at: string; id: string;
+    date: string; created_at: string; id: string; class_id: string | null;
     profiles: { full_name?: string } | null;
   }): RawEval => ({
     id: e.id,
@@ -191,6 +229,7 @@ export function useStudentDetail(studentId: string | undefined): UseStudentDetai
     competencyId: e.competency_id,
     teacherId: e.teacher_id,
     teacherName: e.profiles?.full_name ?? "",
+    classId: e.class_id ?? "",
     date: e.date,
     createdAt: e.created_at,
   });
@@ -224,10 +263,12 @@ export function useStudentDetail(studentId: string | undefined): UseStudentDetai
       setSbStudent(student);
 
       const [classesRes, compRes, alertsRes, attRes, tcaRes] = await Promise.all([
-        supabase.from("classes").select("*, levels(*)").eq("is_archived", false).order("name"),
+        supabase.from("classes").select("*, levels(*), school_years!inner(is_active)").eq("is_archived", false).eq("school_years.is_active", true).order("name"),
         supabase.from("competencies").select("*").order("order"),
         supabase.from("alerts").select("*").eq("student_id", studentId).order("created_at", { ascending: false }),
-        supabase.from("attendance").select("*").eq("student_id", studentId).order("date", { ascending: false }),
+        student.classId
+          ? supabase.from("attendance").select("*").eq("student_id", studentId).eq("class_id", student.classId).order("date", { ascending: false })
+          : Promise.resolve({ data: [], error: null }),
         student.classId
           ? supabase.from("teacher_class_assignments").select("teacher_id, profiles(full_name)").eq("class_id", student.classId)
           : Promise.resolve({ data: [] as { teacher_id: string; profiles: { full_name?: string } | null }[], error: null }),
@@ -278,19 +319,58 @@ export function useStudentDetail(studentId: string | undefined): UseStudentDetai
         name: (r.profiles as { full_name?: string } | null)?.full_name ?? r.teacher_id,
       })));
 
+      if (user?.role !== "professeur") {
+        const { data: historyData, error: historyError } = await supabase
+          .from("student_enrollments")
+          .select("id,school_year_id,class_id,status,started_at,ended_at,school_years(name),classes(name,levels(code))")
+          .eq("student_id", studentId)
+          .order("started_at", { ascending: false });
+        if (!historyError) {
+          setSbAcademicHistory((historyData ?? []).map((row) => {
+            const yearRelation = Array.isArray(row.school_years) ? row.school_years[0] : row.school_years;
+            const classRelation = Array.isArray(row.classes) ? row.classes[0] : row.classes;
+            const levelRelation = Array.isArray(classRelation?.levels) ? classRelation.levels[0] : classRelation?.levels;
+            return {
+              id: row.id,
+              schoolYearId: row.school_year_id,
+              schoolYearName: yearRelation?.name ?? "—",
+              classId: row.class_id ?? undefined,
+              className: classRelation?.name ?? "—",
+              levelCode: levelRelation?.code ?? "",
+              status: row.status as EnrollmentStatus,
+              startedAt: row.started_at,
+              endedAt: row.ended_at ?? undefined,
+            };
+          }));
+        } else {
+          setSbAcademicHistory([]);
+        }
+      } else {
+        setSbAcademicHistory([]);
+      }
+
+      if (!student.classId) {
+        setSbMyEvals([]);
+        setSbAllEvals([]);
+        setSbRecoveries([]);
+        return;
+      }
+
       // Fetch penalty records (no status column)
       const evalsBase = supabase
         .from("evaluations")
-        .select("id, student_id, competency_id, teacher_id, date, created_at, profiles(full_name)")
-        .eq("student_id", studentId);
+        .select("id, student_id, competency_id, teacher_id, class_id, date, created_at, profiles(full_name)")
+        .eq("student_id", studentId)
+        .eq("class_id", student.classId);
 
       if (user?.role === "professeur" && user?.id) {
         const [myRes, allRes] = await Promise.all([
           evalsBase.eq("teacher_id", user.id),
           supabase
             .from("evaluations")
-            .select("id, student_id, competency_id, teacher_id, date, created_at, profiles(full_name)")
-            .eq("student_id", studentId),
+            .select("id, student_id, competency_id, teacher_id, class_id, date, created_at, profiles(full_name)")
+            .eq("student_id", studentId)
+            .eq("class_id", student.classId),
         ]);
         setSbMyEvals((myRes.data ?? []).map(mapEval));
         setSbAllEvals((allRes.data ?? []).map(mapEval));
@@ -305,6 +385,7 @@ export function useStudentDetail(studentId: string | undefined): UseStudentDetai
         .from("skill_recovery_actions")
         .select("id, student_id, competency_id, class_id, action_type, previous_score, new_score, meeting_date, student_reason, meeting_notes, created_by, created_at, profiles(full_name)")
         .eq("student_id", studentId)
+        .eq("class_id", student.classId)
         .order("meeting_date");
       if (recoveryError && !isMissingSkillRecoveryTable(recoveryError)) throw recoveryError;
       setSbRecoveries(recoveryError ? [] : (recoveryData ?? []).map((row) => mapRecovery(row as Parameters<typeof mapRecovery>[0])));
@@ -386,6 +467,7 @@ export function useStudentDetail(studentId: string | undefined): UseStudentDetai
     rawEvals: isDemo ? demoRawEvals : sbAllEvals,
     recoveryActions: isDemo ? demoRecoveries : sbRecoveries,
     classTeachers: isDemo ? demoClassTeachers : sbClassTeachers,
+    academicHistory: isDemo ? demoAcademicHistory : sbAcademicHistory,
     loading,
     error,
     updateStudent: isDemo ? updateStudentDemo : updateStudentReal,

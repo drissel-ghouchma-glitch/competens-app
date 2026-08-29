@@ -1,7 +1,7 @@
 // SQL migration required before archiveStudent works in real mode:
 //   ALTER TABLE students ADD COLUMN IF NOT EXISTS is_archived BOOLEAN NOT NULL DEFAULT FALSE;
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useDemoStore } from "@/stores/demo";
 import { useAppStore } from "@/stores/app-store";
 import { supabase } from "@/lib/supabase";
@@ -45,9 +45,23 @@ export function useStudents(): UseStudentsReturn {
 
   const storeStudents = useAppStore((s) => s.students);
   const storeClasses = useAppStore((s) => s.classes);
+  const storeSchoolYears = useAppStore((s) => s.schoolYears);
   const storeAddStudent = useAppStore((s) => s.addStudent);
   const storeImportStudents = useAppStore((s) => s.importStudents);
   const storeDeleteStudent = useAppStore((s) => s.deleteStudent);
+  const demoActiveYearId = useMemo(
+    () => storeSchoolYears.find((year) => year.isActive && !year.isClosed)?.id,
+    [storeSchoolYears],
+  );
+  const demoClasses = useMemo(
+    () => storeClasses.filter((classe) => classe.schoolYearId === demoActiveYearId && !classe.isArchived),
+    [storeClasses, demoActiveYearId],
+  );
+  const demoClassIds = useMemo(() => new Set(demoClasses.map((classe) => classe.id)), [demoClasses]);
+  const demoStudents = useMemo(
+    () => storeStudents.filter((student) => demoClassIds.has(student.classId)),
+    [storeStudents, demoClassIds],
+  );
 
   const [sbStudents, setSbStudents] = useState<Student[]>([]);
   const [sbClasses, setSbClasses] = useState<Classe[]>([]);
@@ -59,24 +73,23 @@ export function useStudents(): UseStudentsReturn {
     setLoading(true);
     setError(null);
     try {
-      const [studentsRes, classesRes] = await Promise.all([
-        supabase.from("students").select("*").eq("is_archived", false).order("last_name"),
-        supabase.from("classes").select("*").eq("is_archived", false).order("name"),
-      ]);
-
-      if (studentsRes.error) throw studentsRes.error;
+      const { data: activeYear, error: activeYearError } = await supabase
+        .from("school_years")
+        .select("id")
+        .eq("is_active", true)
+        .eq("is_closed", false)
+        .maybeSingle();
+      if (activeYearError) throw activeYearError;
+      if (!activeYear) {
+        setSbStudents([]); setSbClasses([]); return;
+      }
+      const classesRes = await supabase
+        .from("classes")
+        .select("*")
+        .eq("is_archived", false)
+        .eq("school_year_id", activeYear.id)
+        .order("name");
       if (classesRes.error) throw classesRes.error;
-
-      const students: Student[] = (studentsRes.data ?? []).map((s) => ({
-        id: s.id,
-        firstName: s.first_name,
-        lastName: s.last_name,
-        birthDate: s.birth_date ?? "",
-        gender: (s.gender ?? "M") as "M" | "F",
-        classId: s.class_id ?? "",
-        photoUrl: s.photo_url ?? undefined,
-        createdAt: s.created_at,
-      }));
 
       const classes: Classe[] = (classesRes.data ?? []).map((c) => ({
         id: c.id,
@@ -87,6 +100,23 @@ export function useStudents(): UseStudentsReturn {
         isArchived: c.is_archived,
         schoolYearId: c.school_year_id,
         createdAt: c.created_at,
+      }));
+
+      const classIds = classes.map((classe) => classe.id);
+      const studentsRes = classIds.length === 0
+        ? { data: [], error: null }
+        : await supabase.from("students").select("*").eq("is_archived", false).in("class_id", classIds).order("last_name");
+      if (studentsRes.error) throw studentsRes.error;
+
+      const students: Student[] = (studentsRes.data ?? []).map((s) => ({
+        id: s.id,
+        firstName: s.first_name,
+        lastName: s.last_name,
+        birthDate: s.birth_date ?? "",
+        gender: (s.gender ?? "M") as "M" | "F",
+        classId: s.class_id ?? "",
+        photoUrl: s.photo_url ?? undefined,
+        createdAt: s.created_at,
       }));
 
       setSbStudents(students);
@@ -190,8 +220,8 @@ export function useStudents(): UseStudentsReturn {
   );
 
   return {
-    students: isDemo ? storeStudents : sbStudents,
-    classes: isDemo ? storeClasses : sbClasses,
+    students: isDemo ? demoStudents : sbStudents,
+    classes: isDemo ? demoClasses : sbClasses,
     loading,
     error,
     refetch: fetchFromSupabase,

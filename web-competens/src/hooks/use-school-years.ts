@@ -25,7 +25,6 @@ export interface UseSchoolYearsReturn {
   addSchoolYear: (data: Omit<SchoolYear, "id" | "createdAt" | "updatedAt">) => Promise<void>;
   updateSchoolYear: (id: string, data: Partial<SchoolYear>) => Promise<void>;
   toggleSchoolYearActive: (id: string) => Promise<void>;
-  closeSchoolYear: (id: string) => Promise<void>;
 }
 
 export function useSchoolYears(): UseSchoolYearsReturn {
@@ -35,7 +34,6 @@ export function useSchoolYears(): UseSchoolYearsReturn {
   const storeAdd = useAppStore((s) => s.addSchoolYear);
   const storeUpdate = useAppStore((s) => s.updateSchoolYear);
   const storeToggle = useAppStore((s) => s.toggleSchoolYearActive);
-  const storeClose = useAppStore((s) => s.closeSchoolYear);
 
   const [sbYears, setSbYears] = useState<SchoolYear[]>([]);
   const [loading, setLoading] = useState(false);
@@ -100,6 +98,11 @@ export function useSchoolYears(): UseSchoolYearsReturn {
   const toggleActiveReal = useCallback(
     async (id: string) => {
       if (!supabase) return;
+      const selected = sbYears.find((year) => year.id === id);
+      if (selected?.isClosed) throw new Error("Une année clôturée ne peut pas être activée.");
+      if (!selected?.isActive && sbYears.some((year) => year.isActive && year.id !== id)) {
+        throw new Error("Clôturez d'abord l'année active avec le processus de fin d'année.");
+      }
       // Deactivate all, then activate the selected one
       const { error: e1 } = await supabase
         .from("school_years")
@@ -117,19 +120,6 @@ export function useSchoolYears(): UseSchoolYearsReturn {
     [sbYears, fetchFromSupabase]
   );
 
-  const closeReal = useCallback(
-    async (id: string) => {
-      if (!supabase) return;
-      const { error: err } = await supabase
-        .from("school_years")
-        .update({ is_closed: true, is_active: false })
-        .eq("id", id);
-      if (err) throw new Error(err.message);
-      await fetchFromSupabase();
-    },
-    [fetchFromSupabase]
-  );
-
   // ── Demo wrappers ──────────────────────────────────────────
 
   const addDemo = useCallback(
@@ -141,14 +131,16 @@ export function useSchoolYears(): UseSchoolYearsReturn {
     [storeUpdate]
   );
   const toggleDemo = useCallback(
-    async (id: string) => { storeToggle(id); },
-    [storeToggle]
+    async (id: string) => {
+      const selected = storeYears.find((year) => year.id === id);
+      if (selected?.isClosed) throw new Error("Une année clôturée ne peut pas être activée.");
+      if (!selected?.isActive && storeYears.some((year) => year.isActive && year.id !== id)) {
+        throw new Error("Clôturez d'abord l'année active avec le processus de fin d'année.");
+      }
+      storeToggle(id);
+    },
+    [storeToggle, storeYears]
   );
-  const closeDemo = useCallback(
-    async (id: string) => { storeClose(id); },
-    [storeClose]
-  );
-
   return {
     schoolYears: isDemo ? storeYears : sbYears,
     loading,
@@ -157,6 +149,5 @@ export function useSchoolYears(): UseSchoolYearsReturn {
     addSchoolYear: isDemo ? addDemo : addReal,
     updateSchoolYear: isDemo ? updateDemo : updateReal,
     toggleSchoolYearActive: isDemo ? toggleDemo : toggleActiveReal,
-    closeSchoolYear: isDemo ? closeDemo : closeReal,
   };
 }

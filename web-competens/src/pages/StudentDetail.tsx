@@ -19,7 +19,7 @@ import {
   ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar,
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell,
 } from "recharts";
-import type { CompetencyStat, TimelinePoint } from "@/hooks/use-student-detail";
+import type { AcademicHistoryItem, CompetencyStat, TimelinePoint } from "@/hooks/use-student-detail";
 import type { AttendanceRecord } from "@/types";
 import { DailyGranularAnalytics } from "@/components/DailyGranularAnalytics";
 import { SkillHistoryChart } from "@/components/SkillHistoryChart";
@@ -311,6 +311,36 @@ function AttendanceHistoryCard({ history }: { history: AttendanceRecord[] }) {
   );
 }
 
+function AcademicHistoryCard({ history }: { history: AcademicHistoryItem[] }) {
+  const { t } = useI18n();
+  if (history.length === 0) return null;
+  return (
+    <Card className="border-border/50">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base font-semibold flex items-center gap-2">
+          <GraduationCap className="w-4 h-4 text-primary" />
+          {t("studentDetail.academicHistory")}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        {history.map((item) => (
+          <div key={item.id} className="flex flex-col gap-2 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="font-medium">{item.schoolYearName}</p>
+              <p className="text-sm text-muted-foreground">
+                {item.className}{item.levelCode ? ` · ${item.levelCode}` : ""}
+              </p>
+            </div>
+            <Badge variant={item.status === "active" ? "default" : "secondary"}>
+              {t(`studentDetail.enrollment.${item.status}`)}
+            </Badge>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function StudentDetailPage() {
@@ -322,7 +352,7 @@ export default function StudentDetailPage() {
   const {
     student, classe, level, competencies,
     myStats, globalStats, alerts, timeline, attendanceHistory, classes,
-    rawEvals, recoveryActions, classTeachers,
+    rawEvals, recoveryActions, classTeachers, academicHistory,
     loading, error, updateStudent, createRecoveryAction,
   } = useStudentDetail(id);
 
@@ -455,6 +485,7 @@ export default function StudentDetailPage() {
           <SummaryPanel stats={readOnlyStats} />
         </div>
         <SkillGrid stats={readOnlyStats} />
+        {role === "parent" && <AcademicHistoryCard history={academicHistory} />}
         {canRecover && (
           <div className="flex justify-end">
             <Button onClick={() => setRecoveryOpen(true)} className="gap-2"><TrendingUp className="h-4 w-4" />{t("skillRecovery.open")}</Button>
@@ -624,6 +655,7 @@ export default function StudentDetailPage() {
       )}
 
       <AttendanceHistoryCard history={attendanceHistory} />
+      <AcademicHistoryCard history={academicHistory} />
       <SkillRecoveryDialog open={recoveryOpen} onOpenChange={setRecoveryOpen} studentName={`${student.firstName} ${student.lastName}`} competencies={competencies} skills={globalStats} onSubmit={createRecoveryAction} />
     </div>
   );

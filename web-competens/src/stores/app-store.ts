@@ -5,7 +5,7 @@ import type {
   Competency, Evaluation, EvaluationStatus,
   Alert, Notification, TeacherClassAssignment, DailyEvaluationInput,
   AttendanceRecord, DailyAttendanceInput, AttendanceStatus, AttendancePeriod,
-  SkillRecoveryAction,
+  SkillRecoveryAction, SchoolYearClosureDecisionInput, SchoolYearClosureResult, StudentEnrollment, EnrollmentStatus,
 } from "@/types";
 import { generateDemoData } from "./seed-data";
 
@@ -36,6 +36,7 @@ interface AppStore {
   notifications: Notification[];
   teacherClassAssignments: TeacherClassAssignment[];
   attendance: AttendanceRecord[];
+  studentEnrollments: StudentEnrollment[];
   celebrationPublished: boolean;
 
   initDemoData: () => void;
@@ -44,7 +45,12 @@ interface AppStore {
   addSchoolYear: (sy: Omit<SchoolYear, "id" | "createdAt" | "updatedAt">) => void;
   updateSchoolYear: (id: string, data: Partial<SchoolYear>) => void;
   toggleSchoolYearActive: (id: string) => void;
-  closeSchoolYear: (id: string) => void;
+  prepareDemoSchoolYearClosure: (sourceYearId: string, targetYearId: string) => Classe[];
+  finalizeSchoolYearClosure: (
+    sourceYearId: string,
+    targetYearId: string,
+    decisions: SchoolYearClosureDecisionInput[],
+  ) => SchoolYearClosureResult;
 
   addLevel: (level: Omit<Level, "id" | "createdAt">) => void;
   updateLevel: (id: string, data: Partial<Level>) => void;
@@ -99,6 +105,7 @@ export const useAppStore = create<AppStore>()(
       notifications: [],
       teacherClassAssignments: [],
       attendance: [],
+      studentEnrollments: [],
       celebrationPublished: false,
 
       setCelebrationPublished(value) {
@@ -120,8 +127,105 @@ export const useAppStore = create<AppStore>()(
       toggleSchoolYearActive(id) {
         set((s) => ({ schoolYears: s.schoolYears.map((y) => y.id === id ? { ...y, isActive: !y.isActive } : { ...y, isActive: false }) }));
       },
-      closeSchoolYear(id) {
-        set((s) => ({ schoolYears: s.schoolYears.map((y) => y.id === id ? { ...y, isClosed: true, isActive: false } : y) }));
+      prepareDemoSchoolYearClosure(sourceYearId, targetYearId) {
+        let targetClasses: Classe[] = [];
+        set((s) => {
+          const existing = s.classes.filter((classe) => classe.schoolYearId === targetYearId);
+          const existingKeys = new Set(existing.map((classe) => `${classe.name.toLowerCase()}|${classe.levelId}`));
+          const clones = s.classes
+            .filter((classe) => classe.schoolYearId === sourceYearId && !classe.isArchived)
+            .filter((classe) => !existingKeys.has(`${classe.name.toLowerCase()}|${classe.levelId}`))
+            .map<Classe>((classe) => ({
+              ...classe,
+              id: generateUUID(),
+              schoolYearId: targetYearId,
+              teacherId: undefined,
+              teacher: undefined,
+              studentCount: 0,
+              createdAt: new Date().toISOString(),
+            }));
+          targetClasses = [...existing, ...clones];
+          const sourceYear = s.schoolYears.find((year) => year.id === sourceYearId);
+          const sourceClassIds = new Set(s.classes.filter((classe) => classe.schoolYearId === sourceYearId).map((classe) => classe.id));
+          const enrolledKeys = new Set(s.studentEnrollments.map((enrollment) => `${enrollment.studentId}|${enrollment.schoolYearId}`));
+          const now = new Date().toISOString();
+          const snapshots: StudentEnrollment[] = s.students
+            .filter((student) => sourceClassIds.has(student.classId))
+            .filter((student) => !enrolledKeys.has(`${student.id}|${sourceYearId}`))
+            .map((student) => ({
+              id: generateUUID(), studentId: student.id, schoolYearId: sourceYearId,
+              classId: student.classId, status: "active", startedAt: sourceYear?.startDate ?? now.split("T")[0],
+              createdAt: now, updatedAt: now,
+            }));
+          return {
+            classes: clones.length > 0 ? [...s.classes, ...clones] : s.classes,
+            studentEnrollments: [...s.studentEnrollments, ...snapshots],
+          };
+        });
+        return targetClasses;
+      },
+      finalizeSchoolYearClosure(sourceYearId, targetYearId, decisions) {
+        const result: SchoolYearClosureResult = {
+          total: decisions.length,
+          promoted: decisions.filter((d) => d.decision === "promote").length,
+          repeated: decisions.filter((d) => d.decision === "repeat").length,
+          graduated: decisions.filter((d) => d.decision === "graduate").length,
+          transferred: decisions.filter((d) => d.decision === "transfer").length,
+          withdrawn: decisions.filter((d) => d.decision === "withdraw").length,
+        };
+        const decisionByStudent = new Map(decisions.map((decision) => [decision.studentId, decision]));
+        set((s) => {
+          const students = s.students.map((student) => {
+            const decision = decisionByStudent.get(student.id);
+            if (!decision) return student;
+            return {
+              ...student,
+              classId: decision.decision === "promote" || decision.decision === "repeat"
+                ? decision.targetClassId ?? ""
+                : "",
+            };
+          });
+          const classes = s.classes.map((classe) => ({
+            ...classe,
+            studentCount: classe.schoolYearId === targetYearId
+              ? students.filter((student) => student.classId === classe.id).length
+              : classe.studentCount,
+          }));
+          const now = new Date().toISOString();
+          const sourceYear = s.schoolYears.find((year) => year.id === sourceYearId);
+          const targetYear = s.schoolYears.find((year) => year.id === targetYearId);
+          const sourceEnrollments = s.studentEnrollments.map((enrollment) => {
+            const decision = decisionByStudent.get(enrollment.studentId);
+            if (enrollment.schoolYearId !== sourceYearId || !decision) return enrollment;
+            const statusByDecision: Record<string, EnrollmentStatus> = {
+              promote: "promoted", repeat: "repeated", graduate: "graduated",
+              transfer: "transferred", withdraw: "withdrawn",
+            };
+            return {
+              ...enrollment,
+              status: statusByDecision[decision.decision] ?? enrollment.status,
+              endedAt: sourceYear?.endDate,
+              updatedAt: now,
+            };
+          });
+          const enrollmentKeys = new Set(sourceEnrollments.map((enrollment) => `${enrollment.studentId}|${enrollment.schoolYearId}`));
+          const targetEnrollments: StudentEnrollment[] = decisions
+            .filter((decision) => decision.decision === "promote" || decision.decision === "repeat")
+            .filter((decision) => !enrollmentKeys.has(`${decision.studentId}|${targetYearId}`))
+            .map((decision) => ({
+              id: generateUUID(), studentId: decision.studentId, schoolYearId: targetYearId,
+              classId: decision.targetClassId, status: "active",
+              startedAt: targetYear?.startDate ?? now.split("T")[0], createdAt: now, updatedAt: now,
+            }));
+          const schoolYears = s.schoolYears.map((year) => ({
+            ...year,
+            isClosed: year.id === sourceYearId ? true : year.isClosed,
+            isActive: year.id === targetYearId,
+            updatedAt: year.id === sourceYearId || year.id === targetYearId ? now : year.updatedAt,
+          }));
+          return { students, classes, schoolYears, studentEnrollments: [...sourceEnrollments, ...targetEnrollments] };
+        });
+        return result;
       },
 
       addLevel(level) {

@@ -41,6 +41,10 @@ export function useClasses(): UseClassesReturn {
     () => storeSchoolYears.find((y) => y.isActive),
     [storeSchoolYears]
   );
+  const storeActiveClasses = useMemo(
+    () => storeClasses.filter((classe) => classe.schoolYearId === storeActiveYear?.id),
+    [storeClasses, storeActiveYear?.id],
+  );
 
   // Supabase state
   const [sbClasses, setSbClasses] = useState<Classe[]>([]);
@@ -71,7 +75,8 @@ export function useClasses(): UseClassesReturn {
       if (levelsRes.error) throw levelsRes.error;
       if (teachersRes.error) throw teachersRes.error;
 
-      const classes: Classe[] = (classesRes.data ?? []).map((c) => ({
+      const activeYearId = (yearsRes.data ?? [])[0]?.id;
+      const classes: Classe[] = (classesRes.data ?? []).filter((c) => c.school_year_id === activeYearId).map((c) => ({
         id: c.id,
         name: c.name,
         levelId: c.level_id ?? "",
@@ -211,7 +216,7 @@ export function useClasses(): UseClassesReturn {
   );
 
   return {
-    classes: isDemo ? storeClasses : sbClasses,
+    classes: isDemo ? storeActiveClasses : sbClasses,
     levels: isDemo ? storeLevels : sbLevels,
     teachers: isDemo ? storeTeachers : sbTeachers,
     activeYear: isDemo ? storeActiveYear : sbActiveYear,

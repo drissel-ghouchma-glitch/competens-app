@@ -24,6 +24,7 @@ interface RawEval extends PenaltyLedgerEvent {
   competencyId: string;
   teacherId: string;
   teacherName: string;
+  classId: string;
   date: string;
   createdAt: string;
 }
@@ -102,7 +103,7 @@ export function useParent(): UseParentReturn {
         // Penalty rows only — no status column
         supabase
           .from("evaluations")
-          .select("student_id, competency_id, teacher_id, date, created_at, profiles(full_name)")
+          .select("student_id, competency_id, teacher_id, class_id, date, created_at, profiles(full_name)")
           .in("student_id", studentIds),
         supabase
           .from("skill_recovery_actions")
@@ -116,7 +117,7 @@ export function useParent(): UseParentReturn {
         // Only confirmed records are visible to parents
         supabase
           .from("attendance")
-          .select("student_id, date, period, status")
+          .select("student_id, class_id, date, period, status")
           .in("student_id", studentIds)
           .eq("is_confirmed_by_admin", true)
           .order("date", { ascending: false }),
@@ -145,6 +146,7 @@ export function useParent(): UseParentReturn {
         competencyId: (e as { competency_id: string }).competency_id,
         teacherId: (e as { teacher_id?: string }).teacher_id ?? "",
         teacherName: (e.profiles as { full_name?: string } | null)?.full_name ?? "",
+        classId: (e as { class_id?: string }).class_id ?? "",
         date: (e as { date: string }).date,
         createdAt: (e as { created_at: string }).created_at,
       }));
@@ -180,9 +182,11 @@ export function useParent(): UseParentReturn {
       const morningMap = new Map<string, AttendanceStatus>();
       const afternoonMap = new Map<string, AttendanceStatus>();
       const absenceMap = new Map<string, string[]>();
+      const currentClassByStudent = new Map(students.map((student) => [student.id, student.classId]));
 
       for (const a of (attRes.data ?? [])) {
         const sid = a.student_id as string;
+        if ((a.class_id as string) !== currentClassByStudent.get(sid)) continue;
         const period = a.period as string;
         const status = a.status as AttendanceStatus;
         const date = a.date as string;
@@ -210,18 +214,24 @@ export function useParent(): UseParentReturn {
         alertsMap.set(a.student_id, list);
       }
 
-      const enriched: ParentChild[] = students.map((s) => ({
-        ...s,
-        stats: computeStats(evals, recoveries, comps, s.id),
-        alerts: alertsMap.get(s.id) ?? [],
-        timeline: buildTimeline(evals.filter((e) => e.studentId === s.id)),
-        todayMorning: morningMap.get(s.id) ?? null,
-        todayAfternoon: afternoonMap.get(s.id) ?? null,
-        absenceHistory: absenceMap.get(s.id) ?? [],
-        rawEvals: evals.filter((e) => e.studentId === s.id),
-        recoveryActions: recoveries.filter((action) => action.studentId === s.id),
-        classTeachers: tcasByClass.get(s.classId) ?? [],
-      }));
+      const enriched: ParentChild[] = students.map((s) => {
+        const currentEvals = evals.filter((e) => e.studentId === s.id && e.classId === s.classId);
+        const currentRecoveries = recoveries.filter(
+          (action) => action.studentId === s.id && action.classId === s.classId,
+        );
+        return {
+          ...s,
+          stats: computeStats(currentEvals, currentRecoveries, comps, s.id),
+          alerts: alertsMap.get(s.id) ?? [],
+          timeline: buildTimeline(currentEvals),
+          todayMorning: morningMap.get(s.id) ?? null,
+          todayAfternoon: afternoonMap.get(s.id) ?? null,
+          absenceHistory: absenceMap.get(s.id) ?? [],
+          rawEvals: currentEvals,
+          recoveryActions: currentRecoveries,
+          classTeachers: tcasByClass.get(s.classId) ?? [],
+        };
+      });
 
       setCompetencies(comps);
       setChildren(enriched);

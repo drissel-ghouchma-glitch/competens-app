@@ -12,9 +12,10 @@ import {
   DialogHeader, DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog";
 import type { SchoolYear } from "@/types";
+import { SchoolYearClosureDialog } from "@/components/school-years/SchoolYearClosureDialog";
 
 export default function SchoolYearsPage() {
-  const { schoolYears, loading, error, addSchoolYear, updateSchoolYear, toggleSchoolYearActive, closeSchoolYear } = useSchoolYears();
+  const { schoolYears, loading, error, refetch, addSchoolYear, updateSchoolYear, toggleSchoolYearActive } = useSchoolYears();
   const { t, lang } = useI18n();
   const locale = lang === "ar" ? "ar-MA" : "fr-FR";
 
@@ -25,6 +26,7 @@ export default function SchoolYearsPage() {
   const [name, setName] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+  const [closureYear, setClosureYear] = useState<SchoolYear | null>(null);
 
   const handleSubmit = async () => {
     setSaving(true);
@@ -144,13 +146,13 @@ export default function SchoolYearsPage() {
                   <Button variant="outline" size="sm" onClick={() => handleEdit(sy)} disabled={sy.isClosed}>
                     <Edit className="w-3.5 h-3.5" />
                   </Button>
-                  {!sy.isClosed && !sy.isActive && (
+                  {!sy.isClosed && !sy.isActive && !schoolYears.some((year) => year.isActive) && (
                     <Button variant="outline" size="sm" onClick={() => toggleSchoolYearActive(sy.id)}>
                       {t("schoolYears.activate")}
                     </Button>
                   )}
                   {sy.isActive && (
-                    <Button variant="outline" size="sm" onClick={() => closeSchoolYear(sy.id)} className="text-destructive border-destructive/30 hover:bg-destructive/5">
+                    <Button variant="outline" size="sm" onClick={() => setClosureYear(sy)} className="text-destructive border-destructive/30 hover:bg-destructive/5">
                       <Clock className="w-3.5 h-3.5 me-1.5" /> {t("schoolYears.close")}
                     </Button>
                   )}
@@ -169,6 +171,14 @@ export default function SchoolYearsPage() {
           )}
         </div>
       )}
+
+      <SchoolYearClosureDialog
+        sourceYear={closureYear}
+        schoolYears={schoolYears}
+        open={Boolean(closureYear)}
+        onOpenChange={(nextOpen) => { if (!nextOpen) setClosureYear(null); }}
+        onCompleted={refetch}
+      />
     </div>
   );
 }

@@ -157,14 +157,27 @@ export function useHonorRoll(lang: Lang = "fr"): UseHonorRollReturn {
   // ── Demo selectors ───────────────────────────────────────
   const storeStudents = useAppStore((s) => s.students);
   const storeClasses = useAppStore((s) => s.classes);
+  const storeSchoolYears = useAppStore((s) => s.schoolYears);
   const storeCompetencies = useAppStore((s) => s.competencies);
   const storeEvaluations = useAppStore((s) => s.evaluations);
   const storeRecoveries = useAppStore((s) => s.skillRecoveryActions);
   const storeTeachers = useAppStore((s) => s.teachers);
 
+  const demoActiveYearId = useMemo(
+    () => storeSchoolYears.find((year) => year.isActive && !year.isClosed)?.id,
+    [storeSchoolYears],
+  );
+
   const demoClasses = useMemo<HonorRollClass[]>(
-    () => storeClasses.filter((c) => !c.isArchived).map((c) => ({ id: c.id, name: c.name })),
-    [storeClasses]
+    () => storeClasses
+      .filter((c) => !c.isArchived && c.schoolYearId === demoActiveYearId)
+      .map((c) => ({ id: c.id, name: c.name })),
+    [storeClasses, demoActiveYearId]
+  );
+  const demoClassIds = useMemo(() => new Set(demoClasses.map((classe) => classe.id)), [demoClasses]);
+  const demoStudents = useMemo(
+    () => storeStudents.filter((student) => demoClassIds.has(student.classId)),
+    [storeStudents, demoClassIds],
   );
   const demoActiveCompetencyIds = useMemo(
     () => storeCompetencies.filter((c) => !c.isArchived).map((c) => c.id),
@@ -177,18 +190,22 @@ export function useHonorRoll(lang: Lang = "fr"): UseHonorRollReturn {
     [storeCompetencies]
   );
   const demoPenalties = useMemo<RawPenalty[]>(
-    () => storeEvaluations.map((e) => ({
+    () => storeEvaluations.filter((evaluation) => demoClassIds.has(evaluation.classId)).map((e) => ({
       studentId: e.studentId, competencyId: e.competencyId, teacherId: e.teacherId, date: e.date, createdAt: e.createdAt,
     })),
-    [storeEvaluations]
+    [storeEvaluations, demoClassIds]
+  );
+  const demoRecoveries = useMemo(
+    () => storeRecoveries.filter((recovery) => demoClassIds.has(recovery.classId)),
+    [storeRecoveries, demoClassIds],
   );
   const demoTeacherNameById = useMemo(
     () => new Map(storeTeachers.map((t) => [t.id, `${t.firstName} ${t.lastName}`.trim()])),
     [storeTeachers]
   );
   const demoResult = useMemo(
-    () => computeHonorRoll(storeStudents, demoClasses, demoActiveCompetencyIds, demoPenalties, storeRecoveries),
-    [storeStudents, demoClasses, demoActiveCompetencyIds, demoPenalties, storeRecoveries]
+    () => computeHonorRoll(demoStudents, demoClasses, demoActiveCompetencyIds, demoPenalties, demoRecoveries),
+    [demoStudents, demoClasses, demoActiveCompetencyIds, demoPenalties, demoRecoveries]
   );
   const demoTeacherStats = useMemo(
     () => computeTeacherActivity(demoPenalties, demoTeacherNameById, demoCompetencyById, lang),
@@ -208,17 +225,41 @@ export function useHonorRoll(lang: Lang = "fr"): UseHonorRollReturn {
     setLoading(true);
     setError(null);
     try {
-      const [studentsRes, classesRes, compRes, evalsRes, recoveriesRes, teachersRes] = await Promise.all([
-        supabase.from("students").select("id, first_name, last_name, class_id").eq("is_archived", false),
-        supabase.from("classes").select("id, name").eq("is_archived", false).order("name"),
+      const { data: activeYear, error: activeYearError } = await supabase
+        .from("school_years")
+        .select("id")
+        .eq("is_active", true)
+        .eq("is_closed", false)
+        .maybeSingle();
+      if (activeYearError) throw activeYearError;
+      if (!activeYear) {
+        setSbClasses([]); setSbHonorRoll([]); setSbClassStats([]); setSbTeacherStats([]);
+        return;
+      }
+
+      const classesRes = await supabase
+        .from("classes")
+        .select("id, name")
+        .eq("is_archived", false)
+        .eq("school_year_id", activeYear.id)
+        .order("name");
+      if (classesRes.error) throw classesRes.error;
+      const classes: HonorRollClass[] = (classesRes.data ?? []).map((c) => ({ id: c.id, name: c.name }));
+      const classIds = classes.map((classe) => classe.id);
+      if (classIds.length === 0) {
+        setSbClasses([]); setSbHonorRoll([]); setSbClassStats([]); setSbTeacherStats([]);
+        return;
+      }
+
+      const [studentsRes, compRes, evalsRes, recoveriesRes, teachersRes] = await Promise.all([
+        supabase.from("students").select("id, first_name, last_name, class_id").eq("is_archived", false).in("class_id", classIds),
         supabase.from("competencies").select("id, code, title, is_archived"),
-        supabase.from("evaluations").select("student_id, competency_id, teacher_id, date, created_at"),
-        supabase.from("skill_recovery_actions").select("id, student_id, competency_id, class_id, action_type, previous_score, new_score, meeting_date, student_reason, meeting_notes, created_by, created_at"),
+        supabase.from("evaluations").select("student_id, competency_id, teacher_id, date, created_at").in("class_id", classIds),
+        supabase.from("skill_recovery_actions").select("id, student_id, competency_id, class_id, action_type, previous_score, new_score, meeting_date, student_reason, meeting_notes, created_by, created_at").in("class_id", classIds),
         supabase.from("profiles").select("id, full_name").eq("role", "professeur"),
       ]);
 
       if (studentsRes.error) throw studentsRes.error;
-      if (classesRes.error) throw classesRes.error;
       if (compRes.error) throw compRes.error;
       if (evalsRes.error) throw evalsRes.error;
       if (recoveriesRes.error && !isMissingSkillRecoveryTable(recoveriesRes.error)) throw recoveriesRes.error;
@@ -226,7 +267,6 @@ export function useHonorRoll(lang: Lang = "fr"): UseHonorRollReturn {
       const students = (studentsRes.data ?? []).map((s) => ({
         id: s.id, firstName: s.first_name, lastName: s.last_name, classId: s.class_id ?? "",
       }));
-      const classes: HonorRollClass[] = (classesRes.data ?? []).map((c) => ({ id: c.id, name: c.name }));
       const competencies: CompetencyInfo[] = (compRes.data ?? []).map((c) => ({
         id: c.id, code: c.code, title: c.title, isArchived: c.is_archived ?? false,
       }));

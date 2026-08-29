@@ -23,6 +23,65 @@ export interface SchoolYear {
   updatedAt: string;
 }
 
+export type EnrollmentStatus =
+  | "active"
+  | "promoted"
+  | "repeated"
+  | "graduated"
+  | "transferred"
+  | "withdrawn";
+
+export type PromotionDecision =
+  | "pending"
+  | "promote"
+  | "repeat"
+  | "graduate"
+  | "transfer"
+  | "withdraw";
+
+export interface StudentEnrollment {
+  id: string;
+  studentId: string;
+  schoolYearId: string;
+  classId?: string;
+  status: EnrollmentStatus;
+  startedAt: string;
+  endedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface StudentPromotionDecision {
+  id: string;
+  studentId: string;
+  sourceSchoolYearId: string;
+  sourceClassId: string;
+  targetSchoolYearId: string;
+  targetClassId?: string;
+  decision: PromotionDecision;
+  notes?: string;
+  decidedBy?: string;
+  decidedAt?: string;
+  executedAt?: string;
+}
+
+export interface SchoolYearClosureDecisionInput {
+  studentId: string;
+  sourceClassId: string;
+  decision: PromotionDecision;
+  targetClassId?: string;
+  notes?: string;
+}
+
+export interface SchoolYearClosureResult {
+  total: number;
+  promoted: number;
+  repeated: number;
+  graduated: number;
+  transferred: number;
+  withdrawn: number;
+}
+
 export interface Level {
   id: string;
   name: string;
