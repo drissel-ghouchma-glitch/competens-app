@@ -11,6 +11,7 @@ import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Dashboard from "./pages/Dashboard";
 import SchoolYears from "./pages/SchoolYears";
+import SchoolYearArchive from "./pages/SchoolYearArchive";
 import Levels from "./pages/Levels";
 import Classes from "./pages/Classes";
 import Students from "./pages/Students";
@@ -42,6 +43,7 @@ function AppInner() {
         <Route element={<AppLayout />}>
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/school-years" element={<SchoolYears />} />
+          <Route path="/school-years/:yearId/archive" element={<SchoolYearArchive />} />
           <Route path="/levels" element={<Levels />} />
           <Route path="/classes" element={<Classes />} />
           <Route path="/students" element={<Students />} />

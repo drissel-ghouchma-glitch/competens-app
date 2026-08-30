@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useSchoolYears } from "@/hooks/use-school-years";
 import { useI18n } from "@/i18n";
 import { Card, CardContent } from "@/components/ui/card";
@@ -6,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Calendar, Plus, CheckCircle, Clock, Edit, Loader2 } from "lucide-react";
+import { Archive, Calendar, Plus, CheckCircle, Clock, Edit, Loader2 } from "lucide-react";
 import {
   Dialog, DialogContent, DialogDescription,
   DialogHeader, DialogTitle, DialogTrigger,
@@ -15,6 +16,7 @@ import type { SchoolYear } from "@/types";
 import { SchoolYearClosureDialog } from "@/components/school-years/SchoolYearClosureDialog";
 
 export default function SchoolYearsPage() {
+  const navigate = useNavigate();
   const { schoolYears, loading, error, refetch, addSchoolYear, updateSchoolYear, toggleSchoolYearActive } = useSchoolYears();
   const { t, lang } = useI18n();
   const locale = lang === "ar" ? "ar-MA" : "fr-FR";
@@ -143,6 +145,11 @@ export default function SchoolYearsPage() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2 self-end sm:self-auto">
+                  {sy.isClosed && (
+                    <Button variant="outline" size="sm" onClick={() => navigate(`/school-years/${sy.id}/archive`)}>
+                      <Archive className="w-3.5 h-3.5 me-1.5" /> {t("schoolYears.viewArchive")}
+                    </Button>
+                  )}
                   <Button variant="outline" size="sm" onClick={() => handleEdit(sy)} disabled={sy.isClosed}>
                     <Edit className="w-3.5 h-3.5" />
                   </Button>

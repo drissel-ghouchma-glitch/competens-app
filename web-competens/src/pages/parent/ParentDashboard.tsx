@@ -319,7 +319,7 @@ function ChildAnalytics({ child, competencies }: { child: ParentChild; competenc
                     style={{ backgroundColor: acqColor(s.acquisitionRate) }}>
                     <StatusIcon status={s.lastStatus} />
                   </div>
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
                     <p className="text-sm font-semibold">{s.competencyCode}</p>
                     <p className={cn("text-xs truncate", s.isArchived ? "text-muted-foreground/50 italic" : "text-muted-foreground")}>
                       {localizeCompTitle(s.competencyCode, s.competencyTitle, lang)}
