@@ -229,7 +229,14 @@ export default function TeachersPage() {
                       {teacher.firstName[0]}{teacher.lastName[0] ?? ""}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <h3 className="font-semibold text-foreground truncate">{teacher.firstName} {teacher.lastName}</h3>
+                      <h3
+                        className="font-semibold text-foreground leading-tight text-left"
+                        dir="ltr"
+                        title={`${teacher.firstName} ${teacher.lastName}`}
+                      >
+                        <span className="block break-words">{teacher.firstName}</span>
+                        <span className="block break-words">{teacher.lastName}</span>
+                      </h3>
                       <div className="flex flex-col gap-0.5 mt-1">
                         <span className="text-xs text-muted-foreground flex items-center gap-1">
                           <Mail className="w-3 h-3" /> {teacher.email}

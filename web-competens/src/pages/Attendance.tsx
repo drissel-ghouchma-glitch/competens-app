@@ -327,7 +327,7 @@ export default function AttendancePage() {
           </Card>
 
           {/* Action buttons */}
-          <div className="flex justify-end gap-2 flex-wrap">
+          <div className="sticky bottom-0 z-20 -mx-4 flex justify-end gap-2 flex-wrap border-t border-border/70 bg-background/95 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-6px_18px_-12px_hsl(var(--foreground)/0.35)] backdrop-blur sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:p-0 sm:shadow-none sm:backdrop-blur-none">
             {/* Confirm All — admins/directeurs only, only when there are saved records not yet confirmed */}
             {isAdmin && Object.keys(attendanceMap).length > 0 && !allConfirmed && (
               <Button
@@ -345,7 +345,7 @@ export default function AttendancePage() {
 
             {/* Save — teachers only */}
             {isTeacher && (
-              <Button onClick={handleSave} disabled={saving} className="gap-2">
+              <Button onClick={handleSave} disabled={saving} className="w-full gap-2 sm:w-auto">
                 {saving
                   ? <Loader2 className="w-4 h-4 animate-spin" />
                   : <Save className="w-4 h-4" />}
