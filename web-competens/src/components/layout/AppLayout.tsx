@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { OfflineSyncIndicator } from "@/components/layout/OfflineSyncIndicator";
 
 const navItems = [
   { to: "/dashboard", icon: LayoutDashboard, labelKey: "nav.dashboard", roles: ["admin", "directeur", "professeur"] },
@@ -202,6 +203,11 @@ export default function AppLayout() {
               <TooltipContent>{t("layout.logout")}</TooltipContent>
             </Tooltip>
           </div>
+          {!isDemo && (
+            <div className="px-2 pt-1">
+              <OfflineSyncIndicator />
+            </div>
+          )}
         </div>
       </aside>
 
@@ -217,6 +223,7 @@ export default function AppLayout() {
           <h1 className="font-bold text-foreground text-sm">Compétens</h1>
         </div>
         <div className="flex-1" />
+        {!isDemo && <OfflineSyncIndicator />}
         <Button variant="ghost" size="icon" className="shrink-0" onClick={toggleLang}>
           <span className="text-xs font-bold">{lang === "ar" ? "FR" : "ع"}</span>
         </Button>

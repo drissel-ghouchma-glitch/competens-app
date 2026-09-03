@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useAttendance } from "@/hooks/use-attendance";
 import { useAuth } from "@/hooks/use-auth";
 import { useI18n } from "@/i18n";
+import { useOfflineSync } from "@/lib/offline-sync";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -21,6 +22,7 @@ export default function AttendancePage() {
   const role = user?.role ?? "professeur";
   const isTeacher = role === "professeur";
   const isAdmin = role === "admin" || role === "directeur";
+  const { syncRevision, operations } = useOfflineSync();
 
   const {
     classes, loading, error,
@@ -61,7 +63,7 @@ export default function AttendancePage() {
     });
     loadAttendance(selectedClassId, selectedDate, period);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedClassId, selectedDate, period]);
+  }, [selectedClassId, selectedDate, period, syncRevision, operations]);
 
   useEffect(() => {
     if (!selectedClassId || students.length === 0) return;
@@ -104,8 +106,8 @@ export default function AttendancePage() {
         studentId: s.id,
         status: localStatus[s.id] ?? "present",
       }));
-      await saveAttendance(selectedClassId, selectedDate, period, inputs);
-      toast.success(t("attendance.saved"));
+      const result = await saveAttendance(selectedClassId, selectedDate, period, inputs);
+      toast.success(result.queued ? t("offline.savedLocally") : t("attendance.saved"));
     } catch (e: unknown) {
       const message = e instanceof Error ? e.message : "";
       toast.error(message.includes("ATTENDANCE_REGISTER_LOCKED") ? t("attendance.lockedHint") : message || t("common.saveError"));

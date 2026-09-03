@@ -58,11 +58,11 @@ export default function CompetenciesPage() {
       if (editId) {
         await updateCompetency(editId, { code, title, description, pedagogicalAdvice: advice });
       } else if (isTeacherReal) {
-        await submitRequest("add_competency", {
+        const result = await submitRequest("add_competency", {
           code, title, description, pedagogicalAdvice: advice,
           order: competencies.length + 1,
         });
-        toast.success(t("competencies.reqSent"));
+        toast.success(result.queued ? t("offline.savedLocally") : t("competencies.reqSent"));
       } else {
         await addCompetency({
           code, title, description, pedagogicalAdvice: advice,

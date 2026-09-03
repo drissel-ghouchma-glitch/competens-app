@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from "react";
 import { supabase } from "@/lib/supabase";
+import { isNetworkError, loadOfflineSnapshot, saveOfflineSnapshot } from "@/lib/offline-queue";
 import type { User, Role, UserStatus } from "@/types";
 
 interface RegisterTeacherInput {
@@ -69,6 +70,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .single();
 
       if (error || !data) {
+        if (error && isNetworkError(error)) {
+          try {
+            const cachedProfile = await loadOfflineSnapshot<User>(userId, "auth-profile");
+            if (cachedProfile) {
+              setUser(cachedProfile);
+              return cachedProfile;
+            }
+          } catch {
+            // No profile has been cached on this device yet.
+          }
+        }
         console.error("[useAuth] fetchProfile error:", error?.message);
         setUser(null);
         return null;
@@ -85,8 +97,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         createdAt: data.created_at,
       };
       setUser(profile);
+      void saveOfflineSnapshot<User>(userId, "auth-profile", profile).catch(() => undefined);
       return profile;
-    } catch {
+    } catch (error) {
+      if (isNetworkError(error)) {
+        try {
+          const cachedProfile = await loadOfflineSnapshot<User>(userId, "auth-profile");
+          if (cachedProfile) {
+            setUser(cachedProfile);
+            return cachedProfile;
+          }
+        } catch {
+          // No profile has been cached on this device yet.
+        }
+      }
       setUser(null);
       return null;
     } finally {

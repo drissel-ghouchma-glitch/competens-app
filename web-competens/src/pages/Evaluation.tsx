@@ -37,6 +37,7 @@ export default function EvaluationPage() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [saveQueued, setSaveQueued] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
 
   const selectedClass = useMemo(() => classes.find((c) => c.id === classId), [classes, classId]);
@@ -50,6 +51,7 @@ export default function EvaluationPage() {
     setPending(new Set());
     setSaveError("");
     setSaveSuccess(false);
+    setSaveQueued(false);
   };
 
   const handleCompetencySelect = (id: string) => {
@@ -57,6 +59,7 @@ export default function EvaluationPage() {
     setPending(new Set());
     setSaveError("");
     setSaveSuccess(false);
+    setSaveQueued(false);
   };
 
   const togglePending = (studentId: string) => {
@@ -82,8 +85,9 @@ export default function EvaluationPage() {
     setSaveSuccess(false);
     setSaving(true);
     try {
-      await saveDailyEvaluation(classId, competencyId, [...pending]);
+      const result = await saveDailyEvaluation(classId, competencyId, [...pending]);
       setPending(new Set());
+      setSaveQueued(result.queued);
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch (e: unknown) {
@@ -274,7 +278,7 @@ export default function EvaluationPage() {
 
                 {saveSuccess && (
                   <div className="mt-4 flex items-center gap-2 p-3 rounded-lg bg-green-500/10 text-green-700 text-sm">
-                    <CheckCircle className="w-4 h-4 shrink-0" /> {t("evaluation.saved")}
+                    <CheckCircle className="w-4 h-4 shrink-0" /> {saveQueued ? t("offline.savedLocally") : t("evaluation.saved")}
                   </div>
                 )}
 

@@ -1,6 +1,8 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/use-auth";
+import { createOfflineOperation, sendOperation, useOfflineSync } from "@/lib/offline-sync";
+import { isNetworkError } from "@/lib/offline-queue";
 
 export type RequestType = "add_student" | "add_competency" | "assign_class";
 export type RequestStatus = "pending" | "approved" | "rejected";
@@ -18,12 +20,30 @@ export interface AdminRequest {
   createdAt: string;
 }
 
+export interface RequestSubmissionResult {
+  queued: boolean;
+}
+
 export function useRequests() {
   const { user } = useAuth();
+  const { enqueue, operations, syncRevision } = useOfflineSync();
   const [requests, setRequests] = useState<AdminRequest[]>([]);
   const [pendingCount, setPendingCount] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const queuedRequests = useMemo(() => operations
+    .filter((operation) => operation.kind === "admin_request")
+    .map((operation): AdminRequest => ({
+      id: operation.id,
+      type: operation.payload.type,
+      status: "pending",
+      teacherId: operation.userId,
+      teacherName: user?.fullName ?? "",
+      teacherEmail: user?.email ?? "",
+      data: operation.payload.data,
+      createdAt: operation.createdAt,
+    })), [operations, user?.email, user?.fullName]);
 
   const fetchRequests = useCallback(async () => {
     if (!supabase || !user) return;
@@ -59,33 +79,52 @@ export function useRequests() {
         createdAt: r.created_at,
       }));
 
-      setRequests(mapped);
-      setPendingCount(mapped.filter((r) => r.status === "pending").length);
+      const merged = [...mapped, ...queuedRequests].sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+      setRequests(merged);
+      setPendingCount(merged.filter((r) => r.status === "pending").length);
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Erreur de chargement");
+      setRequests(queuedRequests);
+      setPendingCount(queuedRequests.length);
+      setError(e instanceof Error && !isNetworkError(e) ? e.message : null);
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [queuedRequests, user]);
 
   useEffect(() => {
     if (user) fetchRequests();
   }, [user, fetchRequests]);
 
+  useEffect(() => {
+    if (syncRevision > 0 && user) void fetchRequests();
+  }, [fetchRequests, syncRevision, user]);
+
   /** Teacher submits a new request */
   const submitRequest = useCallback(
-    async (type: RequestType, data: Record<string, unknown>): Promise<void> => {
-      if (!supabase || !user) throw new Error("Non authentifié");
-      const { error: err } = await supabase.from("admin_requests").insert({
-        type,
-        teacher_id: user.id,
-        data,
-        status: "pending",
+    async (type: RequestType, data: Record<string, unknown>): Promise<RequestSubmissionResult> => {
+      if (!supabase || !user) throw new Error("AUTHENTICATION_REQUIRED");
+      const operation = createOfflineOperation({
+        userId: user.id,
+        kind: "admin_request",
+        payload: { type, data },
       });
-      if (err) throw new Error(err.message);
-      await fetchRequests();
+
+      if (typeof navigator !== "undefined" && !navigator.onLine) {
+        await enqueue(operation);
+        return { queued: true };
+      }
+
+      try {
+        await sendOperation(operation);
+        await fetchRequests();
+        return { queued: false };
+      } catch (error) {
+        if (!isNetworkError(error)) throw error;
+        await enqueue(operation);
+        return { queued: true };
+      }
     },
-    [user, fetchRequests]
+    [enqueue, fetchRequests, user]
   );
 
   /** Admin approves a request — executes the underlying action then marks approved */

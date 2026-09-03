@@ -1,4 +1,4 @@
-const CACHE_NAME = "competens-v1";
+const CACHE_NAME = "competens-v2";
 const URLS_TO_CACHE = [
   "/",
   "/dashboard",
@@ -6,6 +6,7 @@ const URLS_TO_CACHE = [
   "/students",
   "/competencies",
   "/evaluation",
+  "/attendance",
   "/alerts",
   "/login",
 ];

@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/hooks/use-auth";
 import { LanguageProvider } from "@/i18n";
+import { OfflineSyncProvider } from "@/lib/offline-sync";
 import AppLayout from "@/components/layout/AppLayout";
 
 import Login from "./pages/Login";
@@ -70,11 +71,13 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <LanguageProvider>
       <AuthProvider>
-        <TooltipProvider>
-          <Toaster />
-          <Sonner richColors position="top-right" />
-          <AppInner />
-        </TooltipProvider>
+        <OfflineSyncProvider>
+          <TooltipProvider>
+            <Toaster />
+            <Sonner richColors position="top-right" />
+            <AppInner />
+          </TooltipProvider>
+        </OfflineSyncProvider>
       </AuthProvider>
     </LanguageProvider>
   </QueryClientProvider>

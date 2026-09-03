@@ -27,6 +27,15 @@ export const fr: Dict = {
   "common.deleteError": "Erreur lors de la suppression",
   "common.archiveError": "Erreur lors de l'archivage",
   "common.opError": "Erreur lors de l'opération",
+  "offline.offline": "Hors ligne",
+  "offline.offlineHint": "Les enregistrements seront conservés puis envoyés dès le retour de la connexion.",
+  "offline.pending": "{count} en attente",
+  "offline.syncing": "Synchronisation…",
+  "offline.synced": "Synchronisé",
+  "offline.syncedHint": "Aucune opération en attente.",
+  "offline.reviewNeeded": "{count} à vérifier",
+  "offline.conflictHint": "Une opération n'a pas pu être synchronisée sans risque. Vérifiez-la avec l'administration.",
+  "offline.savedLocally": "Enregistré sur cet appareil. Envoi automatique dès le retour de la connexion.",
 
   // ── Evaluation status ───────────────────────────────────
   "status.acquis": "Acquis",
@@ -710,6 +719,15 @@ export const ar: Dict = {
   "common.deleteError": "حدث خطأ أثناء الحذف",
   "common.archiveError": "حدث خطأ أثناء الأرشفة",
   "common.opError": "حدث خطأ أثناء العملية",
+  "offline.offline": "بدون اتصال",
+  "offline.offlineHint": "سيتم حفظ التسجيلات ثم إرسالها تلقائياً عند عودة الاتصال.",
+  "offline.pending": "{count} في الانتظار",
+  "offline.syncing": "تتم المزامنة…",
+  "offline.synced": "تمت المزامنة",
+  "offline.syncedHint": "لا توجد عمليات معلقة.",
+  "offline.reviewNeeded": "{count} تحتاج مراجعة",
+  "offline.conflictHint": "تعذر رفع عملية بأمان. يرجى مراجعتها مع الإدارة.",
+  "offline.savedLocally": "تم الحفظ على هذا الجهاز، وسيتم الإرسال تلقائياً عند عودة الاتصال.",
 
   // ── Evaluation status ───────────────────────────────────
   "status.acquis": "مكتسب",

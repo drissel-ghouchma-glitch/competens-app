@@ -178,8 +178,8 @@ export default function ClassesPage() {
     setRequestError("");
     setSubmitting(true);
     try {
-      await submitRequest("assign_class", { classIds: requestedClassIds });
-      toast.success(t("classes.reqSent", { count: requestedClassIds.length }));
+      const result = await submitRequest("assign_class", { classIds: requestedClassIds });
+      toast.success(result.queued ? t("offline.savedLocally") : t("classes.reqSent", { count: requestedClassIds.length }));
       setRequestedClassIds([]);
       setOpenRequest(false);
     } catch (e: unknown) {

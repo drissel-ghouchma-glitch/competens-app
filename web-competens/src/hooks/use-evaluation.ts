@@ -5,7 +5,23 @@ import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/lib/supabase";
 import { isMissingSkillRecoveryTable } from "@/lib/skill-recovery";
 import { competencyScoreFromLedger, scoreToStatus, type PenaltyLedgerEvent } from "@/lib/eval-utils";
+import { createOfflineOperation, sendOperation, useOfflineSync } from "@/lib/offline-sync";
+import { isNetworkError, loadOfflineSnapshot, saveOfflineSnapshot } from "@/lib/offline-queue";
 import type { Classe, Student, Competency, Level, DailyEvaluationInput, SkillRecoveryAction, StudentEvalInfo } from "@/types";
+
+export interface EvaluationSaveResult {
+  queued: boolean;
+}
+
+interface EvaluationContextSnapshot {
+  classes: Classe[];
+  levels: Level[];
+  students: Student[];
+  competencies: Competency[];
+  penalties: PenaltyLedgerEvent[];
+  recoveries: SkillRecoveryAction[];
+  lockedToday: string[];
+}
 
 export interface UseEvaluationReturn {
   classes: Classe[];
@@ -17,12 +33,13 @@ export interface UseEvaluationReturn {
   /** Returns per-student { score, lockedByMe } for the selected class+competency. */
   getEvalInfo: (classId: string, competencyId: string) => Record<string, StudentEvalInfo>;
   /** Inserts penalty rows for the given student IDs (those with pending deductions). */
-  saveDailyEvaluation: (classId: string, competencyId: string, penalizedStudentIds: string[]) => Promise<void>;
+  saveDailyEvaluation: (classId: string, competencyId: string, penalizedStudentIds: string[]) => Promise<EvaluationSaveResult>;
 }
 
 export function useEvaluation(): UseEvaluationReturn {
   const isDemo = useDemoStore((s) => s.isDemoMode);
   const { user } = useAuth();
+  const { enqueue, operations, syncRevision } = useOfflineSync();
 
   // ── Demo store selectors (always called) ─────────────────
   const storeClasses = useAppStore((s) => s.classes);
@@ -141,6 +158,10 @@ export function useEvaluation(): UseEvaluationReturn {
       setSbStudents(students);
       setSbCompetencies(competencies);
 
+      let penalties: PenaltyLedgerEvent[] = [];
+      let recoveries: SkillRecoveryAction[] = [];
+      let lockedToday: string[] = [];
+
       // Pre-fetch penalty counts for all students
       if (students.length > 0) {
         const allStudentIds = students.map((s) => s.id);
@@ -156,23 +177,47 @@ export function useEvaluation(): UseEvaluationReturn {
 
         if (penaltyRes.error) throw penaltyRes.error;
         if (recoveryRes.error && !isMissingSkillRecoveryTable(recoveryRes.error)) throw recoveryRes.error;
-        setSbPenalties((penaltyRes.data ?? []).map((row) => ({
+        penalties = (penaltyRes.data ?? []).map((row) => ({
           studentId: row.student_id, competencyId: row.competency_id, date: row.date, createdAt: row.created_at,
-        })));
-        setSbRecoveries(recoveryRes.error ? [] : (recoveryRes.data ?? []).map((row) => ({
+        }));
+        recoveries = recoveryRes.error ? [] : (recoveryRes.data ?? []).map((row) => ({
           id: row.id, studentId: row.student_id, competencyId: row.competency_id, classId: row.class_id,
           actionType: row.action_type as "increase" | "reset_to_100", previousScore: row.previous_score, newScore: row.new_score,
           meetingDate: row.meeting_date, studentReason: row.student_reason, meetingNotes: row.meeting_notes,
           createdBy: row.created_by, createdAt: row.created_at,
-        })));
+        }));
 
         const locked = new Set(
           ((lockRes as { data: { student_id: string; competency_id: string }[] | null }).data ?? [])
             .map((r) => `${r.student_id}__${r.competency_id}`)
         );
-        setSbLockedToday(locked);
+        lockedToday = [...locked];
       }
+      setSbPenalties(penalties);
+      setSbRecoveries(recoveries);
+      setSbLockedToday(new Set(lockedToday));
+      if (user?.id) void saveOfflineSnapshot<EvaluationContextSnapshot>(user.id, "evaluation-context", {
+        classes, levels, students, competencies, penalties, recoveries, lockedToday,
+      }).catch(() => undefined);
     } catch (e: unknown) {
+      if (user?.id && isNetworkError(e)) {
+        try {
+          const cached = await loadOfflineSnapshot<EvaluationContextSnapshot>(user.id, "evaluation-context");
+          if (cached) {
+            setSbClasses(cached.classes);
+            setSbLevels(cached.levels);
+            setSbStudents(cached.students);
+            setSbCompetencies(cached.competencies);
+            setSbPenalties(cached.penalties);
+            setSbRecoveries(cached.recoveries);
+            setSbLockedToday(new Set(cached.lockedToday));
+            setError(null);
+            return;
+          }
+        } catch {
+          // No local snapshot is available yet.
+        }
+      }
       setError(e instanceof Error ? e.message : "Erreur de chargement");
     } finally {
       setLoading(false);
@@ -182,6 +227,10 @@ export function useEvaluation(): UseEvaluationReturn {
   useEffect(() => {
     if (!isDemo) fetchFromSupabase();
   }, [isDemo, fetchFromSupabase]);
+
+  useEffect(() => {
+    if (!isDemo && syncRevision > 0) void fetchFromSupabase();
+  }, [fetchFromSupabase, isDemo, syncRevision]);
 
   // ── Get students ──────────────────────────────────────────
 
@@ -226,27 +275,48 @@ export function useEvaluation(): UseEvaluationReturn {
   const getEvalInfoReal = useCallback(
     (classId: string, competencyId: string): Record<string, StudentEvalInfo> => {
       const classStudents = sbStudents.filter((s) => s.classId === classId);
+      const queuedPenalties: PenaltyLedgerEvent[] = operations.flatMap((operation) =>
+        operation.kind === "evaluation"
+        && operation.state === "queued"
+        && operation.payload.classId === classId
+        && operation.payload.competencyId === competencyId
+          ? operation.payload.studentIds.map((studentId) => ({
+              studentId,
+              competencyId,
+              date: operation.payload.date,
+              createdAt: operation.createdAt,
+            }))
+          : []
+      );
       const result: Record<string, StudentEvalInfo> = {};
       for (const student of classStudents) {
+        const queuedToday = operations.some((operation) =>
+          operation.kind === "evaluation"
+          && operation.payload.classId === classId
+          && operation.payload.competencyId === competencyId
+          && operation.payload.date === today
+          && operation.payload.studentIds.includes(student.id)
+        );
         result[student.id] = {
-          score: competencyScoreFromLedger(sbPenalties, sbRecoveries, student.id, competencyId),
-          lockedByMe: sbLockedToday.has(`${student.id}__${competencyId}`),
+          score: competencyScoreFromLedger([...sbPenalties, ...queuedPenalties], sbRecoveries, student.id, competencyId),
+          lockedByMe: sbLockedToday.has(`${student.id}__${competencyId}`) || queuedToday,
         };
       }
       return result;
     },
-    [sbStudents, sbPenalties, sbRecoveries, sbLockedToday]
+    [operations, sbStudents, sbPenalties, sbRecoveries, sbLockedToday, today]
   );
 
   // ── Save evaluation ───────────────────────────────────────
 
   const saveDemoEval = useCallback(
-    async (classId: string, competencyId: string, penalizedStudentIds: string[]) => {
+    async (classId: string, competencyId: string, penalizedStudentIds: string[]): Promise<EvaluationSaveResult> => {
       const inputs: DailyEvaluationInput[] = penalizedStudentIds.map((studentId) => ({
         studentId,
         competencyId,
       }));
       storeSave(classId, competencyId, inputs);
+      return { queued: false };
     },
     [storeSave]
   );
@@ -314,20 +384,38 @@ export function useEvaluation(): UseEvaluationReturn {
   );
 
   const saveRealEval = useCallback(
-    async (classId: string, competencyId: string, penalizedStudentIds: string[]) => {
+    async (classId: string, competencyId: string, penalizedStudentIds: string[]): Promise<EvaluationSaveResult> => {
       if (!supabase) throw new Error("Supabase non disponible");
-      if (penalizedStudentIds.length === 0) return;
+      if (penalizedStudentIds.length === 0) return { queued: false };
+      if (!user?.id) throw new Error("AUTHENTICATION_REQUIRED");
 
-      const rows = penalizedStudentIds.map((studentId) => ({
-        student_id: studentId,
-        competency_id: competencyId,
-        teacher_id: user?.id ?? null,
-        class_id: classId,
-        date: today,
-      }));
+      const operation = createOfflineOperation({
+        userId: user.id,
+        kind: "evaluation",
+        payload: { classId, competencyId, date: today, studentIds: penalizedStudentIds },
+      });
+      const applyLocally = () => {
+        setSbLockedToday((prev) => {
+          const next = new Set(prev);
+          for (const studentId of penalizedStudentIds) next.add(`${studentId}__${competencyId}`);
+          return next;
+        });
+      };
 
-      const { error: err } = await supabase.from("evaluations").insert(rows);
-      if (err) throw new Error(err.message);
+      if (typeof navigator !== "undefined" && !navigator.onLine) {
+        await enqueue(operation);
+        applyLocally();
+        return { queued: true };
+      }
+
+      try {
+        await sendOperation(operation);
+      } catch (error) {
+        if (!isNetworkError(error)) throw error;
+        await enqueue(operation);
+        applyLocally();
+        return { queued: true };
+      }
 
       // Add the new immutable penalty events to the local ledger immediately.
       const createdAt = new Date().toISOString();
@@ -346,8 +434,9 @@ export function useEvaluation(): UseEvaluationReturn {
       });
 
       await checkThresholdAlerts(competencyId, penalizedStudentIds);
+      return { queued: false };
     },
-    [user?.id, today, checkThresholdAlerts]
+    [checkThresholdAlerts, enqueue, today, user?.id]
   );
 
   return {

@@ -68,8 +68,8 @@ export default function StudentsPage() {
     try {
       if (isTeacherReal) {
         // Send request to admin
-        await submitRequest("add_student", { firstName, lastName, birthDate, gender, classId: studentClass });
-        toast.success(t("students.reqSent"));
+        const result = await submitRequest("add_student", { firstName, lastName, birthDate, gender, classId: studentClass });
+        toast.success(result.queued ? t("offline.savedLocally") : t("students.reqSent"));
         resetAddForm();
         setOpenAdd(false);
       } else {
