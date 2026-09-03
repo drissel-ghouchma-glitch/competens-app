@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { GraduationCap, Loader2, RefreshCw, ShieldAlert, Trophy, Users } from "lucide-react";
+import { CheckCircle2, GraduationCap, Loader2, RefreshCw, ShieldAlert, Trophy, Users } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useDemoStore } from "@/stores/demo";
 import { usePrincipalClasses, type Belt } from "@/hooks/use-principal-classes";
@@ -24,16 +24,17 @@ export default function PrincipalClassesPage() {
   const { t } = useI18n();
   const {
     principalClasses, selectedClass, selectedClassId, setSelectedClassId,
-    competencies, penalties, recoveries, studentScores, beltGroups, loading, error, createRecoveryAction, refetch,
+    competencies, penalties, recoveries, recoveryRequests, studentScores, beltGroups, isManagement, loading, error, createRecoveryAction, refetch,
   } = usePrincipalClasses();
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
   const [recoveryOpen, setRecoveryOpen] = useState(false);
+  const [requestedCompetencyId, setRequestedCompetencyId] = useState<string | undefined>();
   const selectedStudent = useMemo(
     () => studentScores.find((student) => student.id === selectedStudentId) ?? null,
     [studentScores, selectedStudentId]
   );
 
-  if (!isDemo && user?.role !== "professeur") {
+  if (!isDemo && user?.role !== "professeur" && user?.role !== "admin" && user?.role !== "directeur") {
     return (
       <Card className="max-w-lg mx-auto mt-12 border-destructive/30">
         <CardContent className="p-8 text-center space-y-3">
@@ -50,9 +51,9 @@ export default function PrincipalClassesPage() {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-            <Trophy className="w-6 h-6 text-amber-500" /> {t("principalClasses.title")}
+            <Trophy className="w-6 h-6 text-amber-500" /> {t(isManagement ? "principalClasses.managementTitle" : "principalClasses.title")}
           </h1>
-          <p className="text-sm text-muted-foreground mt-1">{t("principalClasses.description")}</p>
+          <p className="text-sm text-muted-foreground mt-1">{t(isManagement ? "principalClasses.managementDescription" : "principalClasses.description")}</p>
         </div>
         <Button variant="outline" size="sm" className="gap-2 self-start" onClick={refetch} disabled={loading}>
           <RefreshCw className={cn("w-4 h-4", loading && "animate-spin")} /> {t("common.refresh")}
@@ -80,7 +81,7 @@ export default function PrincipalClassesPage() {
           <Card className="border-border/50">
             <CardContent className="p-4 flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
               <div className="flex items-center gap-2 text-sm font-medium">
-                <GraduationCap className="w-4 h-4 text-primary" /> {t("principalClasses.selectClass")}
+                <GraduationCap className="w-4 h-4 text-primary" /> {t(isManagement ? "principalClasses.managementSelectClass" : "principalClasses.selectClass")}
               </div>
               <Select value={selectedClassId} onValueChange={setSelectedClassId}>
                 <SelectTrigger className="w-full sm:w-72"><SelectValue /></SelectTrigger>
@@ -96,6 +97,46 @@ export default function PrincipalClassesPage() {
               <Users className="w-4 h-4" />
               {t("principalClasses.classStudentCount", { name: selectedClass.name, count: beltGroups.white.length + beltGroups.yellow.length + beltGroups.green.length + beltGroups.blue.length })}
             </div>
+          )}
+
+          {isManagement && recoveryRequests.length > 0 && (
+            <Card className="border-amber-500/35 bg-amber-500/5">
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2 text-base text-amber-700 dark:text-amber-300">
+                  <ShieldAlert className="h-5 w-5" /> {t("skillRecovery.pendingRequestsTitle", { count: recoveryRequests.length })}
+                </CardTitle>
+                <CardDescription>{t("skillRecovery.pendingRequestsDescription")}</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {recoveryRequests.map((request) => {
+                  const student = studentScores.find((item) => item.id === request.studentId);
+                  const skill = competencies.find((item) => item.id === request.competencyId);
+                  return (
+                    <div key={request.id} className="flex flex-col gap-3 rounded-lg border bg-background/70 p-3 lg:flex-row lg:items-center lg:justify-between">
+                      <div className="min-w-0 space-y-1">
+                        <p className="font-semibold">{student ? `${student.firstName} ${student.lastName}` : t("skillRecovery.unknownStudent")}</p>
+                        <p className="text-sm text-muted-foreground">{skill?.code ?? "-"} - {skill?.title ?? "-"}</p>
+                        <p className="text-xs text-muted-foreground">{t("skillRecovery.principalResetCount", { count: request.principalResetCount })}</p>
+                        <p className="text-xs text-muted-foreground">{t("skillRecovery.requestReason", { reason: request.studentReason })}</p>
+                      </div>
+                      <Button
+                        size="sm"
+                        className="gap-2 self-start lg:self-auto"
+                        disabled={!student}
+                        onClick={() => {
+                          if (!student) return;
+                          setSelectedStudentId(student.id);
+                          setRequestedCompetencyId(request.competencyId);
+                          setRecoveryOpen(true);
+                        }}
+                      >
+                        <CheckCircle2 className="h-4 w-4" /> {t("skillRecovery.reviewAndReset")}
+                      </Button>
+                    </div>
+                  );
+                })}
+              </CardContent>
+            </Card>
           )}
 
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -120,7 +161,7 @@ export default function PrincipalClassesPage() {
                       <button
                         key={student.id}
                         type="button"
-                        onClick={() => { setSelectedStudentId(student.id); setRecoveryOpen(true); }}
+                        onClick={() => { setSelectedStudentId(student.id); setRequestedCompetencyId(undefined); setRecoveryOpen(true); }}
                         className="flex w-full items-center justify-between gap-2 rounded-lg bg-background/70 p-2.5 text-start hover:bg-background transition-colors"
                       >
                         <span className="text-sm font-medium truncate">{student.firstName} {student.lastName}</span>
@@ -140,7 +181,7 @@ export default function PrincipalClassesPage() {
                   <p className="font-semibold">{selectedStudent.firstName} {selectedStudent.lastName}</p>
                   <p className="text-sm text-muted-foreground">{t("principalClasses.selectedStudentHint")}</p>
                 </div>
-                <Button onClick={() => setRecoveryOpen(true)}>{t("skillRecovery.open")}</Button>
+                <Button onClick={() => { setRequestedCompetencyId(undefined); setRecoveryOpen(true); }}>{t("skillRecovery.open")}</Button>
               </div>
               <SkillHistoryChart studentId={selectedStudent.id} competencies={competencies} penalties={penalties} recoveries={recoveries} />
             </div>
@@ -155,6 +196,7 @@ export default function PrincipalClassesPage() {
           studentName={`${selectedStudent.firstName} ${selectedStudent.lastName}`}
           competencies={competencies}
           skills={selectedStudent.skills}
+          initialCompetencyId={requestedCompetencyId}
           onSubmit={(submission) => createRecoveryAction(selectedStudent, submission)}
         />
       )}

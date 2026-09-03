@@ -3,10 +3,10 @@ import { useAuth } from "@/hooks/use-auth";
 import { useDemoStore } from "@/stores/demo";
 import { useAppStore } from "@/stores/app-store";
 import { supabase } from "@/lib/supabase";
-import { isMissingSkillRecoveryTable } from "@/lib/skill-recovery";
+import { isMissingSkillRecoveryRequestTable, isMissingSkillRecoveryTable, isQueuedSkillRecoveryResponse } from "@/lib/skill-recovery";
 import { competencyScoreFromLedger, type PenaltyLedgerEvent } from "@/lib/eval-utils";
-import type { Classe, Competency, SkillRecoveryAction, Student } from "@/types";
-import type { RecoverySubmission } from "@/components/SkillRecoveryDialog";
+import type { Classe, Competency, SkillRecoveryAction, SkillRecoveryRequest, Student } from "@/types";
+import type { RecoverySubmission, RecoverySubmissionResult } from "@/components/SkillRecoveryDialog";
 
 export type Belt = "white" | "yellow" | "green" | "blue";
 
@@ -65,38 +65,60 @@ function mapRecovery(row: {
   };
 }
 
-/** Principal-teacher class overview, including the immutable recovery ledger. */
+function mapRecoveryRequest(row: {
+  id: string; student_id: string; competency_id: string; class_id: string; requested_by: string;
+  current_score: number; principal_reset_count: number; meeting_date: string; student_reason: string;
+  meeting_notes: string; status: "pending" | "completed" | "rejected"; reviewed_by: string | null;
+  reviewed_at: string | null; resolved_recovery_action_id: string | null; created_at: string;
+}): SkillRecoveryRequest {
+  return {
+    id: row.id, studentId: row.student_id, competencyId: row.competency_id, classId: row.class_id,
+    requestedBy: row.requested_by, currentScore: row.current_score, principalResetCount: row.principal_reset_count,
+    meetingDate: row.meeting_date, studentReason: row.student_reason, meetingNotes: row.meeting_notes,
+    status: row.status, reviewedBy: row.reviewed_by ?? undefined, reviewedAt: row.reviewed_at ?? undefined,
+    resolvedRecoveryActionId: row.resolved_recovery_action_id ?? undefined, createdAt: row.created_at,
+  };
+}
+
+/** Principal-class overview. Management can inspect every active class. */
 export function usePrincipalClasses() {
   const { user } = useAuth();
-  const isDemo = useDemoStore((s) => s.isDemoMode);
-  const storeClasses = useAppStore((s) => s.classes);
-  const storeSchoolYears = useAppStore((s) => s.schoolYears);
-  const storeStudents = useAppStore((s) => s.students);
-  const storeCompetencies = useAppStore((s) => s.competencies);
-  const storeEvaluations = useAppStore((s) => s.evaluations);
-  const storeRecoveries = useAppStore((s) => s.skillRecoveryActions);
-  const storeTeachers = useAppStore((s) => s.teachers);
-  const addDemoRecovery = useAppStore((s) => s.addDemoSkillRecoveryAction);
+  const isDemo = useDemoStore((state) => state.isDemoMode);
+  const storeClasses = useAppStore((state) => state.classes);
+  const storeSchoolYears = useAppStore((state) => state.schoolYears);
+  const storeStudents = useAppStore((state) => state.students);
+  const storeCompetencies = useAppStore((state) => state.competencies);
+  const storeEvaluations = useAppStore((state) => state.evaluations);
+  const storeRecoveries = useAppStore((state) => state.skillRecoveryActions);
+  const storeRecoveryRequests = useAppStore((state) => state.skillRecoveryRequests);
+  const storeTeachers = useAppStore((state) => state.teachers);
+  const addDemoRecovery = useAppStore((state) => state.addDemoSkillRecoveryAction);
+  const addDemoRecoveryRequest = useAppStore((state) => state.addDemoSkillRecoveryRequest);
+  const resolveDemoRecoveryRequest = useAppStore((state) => state.resolveDemoSkillRecoveryRequest);
 
   const [sbClasses, setSbClasses] = useState<Classe[]>([]);
   const [sbStudents, setSbStudents] = useState<Student[]>([]);
   const [sbCompetencies, setSbCompetencies] = useState<Competency[]>([]);
   const [sbPenalties, setSbPenalties] = useState<PenaltyLedgerEvent[]>([]);
   const [sbRecoveries, setSbRecoveries] = useState<SkillRecoveryAction[]>([]);
-  const [selectedClassId, setSelectedClassId] = useState<string>("");
+  const [sbRecoveryRequests, setSbRecoveryRequests] = useState<SkillRecoveryRequest[]>([]);
+  const [selectedClassId, setSelectedClassId] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const isManagement = user?.role === "admin" || user?.role === "directeur";
+  const canUsePage = isManagement || user?.role === "professeur";
   const demoTeacherId = user?.id ?? storeClasses.find((classe) => classe.teacherId)?.teacherId;
   const demoActiveYearId = useMemo(
     () => storeSchoolYears.find((year) => year.isActive && !year.isClosed)?.id,
     [storeSchoolYears],
   );
+
   const principalClasses = useMemo(() => {
     const source = isDemo ? storeClasses : sbClasses;
-    const teacherId = isDemo ? demoTeacherId : user?.id;
-    return source.filter((classe) => !classe.isArchived && classe.teacherId === teacherId && (!isDemo || classe.schoolYearId === demoActiveYearId));
-  }, [isDemo, storeClasses, sbClasses, demoTeacherId, user?.id, demoActiveYearId]);
+    const activeClasses = source.filter((classe) => !classe.isArchived && (!isDemo || classe.schoolYearId === demoActiveYearId));
+    return isManagement ? activeClasses : activeClasses.filter((classe) => classe.teacherId === (isDemo ? demoTeacherId : user?.id));
+  }, [demoActiveYearId, demoTeacherId, isDemo, isManagement, sbClasses, storeClasses, user?.id]);
 
   useEffect(() => {
     setSelectedClassId((current) => current && principalClasses.some((classe) => classe.id === current)
@@ -105,18 +127,20 @@ export function usePrincipalClasses() {
   }, [principalClasses]);
 
   const fetchFromSupabase = useCallback(async () => {
-    if (!supabase || !user || user.role !== "professeur") return;
+    if (!supabase || !user || !canUsePage) return;
     setLoading(true);
     setError(null);
     try {
-      const { data, error: classesError } = await supabase
+      let query = supabase
         .from("classes")
         .select("id, name, level_id, teacher_id, capacity, student_count, is_archived, school_year_id, created_at, school_years!inner(is_active,is_closed)")
-        .eq("teacher_id", user.id)
         .eq("is_archived", false)
         .eq("school_years.is_active", true)
         .eq("school_years.is_closed", false)
         .order("name");
+      if (!isManagement) query = query.eq("teacher_id", user.id);
+
+      const { data, error: classesError } = await query;
       if (classesError) throw classesError;
       setSbClasses((data ?? []).map((classe) => ({
         id: classe.id, name: classe.name, levelId: classe.level_id ?? "", teacherId: classe.teacher_id ?? undefined,
@@ -124,36 +148,40 @@ export function usePrincipalClasses() {
         schoolYearId: classe.school_year_id, createdAt: classe.created_at,
       })));
     } catch (cause: unknown) {
-      setError(cause instanceof Error ? cause.message : "Unable to load principal classes.");
+      setError(cause instanceof Error ? cause.message : "Unable to load classes.");
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [canUsePage, isManagement, user]);
 
-  useEffect(() => { if (!isDemo) fetchFromSupabase(); }, [isDemo, fetchFromSupabase]);
+  useEffect(() => { if (!isDemo) void fetchFromSupabase(); }, [fetchFromSupabase, isDemo]);
 
   const fetchSelectedClassData = useCallback(async () => {
-    if (isDemo || !supabase || !selectedClassId || user?.role !== "professeur") return;
+    if (isDemo || !supabase || !selectedClassId || !user || !canUsePage) return;
     setLoading(true);
     setError(null);
     try {
-      const { data: ownedClass, error: ownedClassError } = await supabase
-        .from("classes").select("id").eq("id", selectedClassId).eq("teacher_id", user.id).eq("is_archived", false).maybeSingle();
-      if (ownedClassError) throw ownedClassError;
-      if (!ownedClass) {
-        setSbStudents([]); setSbPenalties([]); setSbRecoveries([]); return;
+      let classQuery = supabase.from("classes").select("id").eq("id", selectedClassId).eq("is_archived", false);
+      if (!isManagement) classQuery = classQuery.eq("teacher_id", user.id);
+      const { data: accessibleClass, error: classError } = await classQuery.maybeSingle();
+      if (classError) throw classError;
+      if (!accessibleClass) {
+        setSbStudents([]); setSbPenalties([]); setSbRecoveries([]); setSbRecoveryRequests([]);
+        return;
       }
 
-      const [studentsResult, competenciesResult, evaluationsResult, recoveriesResult] = await Promise.all([
+      const [studentsResult, competenciesResult, evaluationsResult, recoveriesResult, requestsResult] = await Promise.all([
         supabase.from("students").select("*").eq("class_id", selectedClassId).order("last_name"),
         supabase.from("competencies").select("*").order("order"),
         supabase.from("evaluations").select("id, student_id, competency_id, teacher_id, date, created_at, profiles(full_name)").eq("class_id", selectedClassId),
         supabase.from("skill_recovery_actions").select("id, student_id, competency_id, class_id, action_type, previous_score, new_score, meeting_date, student_reason, meeting_notes, created_by, created_at, profiles(full_name)").eq("class_id", selectedClassId),
+        supabase.from("skill_recovery_requests").select("id, student_id, competency_id, class_id, requested_by, current_score, principal_reset_count, meeting_date, student_reason, meeting_notes, status, reviewed_by, reviewed_at, resolved_recovery_action_id, created_at").eq("class_id", selectedClassId).eq("status", "pending").order("created_at"),
       ]);
       if (studentsResult.error) throw studentsResult.error;
       if (competenciesResult.error) throw competenciesResult.error;
       if (evaluationsResult.error) throw evaluationsResult.error;
       if (recoveriesResult.error && !isMissingSkillRecoveryTable(recoveriesResult.error)) throw recoveriesResult.error;
+      if (requestsResult.error && !isMissingSkillRecoveryRequestTable(requestsResult.error)) throw requestsResult.error;
 
       setSbStudents((studentsResult.data ?? []).map(mapStudent));
       setSbCompetencies((competenciesResult.data ?? []).map((competency) => ({
@@ -167,29 +195,33 @@ export function usePrincipalClasses() {
         teacherName: (evaluation.profiles as { full_name?: string } | null)?.full_name,
       })));
       setSbRecoveries(recoveriesResult.error ? [] : (recoveriesResult.data ?? []).map((row) => mapRecovery(row as Parameters<typeof mapRecovery>[0])));
+      setSbRecoveryRequests(requestsResult.error ? [] : (requestsResult.data ?? []).map((row) => mapRecoveryRequest(row as Parameters<typeof mapRecoveryRequest>[0])));
     } catch (cause: unknown) {
       setError(cause instanceof Error ? cause.message : "Unable to load class analytics.");
     } finally {
       setLoading(false);
     }
-  }, [isDemo, selectedClassId, user?.id, user?.role]);
+  }, [canUsePage, isDemo, isManagement, selectedClassId, user]);
 
-  useEffect(() => { fetchSelectedClassData(); }, [fetchSelectedClassData]);
+  useEffect(() => { void fetchSelectedClassData(); }, [fetchSelectedClassData]);
 
   const students = useMemo(() => isDemo ? storeStudents.filter((student) => student.classId === selectedClassId) : sbStudents,
-    [isDemo, storeStudents, selectedClassId, sbStudents]);
+    [isDemo, sbStudents, selectedClassId, storeStudents]);
   const competencies = isDemo ? storeCompetencies : sbCompetencies;
   const penalties = useMemo<PenaltyLedgerEvent[]>(() => isDemo
     ? storeEvaluations
-        .filter((evaluation) => evaluation.classId === selectedClassId)
-        .map((evaluation) => {
-          const teacher = storeTeachers.find((item) => item.id === evaluation.teacherId);
-          return { ...evaluation, teacherName: teacher ? `${teacher.firstName} ${teacher.lastName}` : undefined };
-        })
-    : sbPenalties, [isDemo, storeEvaluations, selectedClassId, storeTeachers, sbPenalties]);
+      .filter((evaluation) => evaluation.classId === selectedClassId)
+      .map((evaluation) => {
+        const teacher = storeTeachers.find((item) => item.id === evaluation.teacherId);
+        return { ...evaluation, teacherName: teacher ? `${teacher.firstName} ${teacher.lastName}` : undefined };
+      })
+    : sbPenalties, [isDemo, sbPenalties, selectedClassId, storeEvaluations, storeTeachers]);
   const recoveries = useMemo(() => isDemo
     ? storeRecoveries.filter((action) => action.classId === selectedClassId)
-    : sbRecoveries, [isDemo, storeRecoveries, selectedClassId, sbRecoveries]);
+    : sbRecoveries, [isDemo, sbRecoveries, selectedClassId, storeRecoveries]);
+  const recoveryRequests = useMemo(() => isDemo
+    ? storeRecoveryRequests.filter((request) => request.classId === selectedClassId && request.status === "pending")
+    : sbRecoveryRequests, [isDemo, sbRecoveryRequests, selectedClassId, storeRecoveryRequests]);
 
   const studentScores = useMemo<PrincipalStudent[]>(() => students.map((student) => {
     const studentPenalties = penalties.filter((penalty) => penalty.studentId === student.id);
@@ -204,7 +236,7 @@ export function usePrincipalClasses() {
     const activeSkills = skills.filter((skill) => !skill.isArchived);
     const score = activeSkills.length === 0 ? 0 : Math.round(activeSkills.reduce((sum, skill) => sum + skill.acquisitionRate, 0) / activeSkills.length);
     return { ...student, score, penaltyCount: studentPenalties.length, skills };
-  }).sort((left, right) => right.score - left.score || left.lastName.localeCompare(right.lastName)), [students, penalties, recoveries, competencies]);
+  }).sort((left, right) => right.score - left.score || left.lastName.localeCompare(right.lastName)), [competencies, penalties, recoveries, students]);
 
   const beltGroups = useMemo<BeltGroups>(() => {
     const groups = emptyBeltGroups();
@@ -214,40 +246,60 @@ export function usePrincipalClasses() {
 
   const selectedClass = useMemo(() => principalClasses.find((classe) => classe.id === selectedClassId) ?? null, [principalClasses, selectedClassId]);
 
-  const createRecoveryAction = useCallback(async (student: PrincipalStudent, submission: RecoverySubmission) => {
+  const createRecoveryAction = useCallback(async (student: PrincipalStudent, submission: RecoverySubmission): Promise<RecoverySubmissionResult> => {
     if (!selectedClassId) throw new Error("Class is required.");
     const selectedSkill = student.skills.find((skill) => skill.competencyId === submission.competencyId);
     if (!selectedSkill) throw new Error("Skill is not available.");
+    if (submission.newScore <= selectedSkill.acquisitionRate) throw new Error("The new score must be strictly greater than the current score.");
+    if (submission.actionType === "reset_to_100" && submission.newScore !== 100) throw new Error("A reset must set the score to 100.");
 
     if (isDemo) {
-      if (submission.newScore <= selectedSkill.acquisitionRate) throw new Error("The new score must be strictly greater than the current score.");
-      if (submission.actionType === "reset_to_100" && submission.newScore !== 100) throw new Error("A reset must set the score to 100.");
+      const principalResetCount = storeRecoveries.filter((action) =>
+        action.classId === selectedClassId && action.studentId === student.id && action.competencyId === submission.competencyId
+        && action.actionType === "reset_to_100" && action.createdBy === selectedClass?.teacherId
+      ).length;
+      if (!isManagement && submission.actionType === "reset_to_100" && principalResetCount >= 2) {
+        addDemoRecoveryRequest({
+          studentId: student.id, competencyId: submission.competencyId, classId: selectedClassId,
+          requestedBy: user?.id ?? selectedClass?.teacherId ?? "demo-principal", requestedByName: user?.fullName,
+          currentScore: selectedSkill.acquisitionRate, principalResetCount,
+          meetingDate: submission.meetingDate, studentReason: submission.studentReason, meetingNotes: submission.meetingNotes,
+        });
+        return "admin_review_required";
+      }
+
       addDemoRecovery({
         studentId: student.id, competencyId: submission.competencyId, classId: selectedClassId,
         actionType: submission.actionType, previousScore: selectedSkill.acquisitionRate, newScore: submission.newScore,
         meetingDate: submission.meetingDate, studentReason: submission.studentReason, meetingNotes: submission.meetingNotes,
         createdBy: user?.id ?? selectedClass?.teacherId ?? "demo-principal", createdByName: user?.fullName,
       });
-      return;
+      if (isManagement && submission.actionType === "reset_to_100") {
+        resolveDemoRecoveryRequest(student.id, submission.competencyId, selectedClassId, user?.id ?? "demo-management");
+      }
+      return "completed";
     }
+
     if (!supabase) throw new Error("Supabase is unavailable.");
-    const { error: rpcError } = await supabase.rpc("create_skill_recovery_action", {
+    const { data, error: rpcError } = await supabase.rpc("create_skill_recovery_action", {
       p_student_id: student.id, p_competency_id: submission.competencyId, p_action_type: submission.actionType,
       p_new_score: submission.newScore, p_meeting_date: submission.meetingDate,
       p_student_reason: submission.studentReason, p_meeting_notes: submission.meetingNotes,
     });
     if (rpcError) throw new Error(rpcError.message);
     await fetchSelectedClassData();
-  }, [selectedClassId, isDemo, addDemoRecovery, user, selectedClass?.teacherId, fetchSelectedClassData]);
+    return isQueuedSkillRecoveryResponse(data) ? "admin_review_required" : "completed";
+  }, [addDemoRecovery, addDemoRecoveryRequest, fetchSelectedClassData, isDemo, isManagement, resolveDemoRecoveryRequest, selectedClass?.teacherId, selectedClassId, storeRecoveries, user]);
 
   const refetch = useCallback(async () => {
     if (isDemo) return;
     await fetchFromSupabase();
     await fetchSelectedClassData();
-  }, [isDemo, fetchFromSupabase, fetchSelectedClassData]);
+  }, [fetchFromSupabase, fetchSelectedClassData, isDemo]);
 
   return {
     principalClasses, selectedClass, selectedClassId, setSelectedClassId, students, competencies,
-    penalties, recoveries, studentScores, beltGroups, loading, error, createRecoveryAction, refetch,
+    penalties, recoveries, recoveryRequests, studentScores, beltGroups, isManagement,
+    loading, error, createRecoveryAction, refetch,
   };
 }

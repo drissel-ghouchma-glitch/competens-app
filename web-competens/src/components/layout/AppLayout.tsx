@@ -26,7 +26,7 @@ const navItems = [
   { to: "/teachers", icon: UserCog, labelKey: "nav.teachers", roles: ["admin", "directeur"] },
   { to: "/competencies", icon: BookOpen, labelKey: "nav.competencies", roles: ["admin", "professeur"] },
   { to: "/evaluation", icon: ClipboardCheck, labelKey: "nav.evaluation", roles: ["professeur"] },
-  { to: "/principal-classes", icon: Trophy, labelKey: "nav.principalClasses", roles: ["professeur"] },
+  { to: "/principal-classes", icon: Trophy, labelKey: "nav.principalClasses", roles: ["admin", "directeur", "professeur"] },
   { to: "/attendance", icon: CalendarCheck, labelKey: "nav.attendance", roles: ["admin", "directeur", "professeur"] },
   { to: "/alerts", icon: Bell, labelKey: "nav.alerts", roles: ["admin", "directeur", "professeur"] },
   { to: "/admin/pending-teachers", icon: UserCheck, labelKey: "nav.registrations", roles: ["admin"] },
@@ -40,6 +40,7 @@ const mobileNavItems = [
   { to: "/dashboard", icon: LayoutDashboard, labelKey: "nav.home" },
   { to: "/classes", icon: Building2, labelKey: "nav.classes" },
   { to: "/students", icon: Users, labelKey: "nav.students" },
+  { to: "/principal-classes", icon: Trophy, labelKey: "nav.principalClasses" },
   { to: "/evaluation", icon: ClipboardCheck, labelKey: "nav.evaluate" },
   { to: "/alerts", icon: Bell, labelKey: "nav.alerts" },
 ];

@@ -3,11 +3,11 @@ import { useDemoStore } from "@/stores/demo";
 import { useAppStore } from "@/stores/app-store";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/lib/supabase";
-import { isMissingSkillRecoveryTable } from "@/lib/skill-recovery";
+import { isMissingSkillRecoveryTable, isQueuedSkillRecoveryResponse } from "@/lib/skill-recovery";
 import { scoreToStatus, buildTimeline, competencyScoreFromLedger, type PenaltyLedgerEvent, type TimelinePoint } from "@/lib/eval-utils";
 import type { Student, Classe, Level, Competency, Alert, EvaluationStatus, AttendanceRecord, AttendanceStatus, AttendancePeriod, SkillRecoveryAction, EnrollmentStatus } from "@/types";
 import type { DailyEvalRecord, ClassTeacher } from "@/components/DailyGranularAnalytics";
-import type { RecoverySubmission } from "@/components/SkillRecoveryDialog";
+import type { RecoverySubmission, RecoverySubmissionResult } from "@/components/SkillRecoveryDialog";
 
 export type { TimelinePoint, DailyEvalRecord, ClassTeacher };
 
@@ -80,7 +80,7 @@ export interface UseStudentDetailReturn {
   loading: boolean;
   error: string | null;
   updateStudent: (data: Partial<Pick<Student, "firstName" | "lastName" | "birthDate" | "gender" | "classId">>) => Promise<void>;
-  createRecoveryAction: (submission: RecoverySubmission) => Promise<void>;
+  createRecoveryAction: (submission: RecoverySubmission) => Promise<RecoverySubmissionResult>;
   refetch: () => Promise<void>;
 }
 
@@ -102,6 +102,8 @@ export function useStudentDetail(studentId: string | undefined): UseStudentDetai
   const storeSchoolYears = useAppStore((s) => s.schoolYears);
   const storeUpdateStudent = useAppStore((s) => s.updateStudent);
   const addDemoRecovery = useAppStore((s) => s.addDemoSkillRecoveryAction);
+  const addDemoRecoveryRequest = useAppStore((s) => s.addDemoSkillRecoveryRequest);
+  const resolveDemoRecoveryRequest = useAppStore((s) => s.resolveDemoSkillRecoveryRequest);
 
   const demoStudent = useMemo(
     () => storeStudents.find((s) => s.id === studentId) ?? null,
@@ -423,7 +425,7 @@ export function useStudentDetail(studentId: string | undefined): UseStudentDetai
     [studentId, storeUpdateStudent]
   );
 
-  const createRecoveryAction = useCallback(async (submission: RecoverySubmission) => {
+  const createRecoveryAction = useCallback(async (submission: RecoverySubmission): Promise<RecoverySubmissionResult> => {
     const currentStudent = isDemo ? demoStudent : sbStudent;
     const currentClass = isDemo ? demoClasse : sbClasse;
     if (!currentStudent || !currentClass) throw new Error("Student class is unavailable.");
@@ -434,24 +436,42 @@ export function useStudentDetail(studentId: string | undefined): UseStudentDetai
     const currentScore = competencyScoreFromLedger(allPenalties, allRecoveries, currentStudent.id, submission.competencyId);
     if (submission.newScore <= currentScore) throw new Error("The new score must be strictly greater than the current score.");
     if (submission.actionType === "reset_to_100" && submission.newScore !== 100) throw new Error("A reset must set the score to 100.");
+    const isManagement = user?.role === "admin" || user?.role === "directeur";
     if (isDemo) {
+      const principalResetCount = storeRecoveries.filter((action) =>
+        action.classId === currentClass.id && action.studentId === currentStudent.id && action.competencyId === submission.competencyId
+        && action.actionType === "reset_to_100" && action.createdBy === currentClass.teacherId
+      ).length;
+      if (!isManagement && submission.actionType === "reset_to_100" && principalResetCount >= 2) {
+        addDemoRecoveryRequest({
+          studentId: currentStudent.id, competencyId: submission.competencyId, classId: currentClass.id,
+          requestedBy: user?.id ?? currentClass.teacherId ?? "demo-principal", requestedByName: user?.fullName,
+          currentScore, principalResetCount, meetingDate: submission.meetingDate,
+          studentReason: submission.studentReason, meetingNotes: submission.meetingNotes,
+        });
+        return "admin_review_required";
+      }
       addDemoRecovery({
         studentId: currentStudent.id, competencyId: submission.competencyId, classId: currentClass.id,
         actionType: submission.actionType, previousScore: currentScore, newScore: submission.newScore,
         meetingDate: submission.meetingDate, studentReason: submission.studentReason, meetingNotes: submission.meetingNotes,
         createdBy: user?.id ?? currentClass.teacherId ?? "demo-admin", createdByName: user?.fullName,
       });
-      return;
+      if (isManagement && submission.actionType === "reset_to_100") {
+        resolveDemoRecoveryRequest(currentStudent.id, submission.competencyId, currentClass.id, user?.id ?? "demo-management");
+      }
+      return "completed";
     }
     if (!supabase) throw new Error("Supabase is unavailable.");
-    const { error: rpcError } = await supabase.rpc("create_skill_recovery_action", {
+    const { data, error: rpcError } = await supabase.rpc("create_skill_recovery_action", {
       p_student_id: currentStudent.id, p_competency_id: submission.competencyId, p_action_type: submission.actionType,
       p_new_score: submission.newScore, p_meeting_date: submission.meetingDate,
       p_student_reason: submission.studentReason, p_meeting_notes: submission.meetingNotes,
     });
     if (rpcError) throw new Error(rpcError.message);
     await fetchFromSupabase();
-  }, [isDemo, demoStudent, sbStudent, demoClasse, sbClasse, user, demoRawEvals, sbAllEvals, demoRecoveries, sbRecoveries, addDemoRecovery, fetchFromSupabase]);
+    return isQueuedSkillRecoveryResponse(data) ? "admin_review_required" : "completed";
+  }, [isDemo, demoStudent, sbStudent, demoClasse, sbClasse, user, demoRawEvals, sbAllEvals, demoRecoveries, sbRecoveries, storeRecoveries, addDemoRecovery, addDemoRecoveryRequest, resolveDemoRecoveryRequest, fetchFromSupabase]);
 
   return {
     student: isDemo ? demoStudent : sbStudent,

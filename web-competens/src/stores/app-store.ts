@@ -5,7 +5,7 @@ import type {
   Competency, Evaluation, EvaluationStatus,
   Alert, Notification, TeacherClassAssignment, DailyEvaluationInput,
   AttendanceRecord, DailyAttendanceInput, AttendanceStatus, AttendancePeriod,
-  SkillRecoveryAction, SchoolYearClosureDecisionInput, SchoolYearClosureResult, StudentEnrollment, EnrollmentStatus,
+  SkillRecoveryAction, SkillRecoveryRequest, SchoolYearClosureDecisionInput, SchoolYearClosureResult, StudentEnrollment, EnrollmentStatus,
 } from "@/types";
 import { generateDemoData } from "./seed-data";
 
@@ -32,6 +32,7 @@ interface AppStore {
   competencies: Competency[];
   evaluations: Evaluation[];
   skillRecoveryActions: SkillRecoveryAction[];
+  skillRecoveryRequests: SkillRecoveryRequest[];
   alerts: Alert[];
   notifications: Notification[];
   teacherClassAssignments: TeacherClassAssignment[];
@@ -78,6 +79,8 @@ interface AppStore {
 
   saveDailyEvaluation: (classId: string, competencyId: string, evaluations: DailyEvaluationInput[]) => void;
   addDemoSkillRecoveryAction: (action: Omit<SkillRecoveryAction, "id" | "createdAt">) => void;
+  addDemoSkillRecoveryRequest: (request: Omit<SkillRecoveryRequest, "id" | "createdAt" | "status">) => void;
+  resolveDemoSkillRecoveryRequest: (studentId: string, competencyId: string, classId: string, reviewedBy: string) => void;
   saveDemoAttendance: (classId: string, date: string, period: AttendancePeriod, inputs: DailyAttendanceInput[], teacherId: string) => void;
   confirmDemoAttendance: (classId: string, date: string, period: AttendancePeriod) => void;
   markAlertResolved: (id: string) => void;
@@ -101,6 +104,7 @@ export const useAppStore = create<AppStore>()(
       competencies: [],
       evaluations: [],
       skillRecoveryActions: [],
+      skillRecoveryRequests: [],
       alerts: [],
       notifications: [],
       teacherClassAssignments: [],
@@ -358,6 +362,33 @@ export const useAppStore = create<AppStore>()(
             { ...action, id: generateUUID(), createdAt: new Date().toISOString() },
           ],
         }));
+      },
+      addDemoSkillRecoveryRequest(request) {
+        set((s) => {
+          const alreadyPending = s.skillRecoveryRequests.some((item) =>
+            item.status === "pending" && item.studentId === request.studentId && item.competencyId === request.competencyId && item.classId === request.classId
+          );
+          if (alreadyPending) return s;
+          return {
+            skillRecoveryRequests: [
+              ...s.skillRecoveryRequests,
+              { ...request, id: generateUUID(), status: "pending", createdAt: new Date().toISOString() },
+            ],
+          };
+        });
+      },
+      resolveDemoSkillRecoveryRequest(studentId, competencyId, classId, reviewedBy) {
+        set((s) => {
+          const request = s.skillRecoveryRequests
+            .filter((item) => item.status === "pending" && item.studentId === studentId && item.competencyId === competencyId && item.classId === classId)
+            .sort((left, right) => left.createdAt.localeCompare(right.createdAt))[0];
+          if (!request) return s;
+          return {
+            skillRecoveryRequests: s.skillRecoveryRequests.map((item) => item.id === request.id
+              ? { ...item, status: "completed", reviewedBy, reviewedAt: new Date().toISOString() }
+              : item),
+          };
+        });
       },
       saveDemoAttendance(classId, date, period, inputs, teacherId) {
         if (get().attendance.some(

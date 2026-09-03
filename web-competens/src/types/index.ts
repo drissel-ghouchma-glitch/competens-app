@@ -188,6 +188,28 @@ export interface SkillRecoveryAction {
   createdAt: string;
 }
 
+export type SkillRecoveryRequestStatus = "pending" | "completed" | "rejected";
+
+/** A principal teacher's third request to reset the same skill to 100%. */
+export interface SkillRecoveryRequest {
+  id: string;
+  studentId: string;
+  competencyId: string;
+  classId: string;
+  requestedBy: string;
+  requestedByName?: string;
+  currentScore: number;
+  principalResetCount: number;
+  meetingDate: string;
+  studentReason: string;
+  meetingNotes: string;
+  status: SkillRecoveryRequestStatus;
+  reviewedBy?: string;
+  reviewedAt?: string;
+  resolvedRecoveryActionId?: string;
+  createdAt: string;
+}
+
 // Per-student info returned by the evaluation hook for the teacher grid.
 export interface StudentEvalInfo {
   score: number;        // Current value from the all-time chronological ledger.

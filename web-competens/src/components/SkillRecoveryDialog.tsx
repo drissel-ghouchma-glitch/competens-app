@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useI18n } from "@/i18n";
+import { toast } from "sonner";
 import type { Competency, SkillRecoveryActionType } from "@/types";
 
 export interface RecoverySkill {
@@ -28,16 +29,19 @@ export interface RecoverySubmission {
   meetingNotes: string;
 }
 
+export type RecoverySubmissionResult = "completed" | "admin_review_required";
+
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   studentName: string;
   competencies: Competency[];
   skills: RecoverySkill[];
-  onSubmit: (submission: RecoverySubmission) => Promise<void>;
+  initialCompetencyId?: string;
+  onSubmit: (submission: RecoverySubmission) => Promise<RecoverySubmissionResult | void>;
 }
 
-export function SkillRecoveryDialog({ open, onOpenChange, studentName, competencies, skills, onSubmit }: Props) {
+export function SkillRecoveryDialog({ open, onOpenChange, studentName, competencies, skills, initialCompetencyId, onSubmit }: Props) {
   const { t } = useI18n();
   const candidates = useMemo(() => skills.filter((skill) => !skill.isArchived && skill.acquisitionRate < 99), [skills]);
   const [competencyId, setCompetencyId] = useState("");
@@ -52,7 +56,9 @@ export function SkillRecoveryDialog({ open, onOpenChange, studentName, competenc
 
   useEffect(() => {
     if (!open) return;
-    setCompetencyId(candidates[0]?.competencyId ?? "");
+    setCompetencyId(candidates.some((skill) => skill.competencyId === initialCompetencyId)
+      ? initialCompetencyId ?? ""
+      : candidates[0]?.competencyId ?? "");
     setActionType("increase");
     setNewScore("");
     setMeetingDate(new Date().toISOString().slice(0, 10));
@@ -60,7 +66,7 @@ export function SkillRecoveryDialog({ open, onOpenChange, studentName, competenc
     setMeetingNotes("");
     setConfirmedReset(false);
     setFormError(null);
-  }, [open, candidates]);
+  }, [open, candidates, initialCompetencyId]);
 
   const selected = candidates.find((skill) => skill.competencyId === competencyId);
   const selectedCompetency = competencies.find((competency) => competency.id === competencyId);
@@ -82,7 +88,9 @@ export function SkillRecoveryDialog({ open, onOpenChange, studentName, competenc
     setSaving(true);
     setFormError(null);
     try {
-      await onSubmit({ competencyId, actionType, newScore: nextScore, meetingDate, studentReason: studentReason.trim(), meetingNotes: meetingNotes.trim() });
+      const result = await onSubmit({ competencyId, actionType, newScore: nextScore, meetingDate, studentReason: studentReason.trim(), meetingNotes: meetingNotes.trim() });
+      if (result === "admin_review_required") toast.info(t("skillRecovery.adminReviewRequested"));
+      else toast.success(t("skillRecovery.saved"));
       onOpenChange(false);
     } catch (error: unknown) {
       setFormError(error instanceof Error ? error.message : t("common.saveError"));

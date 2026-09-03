@@ -120,6 +120,9 @@ export const fr: Dict = {
   // ── Principal classes ───────────────────────────────────────
   "principalClasses.title": "Mes classes principales",
   "principalClasses.description": "Suivez les élèves des classes dont vous êtes professeur principal.",
+  "principalClasses.managementTitle": "Suivi de toutes les classes",
+  "principalClasses.managementDescription": "Consultez les élèves et les demandes de récupération de toutes les classes actives.",
+  "principalClasses.managementSelectClass": "Choisir une classe",
   "principalClasses.accessDenied": "Accès non autorisé",
   "principalClasses.teacherOnly": "Cette page est réservée aux professeurs.",
   "principalClasses.empty": "Aucune classe principale attribuée.",
@@ -170,6 +173,14 @@ export const fr: Dict = {
   "skillRecovery.requiredFields": "La date, la raison de l'élève et les notes de l'entretien sont obligatoires.",
   "skillRecovery.invalidScore": "Le nouveau score doit être un entier entre 0 et 100 et être strictement supérieur au score actuel.",
   "skillRecovery.save": "Enregistrer le suivi",
+  "skillRecovery.saved": "Suivi enregistré.",
+  "skillRecovery.adminReviewRequested": "La demande a été transmise à l'administration : cette compétence a déjà été remise à 100% deux fois par le professeur principal.",
+  "skillRecovery.pendingRequestsTitle": "{count} demande(s) de remise à 100% à examiner",
+  "skillRecovery.pendingRequestsDescription": "Ces compétences ont déjà été remises à 100% deux fois par le professeur principal.",
+  "skillRecovery.principalResetCount": "Remise à 100% par le professeur principal : {count} fois",
+  "skillRecovery.requestReason": "Motif de l'élève : {reason}",
+  "skillRecovery.reviewAndReset": "Examiner et remettre à 100%",
+  "skillRecovery.unknownStudent": "Élève introuvable",
 
   // ── Layout ──────────────────────────────────────────────
   "layout.subtitle": "Suivi scolaire",
@@ -841,6 +852,9 @@ export const ar: Dict = {
   // ── Principal classes ───────────────────────────────────────
   "principalClasses.title": "أقسامي الرئيسية",
   "principalClasses.description": "تابع تلاميذ الأقسام التي أنت أستاذها الرئيسي.",
+  "principalClasses.managementTitle": "متابعة جميع الأقسام",
+  "principalClasses.managementDescription": "اطلع على تلاميذ وطلبات استرجاع الكفايات في جميع الأقسام النشطة.",
+  "principalClasses.managementSelectClass": "اختر قسماً",
   "principalClasses.accessDenied": "وصول غير مسموح",
   "principalClasses.teacherOnly": "هذه الصفحة مخصصة للأساتذة فقط.",
   "principalClasses.empty": "لم يتم تعيينك أستاذًا رئيسيًا لأي قسم.",
@@ -891,6 +905,14 @@ export const ar: Dict = {
   "skillRecovery.requiredFields": "تاريخ اللقاء وسبب التلميذ وملاحظات اللقاء حقول إجبارية.",
   "skillRecovery.invalidScore": "يجب أن تكون النقطة الجديدة عددا صحيحا من 0 إلى 100 وأكبر من النقطة الحالية.",
   "skillRecovery.save": "حفظ المتابعة",
+  "skillRecovery.saved": "تم حفظ المتابعة.",
+  "skillRecovery.adminReviewRequested": "تم إرسال الطلب إلى الإدارة: سبق للأستاذ الرئيسي أن أعاد هذه الكفاية إلى 100% مرتين.",
+  "skillRecovery.pendingRequestsTitle": "{count} طلب/طلبات إرجاع إلى 100% للمراجعة",
+  "skillRecovery.pendingRequestsDescription": "سبق للأستاذ الرئيسي أن أعاد هذه الكفايات إلى 100% مرتين.",
+  "skillRecovery.principalResetCount": "إرجاع الأستاذ الرئيسي إلى 100%: {count} مرات",
+  "skillRecovery.requestReason": "سبب التلميذ: {reason}",
+  "skillRecovery.reviewAndReset": "مراجعة وإرجاع إلى 100%",
+  "skillRecovery.unknownStudent": "تلميذ غير موجود",
 
   // ── Layout ──────────────────────────────────────────────
   "layout.subtitle": "التتبع المدرسي",
