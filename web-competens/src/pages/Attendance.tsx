@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CheckCircle, XCircle, Loader2, Save, Users, ClipboardList, ShieldCheck, Sun, Sunset } from "lucide-react";
+import { CheckCircle, XCircle, Loader2, Save, Users, ClipboardList, ShieldCheck, Sun, Sunset, LockKeyhole } from "lucide-react";
 import type { AttendanceStatus, AttendancePeriod, DailyAttendanceInput, Student } from "@/types";
 import { toast } from "sonner";
 
@@ -87,15 +87,15 @@ export default function AttendancePage() {
   }, [attendanceMap, attendanceLoading, selectedClassId, selectedDate, period]);
 
   const toggleStatus = useCallback((studentId: string) => {
-    if (!isTeacher) return;
+    if (!isTeacher || Object.keys(attendanceMap).length > 0) return;
     setLocalStatus((prev) => ({
       ...prev,
       [studentId]: prev[studentId] === "present" ? "absent" : "present",
     }));
-  }, [isTeacher]);
+  }, [isTeacher, attendanceMap]);
 
   const handleSave = async () => {
-    if (!selectedClassId || students.length === 0) return;
+    if (!selectedClassId || students.length === 0 || Object.keys(attendanceMap).length > 0) return;
     setSaving(true);
     try {
       const inputs: DailyAttendanceInput[] = students.map((s) => ({
@@ -105,7 +105,8 @@ export default function AttendancePage() {
       await saveAttendance(selectedClassId, selectedDate, period, inputs);
       toast.success(t("attendance.saved"));
     } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : t("common.saveError"));
+      const message = e instanceof Error ? e.message : "";
+      toast.error(message.includes("ATTENDANCE_REGISTER_LOCKED") ? t("attendance.lockedHint") : message || t("common.saveError"));
     } finally {
       setSaving(false);
     }
@@ -127,6 +128,9 @@ export default function AttendancePage() {
   const presentCount = students.filter((s) => (localStatus[s.id] ?? "present") === "present").length;
   const absentCount  = students.filter((s) => (localStatus[s.id] ?? "present") === "absent").length;
   const allConfirmed = students.length > 0 && students.every((s) => confirmedStudentIds.has(s.id));
+  // A teacher's first saved register is final for this class/date/period.
+  // The database migration enforces the same rule against direct API calls.
+  const isTeacherRegisterLocked = isTeacher && Object.keys(attendanceMap).length > 0;
 
   const selectedClass = classes.find((c) => c.id === selectedClassId);
   const dateLabel = selectedDate
@@ -262,7 +266,7 @@ export default function AttendancePage() {
             )}
             {isTeacher && (
               <span className="text-xs text-muted-foreground ms-auto hidden sm:block">
-                {t("attendance.clickHint")}
+                {isTeacherRegisterLocked ? t("attendance.lockedHint") : t("attendance.clickHint")}
               </span>
             )}
           </div>
@@ -288,7 +292,7 @@ export default function AttendancePage() {
                     key={s.id}
                     onClick={() => toggleStatus(s.id)}
                     className={`flex items-center gap-3 px-4 py-3 rounded-xl border transition-all duration-150 ${
-                      isTeacher ? "cursor-pointer hover:shadow-sm active:scale-[0.99]" : "cursor-default"
+                      isTeacher && !isTeacherRegisterLocked ? "cursor-pointer hover:shadow-sm active:scale-[0.99]" : "cursor-default"
                     } ${
                       isPresent
                         ? "bg-green-500/5 border-green-500/20 hover:bg-green-500/10"
@@ -345,11 +349,13 @@ export default function AttendancePage() {
 
             {/* Save — teachers only */}
             {isTeacher && (
-              <Button onClick={handleSave} disabled={saving} className="w-full gap-2 sm:w-auto">
-                {saving
+              <Button onClick={handleSave} disabled={saving || isTeacherRegisterLocked} className="w-full gap-2 sm:w-auto">
+                {isTeacherRegisterLocked
+                  ? <LockKeyhole className="w-4 h-4" />
+                  : saving
                   ? <Loader2 className="w-4 h-4 animate-spin" />
                   : <Save className="w-4 h-4" />}
-                {t("attendance.saveBtn")}
+                {isTeacherRegisterLocked ? t("attendance.lockedBtn") : t("attendance.saveBtn")}
               </Button>
             )}
           </div>

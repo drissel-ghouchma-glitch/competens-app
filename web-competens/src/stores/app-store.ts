@@ -360,6 +360,11 @@ export const useAppStore = create<AppStore>()(
         }));
       },
       saveDemoAttendance(classId, date, period, inputs, teacherId) {
+        if (get().attendance.some(
+          (record) => record.classId === classId && record.date === date && record.period === period
+        )) {
+          throw new Error("ATTENDANCE_REGISTER_LOCKED");
+        }
         set((s) => {
           const next = s.attendance.filter(
             (a) => !(a.classId === classId && a.date === date && a.period === period && inputs.some((i) => i.studentId === a.studentId))
