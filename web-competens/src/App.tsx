@@ -25,6 +25,7 @@ import Attendance from "./pages/Attendance";
 import PendingTeachers from "./pages/admin/PendingTeachers";
 import AdminRequests from "./pages/admin/AdminRequests";
 import UserManagement from "./pages/admin/UserManagement";
+import TeacherEvaluationAnalysis from "./pages/admin/TeacherEvaluationAnalysis";
 import ParentDashboard from "./pages/parent/ParentDashboard";
 import PrincipalClasses from "./pages/PrincipalClasses";
 import NotFound from "./pages/NotFound";
@@ -58,6 +59,7 @@ function AppInner() {
           <Route path="/admin/pending-teachers" element={<PendingTeachers />} />
           <Route path="/admin/requests" element={<AdminRequests />} />
           <Route path="/admin/users" element={<UserManagement />} />
+          <Route path="/admin/evaluation-analysis" element={<TeacherEvaluationAnalysis />} />
           <Route path="/parent" element={<ParentDashboard />} />
         </Route>
         <Route path="/" element={<Navigate to="/login" replace />} />

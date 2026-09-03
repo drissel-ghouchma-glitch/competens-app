@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { useTeachers } from "@/hooks/use-teachers";
 import { useAuth } from "@/hooks/use-auth";
 import { useAppStore } from "@/stores/app-store";
@@ -13,7 +14,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-  UserCog, Plus, Mail, Phone, Edit, Archive, Building2, Search, Info, Loader2, Trophy,
+  UserCog, Plus, Mail, Phone, Edit, Archive, Building2, Search, Info, Loader2, Trophy, BarChart3,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -26,6 +27,7 @@ export default function TeachersPage() {
   const { teachers, classes, teacherAssignedClassIds, primaryClassByTeacherId, loading, error, canAddManually, updateTeacher, archiveTeacher } = useTeachers();
   const { user } = useAuth();
   const { t } = useI18n();
+  const navigate = useNavigate();
 
   // Demo-only store actions
   const storeAddTeacher = useAppStore((s) => s.addTeacher);
@@ -130,6 +132,12 @@ export default function TeachersPage() {
           </p>
         </div>
 
+        <div className="flex flex-wrap items-center gap-2">
+          {canManage && (
+            <Button variant="outline" size="sm" className="gap-2" onClick={() => navigate("/admin/evaluation-analysis")}>
+              <BarChart3 className="w-4 h-4" /> {t("teachers.evaluationAnalysis")}
+            </Button>
+          )}
         {canAddManually ? (
           <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) resetForm(); }}>
             <DialogTrigger asChild>
@@ -193,6 +201,7 @@ export default function TeachersPage() {
             {t("teachers.selfRegister")} <strong className="text-foreground ms-1">/register</strong>
           </div>
         )}
+        </div>
       </div>
 
       {error && (
