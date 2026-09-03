@@ -72,6 +72,13 @@ export function useAlerts(): UseAlertsReturn {
           read: n.read,
           type: n.type as "alert" | "info" | "evaluation",
           relatedId: n.related_id ?? undefined,
+          eventId: n.event_id ?? undefined,
+          eventType: n.event_type ?? undefined,
+          priority: n.priority ?? "normal",
+          classId: n.class_id ?? undefined,
+          studentId: n.student_id ?? undefined,
+          payload: n.payload ?? {},
+          readAt: n.read_at ?? undefined,
           createdAt: n.created_at,
         }))
       );
@@ -86,6 +93,15 @@ export function useAlerts(): UseAlertsReturn {
     if (!isDemo) fetchFromSupabase();
   }, [isDemo, fetchFromSupabase]);
 
+  useEffect(() => {
+    if (isDemo || !supabase || !user?.id) return;
+    const channel = supabase
+      .channel(`alerts-${user.id}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "notifications", filter: `user_id=eq.${user.id}` }, () => void fetchFromSupabase())
+      .subscribe();
+    return () => { void supabase.removeChannel(channel); };
+  }, [fetchFromSupabase, isDemo, user?.id]);
+
   const markAlertResolvedReal = useCallback(async (alertId: string) => {
     if (!supabase) return;
     await supabase
@@ -97,7 +113,8 @@ export function useAlerts(): UseAlertsReturn {
 
   const markNotificationReadReal = useCallback(async (notifId: string) => {
     if (!supabase) return;
-    await supabase.from("notifications").update({ read: true }).eq("id", notifId);
+    const { error: markError } = await supabase.rpc("mark_notification_read", { p_notification_id: notifId });
+    if (markError) throw new Error(markError.message);
     setSbNotifications((prev) => prev.map((n) => n.id === notifId ? { ...n, read: true } : n));
   }, []);
 

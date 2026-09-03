@@ -4,6 +4,7 @@ import { useAppStore } from "@/stores/app-store";
 import { useAuth } from "@/hooks/use-auth";
 import { useDemoStore } from "@/stores/demo";
 import { useRequests } from "@/hooks/use-requests";
+import { useNotificationBadge } from "@/hooks/use-notification-badge";
 import { useI18n } from "@/i18n";
 import { cn } from "@/lib/utils";
 import {
@@ -28,7 +29,7 @@ const navItems = [
   { to: "/evaluation", icon: ClipboardCheck, labelKey: "nav.evaluation", roles: ["professeur"] },
   { to: "/principal-classes", icon: Trophy, labelKey: "nav.principalClasses", roles: ["admin", "directeur", "professeur"] },
   { to: "/attendance", icon: CalendarCheck, labelKey: "nav.attendance", roles: ["admin", "directeur", "professeur"] },
-  { to: "/alerts", icon: Bell, labelKey: "nav.alerts", roles: ["admin", "directeur", "professeur"] },
+  { to: "/alerts", icon: Bell, labelKey: "nav.alerts", roles: ["admin", "directeur", "professeur", "parent"] },
   { to: "/admin/pending-teachers", icon: UserCheck, labelKey: "nav.registrations", roles: ["admin"] },
   { to: "/admin/requests", icon: ClipboardList, labelKey: "nav.requests", roles: ["admin"], badge: true },
   { to: "/admin/users", icon: ShieldCheck, labelKey: "nav.users", roles: ["admin"] },
@@ -55,6 +56,7 @@ const teacherMobileNavItems = [
 
 const parentMobileNavItems = [
   { to: "/parent", icon: Home, labelKey: "nav.children" },
+  { to: "/alerts", icon: Bell, labelKey: "nav.alerts" },
 ];
 
 export default function AppLayout() {
@@ -72,7 +74,7 @@ export default function AppLayout() {
 
   const initDemo = useAppStore((s) => s.initDemoData);
   const initialized = useAppStore((s) => s.initialized);
-  const unreadCount = useAppStore((s) => s.notifications.filter((n) => !n.read).length);
+  const unreadCount = useNotificationBadge();
   const { user, isLoading: authLoading, logout } = useAuth();
   const isDemo = useDemoStore((s) => s.isDemoMode);
   const disableDemo = useDemoStore((s) => s.disableDemo);
@@ -143,7 +145,11 @@ export default function AppLayout() {
         </div>
         <ScrollArea className="flex-1 px-3 py-4">
           <div className="space-y-1">
-            {filteredNav.map((item) => (
+            {filteredNav.map((item) => {
+              const itemBadgeCount = item.to === "/alerts"
+                ? unreadCount
+                : ("badge" in item && item.badge ? pendingCount : 0);
+              return (
               <NavLink
                 key={item.to}
                 to={item.to}
@@ -157,13 +163,14 @@ export default function AppLayout() {
               >
                 <item.icon className="w-5 h-5 shrink-0" />
                 <span className="truncate flex-1">{t(item.labelKey)}</span>
-                {"badge" in item && item.badge && !isDemo && pendingCount > 0 && (
+                {!isDemo && itemBadgeCount > 0 && (
                   <span className="ms-auto w-5 h-5 rounded-full bg-destructive flex items-center justify-center text-[10px] font-bold text-destructive-foreground shrink-0">
-                    {pendingCount > 9 ? "9+" : pendingCount}
+                    {itemBadgeCount > 9 ? "9+" : itemBadgeCount}
                   </span>
                 )}
               </NavLink>
-            ))}
+              );
+            })}
           </div>
         </ScrollArea>
         <div className="p-4 border-t border-border space-y-2">
@@ -252,7 +259,11 @@ export default function AppLayout() {
             </div>
             <ScrollArea className="flex-1 px-3 py-4" style={{ height: "calc(100% - 3.5rem)" }}>
               <div className="space-y-1">
-                {filteredNav.map((item) => (
+                {filteredNav.map((item) => {
+                  const itemBadgeCount = item.to === "/alerts"
+                    ? unreadCount
+                    : ("badge" in item && item.badge ? pendingCount : 0);
+                  return (
                   <NavLink
                     key={item.to}
                     to={item.to}
@@ -264,13 +275,14 @@ export default function AppLayout() {
                   >
                     <item.icon className="w-5 h-5" />
                     <span className="flex-1">{t(item.labelKey)}</span>
-                    {"badge" in item && item.badge && !isDemo && pendingCount > 0 && (
+                    {!isDemo && itemBadgeCount > 0 && (
                       <span className="w-5 h-5 rounded-full bg-destructive flex items-center justify-center text-[10px] font-bold text-destructive-foreground shrink-0">
-                        {pendingCount > 9 ? "9+" : pendingCount}
+                        {itemBadgeCount > 9 ? "9+" : itemBadgeCount}
                       </span>
                     )}
                   </NavLink>
-                ))}
+                  );
+                })}
               </div>
               <div className="mt-4 pt-4 border-t border-border">
                 <Button variant="ghost" className="w-full justify-start text-muted-foreground" onClick={handleLogout}>

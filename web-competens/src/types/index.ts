@@ -236,6 +236,40 @@ export interface Notification {
   read: boolean;
   type: "alert" | "info" | "evaluation";
   relatedId?: string;
+  eventId?: string;
+  eventType?: ActivityEventType;
+  priority?: "normal" | "high" | "critical";
+  classId?: string;
+  studentId?: string;
+  payload?: Record<string, unknown>;
+  readAt?: string;
+  createdAt: string;
+}
+
+export type ActivityEventType =
+  | "attendance_registered"
+  | "attendance_confirmed"
+  | "evaluation_recorded"
+  | "recovery_recorded"
+  | "recovery_admin_review_requested"
+  | "admin_request_submitted"
+  | "admin_request_reviewed"
+  | "risk_alert_opened";
+
+export interface ActivityEvent {
+  id: string;
+  eventType: ActivityEventType;
+  actorId?: string;
+  actorName?: string;
+  classId?: string;
+  className?: string;
+  studentId?: string;
+  studentName?: string;
+  competencyId?: string;
+  competencyCode?: string;
+  competencyTitle?: string;
+  eventDate: string;
+  payload: Record<string, unknown>;
   createdAt: string;
 }
 

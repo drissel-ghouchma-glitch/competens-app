@@ -264,12 +264,11 @@ export function useAttendance(): UseAttendanceReturn {
 
   const confirmAttendanceReal = useCallback(async (classId: string, date: string, period: AttendancePeriod) => {
     if (!supabase) return;
-    const { error: err } = await supabase
-      .from("attendance")
-      .update({ is_confirmed_by_admin: true })
-      .eq("class_id", classId)
-      .eq("date", date)
-      .eq("period", period);
+    const { error: err } = await supabase.rpc("confirm_attendance_register", {
+      p_class_id: classId,
+      p_date: date,
+      p_period: period,
+    });
     if (err) throw new Error(err.message);
     await loadAttendanceReal(classId, date, period);
   }, [loadAttendanceReal]);

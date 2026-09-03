@@ -4,7 +4,7 @@ import { useAppStore } from "@/stores/app-store";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/lib/supabase";
 import { isMissingSkillRecoveryTable } from "@/lib/skill-recovery";
-import { competencyScoreFromLedger, scoreToStatus, type PenaltyLedgerEvent } from "@/lib/eval-utils";
+import { competencyScoreFromLedger, type PenaltyLedgerEvent } from "@/lib/eval-utils";
 import { createOfflineOperation, sendOperation, useOfflineSync } from "@/lib/offline-sync";
 import { isNetworkError, loadOfflineSnapshot, saveOfflineSnapshot } from "@/lib/offline-queue";
 import type { Classe, Student, Competency, Level, DailyEvaluationInput, SkillRecoveryAction, StudentEvalInfo } from "@/types";
@@ -321,6 +321,10 @@ export function useEvaluation(): UseEvaluationReturn {
     [storeSave]
   );
 
+  /*
+   * Threshold detection used to run only in the browser. It is now a database
+   * trigger so it also runs for operations synchronised after working offline.
+   * This legacy implementation remains below temporarily as migration context.
   const checkThresholdAlerts = useCallback(
     async (competencyId: string, studentIds: string[]) => {
       if (!supabase) return;
@@ -382,6 +386,7 @@ export function useEvaluation(): UseEvaluationReturn {
     },
     [sbCompetencies, sbStudents, today]
   );
+  */
 
   const saveRealEval = useCallback(
     async (classId: string, competencyId: string, penalizedStudentIds: string[]): Promise<EvaluationSaveResult> => {
@@ -433,10 +438,9 @@ export function useEvaluation(): UseEvaluationReturn {
         return next;
       });
 
-      await checkThresholdAlerts(competencyId, penalizedStudentIds);
       return { queued: false };
     },
-    [checkThresholdAlerts, enqueue, today, user?.id]
+    [enqueue, today, user?.id]
   );
 
   return {
