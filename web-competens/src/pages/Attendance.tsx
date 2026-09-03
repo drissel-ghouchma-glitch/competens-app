@@ -80,7 +80,9 @@ export default function AttendancePage() {
     setLocalStatus((prev) => {
       const next = { ...prev };
       for (const [id, status] of Object.entries(attendanceMap)) {
-        if (id in next) next[id] = status;
+        // Attendance can arrive before the student list. Keep every saved
+        // status so the following student-list update preserves it.
+        next[id] = status;
       }
       return next;
     });
