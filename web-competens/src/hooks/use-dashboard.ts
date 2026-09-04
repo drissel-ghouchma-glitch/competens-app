@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useDemoStore } from "@/stores/demo";
 import { useAppStore } from "@/stores/app-store";
-import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/lib/supabase";
 import type { Alert, Student, SchoolYear } from "@/types";
 
@@ -19,7 +18,6 @@ export interface DashboardData {
 
 export function useDashboard(): DashboardData {
   const isDemo = useDemoStore((s) => s.isDemoMode);
-  const { user } = useAuth();
 
   // Store selectors (always called)
   const storeStudents = useAppStore((s) => s.students);
@@ -28,17 +26,11 @@ export function useDashboard(): DashboardData {
   const storeEvaluations = useAppStore((s) => s.evaluations);
   const storeAlerts = useAppStore((s) => s.alerts);
   const storeSchoolYears = useAppStore((s) => s.schoolYears);
-  const storeAssignments = useAppStore((s) => s.teacherClassAssignments);
 
   const storeActiveYear = useMemo(() => storeSchoolYears.find((y) => y.isActive), [storeSchoolYears]);
   const storeActiveClassIds = useMemo(
-    () => new Set(storeClasses
-      .filter((classe) => classe.schoolYearId === storeActiveYear?.id && !classe.isArchived)
-      .filter((classe) => user?.role !== "professeur" || storeAssignments.some((assignment) =>
-        assignment.teacherId === user.id && assignment.classId === classe.id
-      ))
-      .map((classe) => classe.id)),
-    [storeClasses, storeActiveYear?.id, storeAssignments, user?.id, user?.role],
+    () => new Set(storeClasses.filter((classe) => classe.schoolYearId === storeActiveYear?.id && !classe.isArchived).map((classe) => classe.id)),
+    [storeClasses, storeActiveYear?.id],
   );
   const storeActiveStudents = useMemo(
     () => storeStudents.filter((student) => storeActiveClassIds.has(student.classId)),
@@ -112,42 +104,12 @@ export function useDashboard(): DashboardData {
             isClosed: yearData.is_closed, createdAt: yearData.created_at, updatedAt: yearData.updated_at,
           }
         : undefined;
-      let assignedClassIds: string[] = [];
-      if (user?.role === "professeur") {
-        const { data: assignments, error: assignmentsError } = await supabase
-          .from("teacher_class_assignments")
-          .select("class_id")
-          .eq("teacher_id", user.id);
-        if (assignmentsError) throw assignmentsError;
-        assignedClassIds = (assignments ?? []).map((assignment) => assignment.class_id);
-      }
-
-      let activeClasses: { id: string }[] = [];
-      let classesError: Error | null = null;
-      if (activeYear && (user?.role !== "professeur" || assignedClassIds.length > 0)) {
-        let classesQuery = supabase
-          .from("classes")
-          .select("id")
-          .eq("school_year_id", activeYear.id)
-          .eq("is_archived", false);
-        if (user?.role === "professeur") classesQuery = classesQuery.in("id", assignedClassIds);
-        const classesResult = await classesQuery;
-        activeClasses = classesResult.data ?? [];
-        classesError = classesResult.error;
-      }
+      const { data: activeClasses, error: classesError } = activeYear
+        ? await supabase.from("classes").select("id").eq("school_year_id", activeYear.id).eq("is_archived", false)
+        : { data: [], error: null };
       if (classesError) throw classesError;
-      const classIds = activeClasses.map((classe) => classe.id);
+      const classIds = (activeClasses ?? []).map((classe) => classe.id);
       const scopedClassIds = classIds.length > 0 ? classIds : ["00000000-0000-0000-0000-000000000000"];
-
-      const alertsQuery = classIds.length > 0
-        ? supabase
-          .from("alerts")
-          .select("*, students!inner(id, first_name, last_name, class_id)")
-          .eq("resolved", false)
-          .in("students.class_id", classIds)
-          .order("created_at", { ascending: false })
-          .limit(5)
-        : Promise.resolve({ data: [], error: null });
 
       const [
         studentsRes,
@@ -157,12 +119,10 @@ export function useDashboard(): DashboardData {
         alertsRes,
       ] = await Promise.all([
         supabase.from("students").select("*", { count: "exact", head: true }).eq("is_archived", false).in("class_id", scopedClassIds),
-        user?.role === "professeur"
-          ? Promise.resolve({ count: 0, error: null })
-          : supabase.from("profiles").select("*", { count: "exact", head: true }).eq("role", "professeur").eq("status", "active"),
+        supabase.from("profiles").select("*", { count: "exact", head: true }).eq("role", "professeur").eq("status", "active"),
         supabase.from("evaluations").select("*", { count: "exact", head: true }).in("class_id", scopedClassIds),
         supabase.from("evaluations").select("date").in("class_id", scopedClassIds).gte("date", startDate).lte("date", today),
-        alertsQuery,
+        supabase.from("alerts").select("*, students(id, first_name, last_name, class_id)").eq("resolved", false).order("created_at", { ascending: false }).limit(5),
       ]);
 
       // Weekly data aggregation
@@ -218,7 +178,7 @@ export function useDashboard(): DashboardData {
     } finally {
       setLoading(false);
     }
-  }, [user?.id, user?.role]);
+  }, []);
 
   useEffect(() => {
     if (!isDemo) fetchFromSupabase();

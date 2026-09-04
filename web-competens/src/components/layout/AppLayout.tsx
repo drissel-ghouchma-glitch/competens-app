@@ -19,7 +19,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { OfflineSyncIndicator } from "@/components/layout/OfflineSyncIndicator";
 
 const navItems = [
-  { to: "/dashboard", icon: LayoutDashboard, labelKey: "nav.dashboard", roles: ["admin", "directeur", "professeur"] },
+  { to: "/dashboard", icon: LayoutDashboard, labelKey: "nav.dashboard", roles: ["admin", "directeur", "professeur", "parent"] },
   { to: "/school-years", icon: School, labelKey: "nav.schoolYears", roles: ["admin"] },
   { to: "/levels", icon: GraduationCap, labelKey: "nav.levels", roles: ["admin"] },
   { to: "/classes", icon: Building2, labelKey: "nav.classes", roles: ["admin", "directeur", "professeur"] },
@@ -56,6 +56,7 @@ const teacherMobileNavItems = [
 ];
 
 const parentMobileNavItems = [
+  { to: "/dashboard", icon: LayoutDashboard, labelKey: "nav.home" },
   { to: "/parent", icon: Home, labelKey: "nav.children" },
   { to: "/alerts", icon: Bell, labelKey: "nav.alerts" },
 ];

@@ -1,16 +1,14 @@
 import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
 import { useDashboard } from "@/hooks/use-dashboard";
 import { useAuth } from "@/hooks/use-auth";
 import { useCelebrationSettings } from "@/hooks/use-celebration-settings";
 import { useI18n } from "@/i18n";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { HonorRoll } from "@/components/HonorRoll";
 import {
-  Users, Building2, UserCog, ClipboardCheck, TrendingUp,
-  Bell, ArrowRight, ChevronRight, Activity, Loader2, Star,
+  Users, Building2, UserCog, ClipboardCheck,
+  Bell, Activity, Loader2, Star,
 } from "lucide-react";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -20,8 +18,7 @@ import {
 export default function DashboardPage() {
   const { t } = useI18n();
   const { user } = useAuth();
-  const isTeacher = user?.role === "professeur";
-  const isAdminRole = user?.role !== "professeur";
+  const canManageHonorRoll = user?.role === "admin" || user?.role === "directeur";
   const { isPublished } = useCelebrationSettings();
   const [showHonorRoll, setShowHonorRoll] = useState(false);
   const {
@@ -29,15 +26,12 @@ export default function DashboardPage() {
     activeYear, weeklyData, alerts, loading, error,
   } = useDashboard();
 
-  const stats = useMemo(() => {
-    const allStats = [
-      { label: t("dashboard.students"),     value: totalStudents,    icon: Users,          color: "text-blue-500",   bg: "bg-blue-500/10" },
-      { label: t("dashboard.classes"),      value: totalClasses,     icon: Building2,      color: "text-emerald-500", bg: "bg-emerald-500/10" },
-      { label: t("dashboard.teachers"),     value: totalTeachers,    icon: UserCog,        color: "text-violet-500", bg: "bg-violet-500/10" },
-      { label: t("dashboard.evaluations"),  value: totalEvaluations, icon: ClipboardCheck, color: "text-amber-500",  bg: "bg-amber-500/10" },
-    ];
-    return isTeacher ? allStats.filter((stat) => stat.label !== t("dashboard.teachers")) : allStats;
-  }, [totalStudents, totalClasses, totalTeachers, totalEvaluations, t, isTeacher]);
+  const stats = useMemo(() => [
+    { label: t("dashboard.students"),     value: totalStudents,    icon: Users,          color: "text-blue-500",   bg: "bg-blue-500/10" },
+    { label: t("dashboard.classes"),      value: totalClasses,     icon: Building2,      color: "text-emerald-500", bg: "bg-emerald-500/10" },
+    { label: t("dashboard.teachers"),     value: totalTeachers,    icon: UserCog,        color: "text-violet-500", bg: "bg-violet-500/10" },
+    { label: t("dashboard.evaluations"),  value: totalEvaluations, icon: ClipboardCheck, color: "text-amber-500",  bg: "bg-amber-500/10" },
+  ], [totalStudents, totalClasses, totalTeachers, totalEvaluations, t]);
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -48,8 +42,9 @@ export default function DashboardPage() {
           <p className="text-sm text-muted-foreground">
             {loading ? t("common.loading") : activeYear ? t("dashboard.schoolYear", { name: activeYear.name }) : t("dashboard.noActiveYear")}
           </p>
+          <p className="mt-1 max-w-2xl text-xs leading-5 text-muted-foreground">{t("dashboard.generalInfo")}</p>
         </div>
-        {isAdminRole && (
+        {canManageHonorRoll && (
           <Button
             size="sm"
             variant={showHonorRoll ? "default" : "outline"}
@@ -62,17 +57,17 @@ export default function DashboardPage() {
         )}
       </div>
 
-      {isAdminRole && showHonorRoll && <HonorRoll isAdmin />}
+      {canManageHonorRoll && showHonorRoll && <HonorRoll isAdmin />}
 
-      {/* Teachers only ever see the celebration once the admin has published it */}
-      {!isAdminRole && isPublished && <HonorRoll isAdmin={false} />}
+      {/* Teachers and parents only see the celebration after management publishes it. */}
+      {!canManageHonorRoll && isPublished && <HonorRoll isAdmin={false} />}
 
       {error && (
         <div className="p-3 rounded-lg bg-destructive/10 text-destructive text-sm">{error}</div>
       )}
 
       {/* Stats Cards */}
-      <div className={`grid grid-cols-2 gap-3 md:gap-4 ${isTeacher ? "lg:grid-cols-3" : "lg:grid-cols-4"}`}>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
         {stats.map((stat) => (
           <Card key={stat.label} className="border-border/50 hover:shadow-md transition-shadow">
             <CardContent className="p-4 md:p-5">
@@ -130,18 +125,9 @@ export default function DashboardPage() {
         {/* Alerts */}
         <Card className="border-border/50">
           <CardHeader className="pb-2">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-base font-semibold flex items-center gap-2">
-                <Bell className="w-4 h-4 text-warning" /> {t("dashboard.recentAlerts")}
-              </CardTitle>
-              {alerts.length > 0 && (
-                <Link to="/alerts">
-                  <Badge variant="outline" className="text-xs gap-1">
-                    {t("dashboard.seeAll")} <ChevronRight className="w-3 h-3 rtl:rotate-180" />
-                  </Badge>
-                </Link>
-              )}
-            </div>
+            <CardTitle className="text-base font-semibold flex items-center gap-2">
+              <Bell className="w-4 h-4 text-warning" /> {t("dashboard.recentAlerts")}
+            </CardTitle>
           </CardHeader>
           <CardContent className="pt-2 space-y-3">
             {loading ? (
@@ -152,11 +138,7 @@ export default function DashboardPage() {
               <p className="text-sm text-muted-foreground text-center py-6">{t("dashboard.noAlerts")}</p>
             ) : (
               alerts.slice(0, 5).map((a) => (
-                <Link
-                  key={a.id}
-                  to={`/students/${a.studentId}`}
-                  className="flex items-center gap-3 p-3 rounded-xl bg-muted/40 hover:bg-muted transition-colors"
-                >
+                <div key={a.id} className="flex items-center gap-3 rounded-xl bg-muted/40 p-3">
                   <div className={`w-2 h-2 rounded-full shrink-0 ${a.level === "critical" ? "bg-destructive" : "bg-warning"}`} />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium truncate">
@@ -164,36 +146,11 @@ export default function DashboardPage() {
                     </p>
                     <p className="text-xs text-muted-foreground truncate">{a.cause}</p>
                   </div>
-                </Link>
+                </div>
               ))
             )}
           </CardContent>
         </Card>
-      </div>
-
-      {/* Quick Access */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {[
-          { to: "/classes",      label: t("dashboard.classes"),      icon: Building2,      bg: "from-emerald-500/20 to-emerald-500/5", text: "text-emerald-600 dark:text-emerald-400" },
-          { to: "/students",     label: t("dashboard.students"),     icon: Users,          bg: "from-blue-500/20 to-blue-500/5",       text: "text-blue-600 dark:text-blue-400" },
-          { to: "/competencies", label: t("dashboard.competencies"), icon: TrendingUp,     bg: "from-violet-500/20 to-violet-500/5",   text: "text-violet-600 dark:text-violet-400" },
-          { to: "/evaluation",   label: t("dashboard.evaluate"),     icon: ClipboardCheck, bg: "from-amber-500/20 to-amber-500/5",     text: "text-amber-600 dark:text-amber-400" },
-        ].map((item) => (
-          <Link key={item.to} to={item.to}>
-            <Card className="border-border/50 hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-pointer overflow-hidden">
-              <CardContent className="p-4 md:p-5 relative">
-                <div className={`absolute top-0 end-0 w-20 h-20 rounded-bl-[80px] bg-gradient-to-bl ${item.bg}`} />
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center bg-gradient-to-br ${item.bg} mb-3`}>
-                  <item.icon className={`w-5 h-5 ${item.text}`} />
-                </div>
-                <p className="font-semibold text-sm">{item.label}</p>
-                <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
-                  {t("dashboard.access")} <ArrowRight className="w-3 h-3 rtl:rotate-180" />
-                </p>
-              </CardContent>
-            </Card>
-          </Link>
-        ))}
       </div>
     </div>
   );
