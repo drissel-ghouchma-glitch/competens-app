@@ -20,6 +20,7 @@ import {
 export default function DashboardPage() {
   const { t } = useI18n();
   const { user } = useAuth();
+  const isTeacher = user?.role === "professeur";
   const isAdminRole = user?.role !== "professeur";
   const { isPublished } = useCelebrationSettings();
   const [showHonorRoll, setShowHonorRoll] = useState(false);
@@ -28,12 +29,15 @@ export default function DashboardPage() {
     activeYear, weeklyData, alerts, loading, error,
   } = useDashboard();
 
-  const stats = useMemo(() => [
-    { label: t("dashboard.students"),     value: totalStudents,    icon: Users,          color: "text-blue-500",   bg: "bg-blue-500/10" },
-    { label: t("dashboard.classes"),      value: totalClasses,     icon: Building2,      color: "text-emerald-500", bg: "bg-emerald-500/10" },
-    { label: t("dashboard.teachers"),     value: totalTeachers,    icon: UserCog,        color: "text-violet-500", bg: "bg-violet-500/10" },
-    { label: t("dashboard.evaluations"),  value: totalEvaluations, icon: ClipboardCheck, color: "text-amber-500",  bg: "bg-amber-500/10" },
-  ], [totalStudents, totalClasses, totalTeachers, totalEvaluations, t]);
+  const stats = useMemo(() => {
+    const allStats = [
+      { label: t("dashboard.students"),     value: totalStudents,    icon: Users,          color: "text-blue-500",   bg: "bg-blue-500/10" },
+      { label: t("dashboard.classes"),      value: totalClasses,     icon: Building2,      color: "text-emerald-500", bg: "bg-emerald-500/10" },
+      { label: t("dashboard.teachers"),     value: totalTeachers,    icon: UserCog,        color: "text-violet-500", bg: "bg-violet-500/10" },
+      { label: t("dashboard.evaluations"),  value: totalEvaluations, icon: ClipboardCheck, color: "text-amber-500",  bg: "bg-amber-500/10" },
+    ];
+    return isTeacher ? allStats.filter((stat) => stat.label !== t("dashboard.teachers")) : allStats;
+  }, [totalStudents, totalClasses, totalTeachers, totalEvaluations, t, isTeacher]);
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -68,7 +72,7 @@ export default function DashboardPage() {
       )}
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
+      <div className={`grid grid-cols-2 gap-3 md:gap-4 ${isTeacher ? "lg:grid-cols-3" : "lg:grid-cols-4"}`}>
         {stats.map((stat) => (
           <Card key={stat.label} className="border-border/50 hover:shadow-md transition-shadow">
             <CardContent className="p-4 md:p-5">

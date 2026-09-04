@@ -25,6 +25,7 @@ export default function StudentsPage() {
   const isDemo = useDemoStore((s) => s.isDemoMode);
 
   const isTeacherReal = !isDemo && user?.role === "professeur";
+  const isTeacher = user?.role === "professeur";
   const canManage = user?.role === "admin" || user?.role === "directeur";
 
   const [archiving, setArchiving] = useState<string | null>(null);
@@ -177,6 +178,7 @@ export default function StudentsPage() {
   const addButtonLabel = isTeacherReal ? t("students.requestAdd") : t("students.addStudent");
   const dialogTitle = isTeacherReal ? t("students.requestAddTitle") : t("students.addTitle");
   const dialogDesc = isTeacherReal ? t("students.requestAddDesc") : t("students.addDesc");
+  const classFilterLabel = isTeacher ? t("students.myClasses") : t("students.allClasses");
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -332,9 +334,9 @@ export default function StudentsPage() {
           <Input placeholder={t("students.searchPlaceholder")} value={search} onChange={(e) => setSearch(e.target.value)} className="ps-9" />
         </div>
         <Select value={classFilter} onValueChange={setClassFilter}>
-          <SelectTrigger className="w-[180px]"><SelectValue placeholder={t("students.allClasses")} /></SelectTrigger>
+          <SelectTrigger className="w-[180px]"><SelectValue placeholder={classFilterLabel} /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">{t("students.allClasses")}</SelectItem>
+            <SelectItem value="all">{classFilterLabel}</SelectItem>
             {classes.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
           </SelectContent>
         </Select>

@@ -100,14 +100,21 @@ export function useStudentDetail(studentId: string | undefined): UseStudentDetai
   const storeAttendance = useAppStore((s) => s.attendance);
   const storeEnrollments = useAppStore((s) => s.studentEnrollments);
   const storeSchoolYears = useAppStore((s) => s.schoolYears);
+  const storeAssignments = useAppStore((s) => s.teacherClassAssignments);
   const storeUpdateStudent = useAppStore((s) => s.updateStudent);
   const addDemoRecovery = useAppStore((s) => s.addDemoSkillRecoveryAction);
   const addDemoRecoveryRequest = useAppStore((s) => s.addDemoSkillRecoveryRequest);
   const resolveDemoRecoveryRequest = useAppStore((s) => s.resolveDemoSkillRecoveryRequest);
 
   const demoStudent = useMemo(
-    () => storeStudents.find((s) => s.id === studentId) ?? null,
-    [storeStudents, studentId]
+    () => {
+      const candidate = storeStudents.find((student) => student.id === studentId) ?? null;
+      if (!candidate || user?.role !== "professeur") return candidate;
+      return storeAssignments.some((assignment) => assignment.teacherId === user.id && assignment.classId === candidate.classId)
+        ? candidate
+        : null;
+    },
+    [storeStudents, storeAssignments, studentId, user?.id, user?.role]
   );
   const demoClasse = useMemo(
     () => (demoStudent ? storeClasses.find((c) => c.id === demoStudent.classId) ?? null : null),
@@ -118,8 +125,8 @@ export function useStudentDetail(studentId: string | undefined): UseStudentDetai
     [storeLevels, demoClasse]
   );
   const demoAlerts = useMemo(
-    () => storeAlerts.filter((a) => a.studentId === studentId),
-    [storeAlerts, studentId]
+    () => demoStudent ? storeAlerts.filter((alert) => alert.studentId === studentId) : [],
+    [storeAlerts, studentId, demoStudent]
   );
   const demoRawEvals = useMemo(
     () => storeEvaluations
@@ -171,7 +178,7 @@ export function useStudentDetail(studentId: string | undefined): UseStudentDetai
       .filter((t) => ids.has(t.id))
       .map((t) => ({ id: t.id, name: `${t.firstName} ${t.lastName}` }));
   }, [demoRawEvals, storeTeachers]);
-  const demoAcademicHistory = useMemo<AcademicHistoryItem[]>(() => storeEnrollments
+  const demoAcademicHistory = useMemo<AcademicHistoryItem[]>(() => (demoStudent ? storeEnrollments
     .filter((enrollment) => enrollment.studentId === studentId)
     .map((enrollment) => {
       const historyClass = storeClasses.find((classe) => classe.id === enrollment.classId);
@@ -189,8 +196,15 @@ export function useStudentDetail(studentId: string | undefined): UseStudentDetai
         endedAt: enrollment.endedAt,
       };
     })
-    .sort((left, right) => right.startedAt.localeCompare(left.startedAt)),
-  [storeEnrollments, storeClasses, storeLevels, storeSchoolYears, studentId]);
+    .sort((left, right) => right.startedAt.localeCompare(left.startedAt)) : []),
+  [storeEnrollments, storeClasses, storeLevels, storeSchoolYears, studentId, demoStudent]);
+
+  const demoClasses = useMemo(
+    () => storeClasses.filter((classe) => user?.role !== "professeur" || storeAssignments.some((assignment) =>
+      assignment.teacherId === user.id && assignment.classId === classe.id
+    )),
+    [storeClasses, storeAssignments, user?.id, user?.role],
+  );
 
   // ── Supabase state ───────────────────────────────────────
   const [sbStudent, setSbStudent] = useState<Student | null>(null);
@@ -252,8 +266,22 @@ export function useStudentDetail(studentId: string | undefined): UseStudentDetai
     setLoading(true);
     setError(null);
     try {
-      const { data: stuData, error: stuErr } = await supabase
-        .from("students").select("*").eq("id", studentId).single();
+      let assignedClassIds: string[] = [];
+      if (user?.role === "professeur") {
+        const { data: assignments, error: assignmentsError } = await supabase
+          .from("teacher_class_assignments")
+          .select("class_id")
+          .eq("teacher_id", user.id);
+        if (assignmentsError) throw assignmentsError;
+        assignedClassIds = (assignments ?? []).map((assignment) => assignment.class_id);
+        if (assignedClassIds.length === 0) {
+          setSbStudent(null); setSbClasse(null); setSbClasses([]); return;
+        }
+      }
+
+      let studentQuery = supabase.from("students").select("*").eq("id", studentId);
+      if (user?.role === "professeur") studentQuery = studentQuery.in("class_id", assignedClassIds);
+      const { data: stuData, error: stuErr } = await studentQuery.single();
       if (stuErr) throw stuErr;
 
       const student: Student = {
@@ -264,8 +292,11 @@ export function useStudentDetail(studentId: string | undefined): UseStudentDetai
       };
       setSbStudent(student);
 
+      let classesQuery = supabase.from("classes").select("*, levels(*), school_years!inner(is_active)").eq("is_archived", false).eq("school_years.is_active", true).order("name");
+      if (user?.role === "professeur") classesQuery = classesQuery.in("id", assignedClassIds);
+
       const [classesRes, compRes, alertsRes, attRes, tcaRes] = await Promise.all([
-        supabase.from("classes").select("*, levels(*), school_years!inner(is_active)").eq("is_archived", false).eq("school_years.is_active", true).order("name"),
+        classesQuery,
         supabase.from("competencies").select("*").order("order"),
         supabase.from("alerts").select("*").eq("student_id", studentId).order("created_at", { ascending: false }),
         student.classId
@@ -483,7 +514,7 @@ export function useStudentDetail(studentId: string | undefined): UseStudentDetai
     alerts: isDemo ? demoAlerts : sbAlerts,
     timeline: isDemo ? demoTimeline : sbTimeline,
     attendanceHistory: isDemo ? demoAttendanceHistory : sbAttendanceHistory,
-    classes: isDemo ? storeClasses : sbClasses,
+    classes: isDemo ? demoClasses : sbClasses,
     rawEvals: isDemo ? demoRawEvals : sbAllEvals,
     recoveryActions: isDemo ? demoRecoveries : sbRecoveries,
     classTeachers: isDemo ? demoClassTeachers : sbClassTeachers,

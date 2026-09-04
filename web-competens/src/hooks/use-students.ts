@@ -4,6 +4,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useDemoStore } from "@/stores/demo";
 import { useAppStore } from "@/stores/app-store";
+import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/lib/supabase";
 import type { Student, Classe } from "@/types";
 
@@ -42,9 +43,11 @@ async function syncClassStudentCount(classId: string) {
 
 export function useStudents(): UseStudentsReturn {
   const isDemo = useDemoStore((s) => s.isDemoMode);
+  const { user } = useAuth();
 
   const storeStudents = useAppStore((s) => s.students);
   const storeClasses = useAppStore((s) => s.classes);
+  const storeAssignments = useAppStore((s) => s.teacherClassAssignments);
   const storeSchoolYears = useAppStore((s) => s.schoolYears);
   const storeAddStudent = useAppStore((s) => s.addStudent);
   const storeImportStudents = useAppStore((s) => s.importStudents);
@@ -54,8 +57,13 @@ export function useStudents(): UseStudentsReturn {
     [storeSchoolYears],
   );
   const demoClasses = useMemo(
-    () => storeClasses.filter((classe) => classe.schoolYearId === demoActiveYearId && !classe.isArchived),
-    [storeClasses, demoActiveYearId],
+    () => storeClasses.filter((classe) => {
+      if (classe.schoolYearId !== demoActiveYearId || classe.isArchived) return false;
+      return user?.role !== "professeur" || storeAssignments.some((assignment) =>
+        assignment.teacherId === user.id && assignment.classId === classe.id
+      );
+    }),
+    [storeClasses, demoActiveYearId, storeAssignments, user?.id, user?.role],
   );
   const demoClassIds = useMemo(() => new Set(demoClasses.map((classe) => classe.id)), [demoClasses]);
   const demoStudents = useMemo(
@@ -83,12 +91,28 @@ export function useStudents(): UseStudentsReturn {
       if (!activeYear) {
         setSbStudents([]); setSbClasses([]); return;
       }
-      const classesRes = await supabase
+      let assignedClassIds: string[] = [];
+      if (user?.role === "professeur") {
+        const { data: assignments, error: assignmentsError } = await supabase
+          .from("teacher_class_assignments")
+          .select("class_id")
+          .eq("teacher_id", user.id);
+        if (assignmentsError) throw assignmentsError;
+        assignedClassIds = (assignments ?? []).map((assignment) => assignment.class_id);
+        if (assignedClassIds.length === 0) {
+          setSbStudents([]); setSbClasses([]); return;
+        }
+      }
+
+      let classesQuery = supabase
         .from("classes")
         .select("*")
         .eq("is_archived", false)
         .eq("school_year_id", activeYear.id)
         .order("name");
+      if (user?.role === "professeur") classesQuery = classesQuery.in("id", assignedClassIds);
+
+      const classesRes = await classesQuery;
       if (classesRes.error) throw classesRes.error;
 
       const classes: Classe[] = (classesRes.data ?? []).map((c) => ({
@@ -126,7 +150,7 @@ export function useStudents(): UseStudentsReturn {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [user?.id, user?.role]);
 
   useEffect(() => {
     if (!isDemo) fetchFromSupabase();
