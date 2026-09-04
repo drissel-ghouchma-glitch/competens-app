@@ -60,8 +60,12 @@ export default function AlertsPage() {
   const [eventType, setEventType] = useState<ActivityEventType | "all">("all");
   const [studentQuery, setStudentQuery] = useState("");
   const isActivityViewer = user?.role === "admin" || user?.role === "directeur" || user?.role === "professeur";
+  const isTeacher = user?.role === "professeur";
   const canResolveAlerts = isActivityViewer;
   const locale = lang === "ar" ? "ar-MA" : "fr-FR";
+  const allMyClassesLabel = lang === "ar" ? "كل أقسامي" : "Toutes mes classes";
+  const managementMessagesTitle = lang === "ar" ? "إشعارات الإدارة وطلباتي" : "Messages de l’administration et mes demandes";
+  const managementMessagesHint = lang === "ar" ? "تأكيد الغياب، حالة الطلبات، وأي متابعة تخص أقسامك." : "Confirmation des présences, état de vos demandes et suivis concernant vos classes.";
   const copy = lang === "ar"
     ? {
         activityTitle: "سجل النشاط", activitySubtitle: "كل العمليات المؤكدة في النظام حسب اليوم.",
@@ -145,10 +149,15 @@ export default function AlertsPage() {
   const describeNotification = (notification: Notification) => {
     const student = students.find((candidate) => candidate.id === notification.studentId);
     const studentName = student ? `${student.firstName} ${student.lastName}` : "";
+    const notificationClass = classes.find((candidate) => candidate.id === notification.classId);
+    const className = notificationClass?.name;
     const eventTitle = notification.eventType ? titleForEvent(notification.eventType) : notification.title;
     let message = notification.message;
-    if (notification.eventType === "attendance_confirmed" && notification.studentId) message = `${copy.absenceConfirmed}${studentName ? `: ${studentName}` : ""}.`;
+    if (notification.eventType === "attendance_confirmed") message = notification.studentId
+      ? `${copy.absenceConfirmed}${studentName ? `: ${studentName}` : ""}.`
+      : lang === "ar" ? `تم تأكيد الحضور للقسم ${className ?? ""}.` : `Les présences de ${className ?? "la classe"} ont été confirmées.`;
     if (notification.eventType === "evaluation_recorded" && notification.studentId) message = `${copy.scoreAffected}${studentName ? `: ${studentName}` : ""}.`;
+    if (notification.eventType === "admin_request_submitted") message = lang === "ar" ? "تم حفظ طلبك وإرساله إلى الإدارة للمراجعة." : "Votre demande a été enregistrée et transmise à l’administration.";
     if (notification.eventType === "admin_request_reviewed") {
       const status = String(notification.payload?.status ?? "");
       const statusLabel = status === "approved" ? copy.approved : status === "rejected" ? copy.rejected : copy.pending;
@@ -181,6 +190,18 @@ export default function AlertsPage() {
         </div>
       )}
 
+      {isTeacher && (
+        <Card className="border-primary/25 bg-primary/[0.025]">
+          <CardHeader className="pb-2"><CardTitle className="text-base font-semibold flex items-center gap-2"><Bell className="w-4 h-4 text-primary" /> {managementMessagesTitle} {unreadNotifications.length > 0 && <Badge variant="destructive">{unreadNotifications.length}</Badge>}</CardTitle><p className="text-sm text-muted-foreground">{managementMessagesHint}</p></CardHeader>
+          <CardContent className="space-y-2 max-h-[340px] overflow-y-auto">
+            {notifications.length === 0 ? <p className="text-sm text-muted-foreground text-center py-4">{copy.noNotifications}</p> : notifications.slice(0, 8).map((notification) => {
+              const content = describeNotification(notification);
+              return <div key={notification.id} className={cn("flex items-start justify-between gap-3 rounded-xl border p-3", notification.read ? "border-border/50 bg-muted/20 opacity-75" : "border-primary/20 bg-primary/[0.03]")}><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><p className="text-sm font-medium">{content.title}</p>{!notification.read && <Badge variant="secondary" className="text-[10px]">{copy.pending}</Badge>}</div><p className="text-xs text-muted-foreground mt-0.5">{content.message}</p><p className="text-[11px] text-muted-foreground mt-1">{new Date(notification.createdAt).toLocaleString(locale, { dateStyle: "medium", timeStyle: "short" })}</p></div>{!notification.read && <Button variant="ghost" size="sm" className="shrink-0" onClick={() => void markNotificationRead(notification.id)}>{copy.markRead}</Button>}</div>;
+            })}
+          </CardContent>
+        </Card>
+      )}
+
       {isActivityViewer && (
         <Card className="border-primary/20 overflow-hidden">
           <CardHeader className="pb-4 bg-primary/[0.03]">
@@ -190,14 +211,14 @@ export default function AlertsPage() {
             <p className="text-sm text-muted-foreground">{copy.activitySubtitle}</p>
           </CardHeader>
           <CardContent className="p-4 md:p-5 space-y-4">
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+            <div className={cn("grid gap-3 sm:grid-cols-2", isTeacher ? "lg:grid-cols-4" : "lg:grid-cols-5")}>
               <label className="space-y-1.5"><span className="text-xs font-medium text-muted-foreground">{copy.date}</span><Input type="date" value={date} onChange={(event) => setDate(event.target.value)} /></label>
               <label className="space-y-1.5"><span className="text-xs font-medium text-muted-foreground">{copy.class}</span>
-                <Select value={classId} onValueChange={setClassId}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">{copy.allClasses}</SelectItem>{classes.map((classe) => <SelectItem key={classe.id} value={classe.id}>{classe.name}</SelectItem>)}</SelectContent></Select>
+                <Select value={classId} onValueChange={setClassId}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">{isTeacher ? allMyClassesLabel : copy.allClasses}</SelectItem>{classes.map((classe) => <SelectItem key={classe.id} value={classe.id}>{classe.name}</SelectItem>)}</SelectContent></Select>
               </label>
-              <label className="space-y-1.5"><span className="text-xs font-medium text-muted-foreground">{copy.teacher}</span>
+              {!isTeacher && <label className="space-y-1.5"><span className="text-xs font-medium text-muted-foreground">{copy.teacher}</span>
                 <Select value={actorId} onValueChange={setActorId}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">{copy.allTeachers}</SelectItem>{teachers.map((teacher) => <SelectItem key={teacher.id} value={teacher.id}>{`${teacher.firstName} ${teacher.lastName}`.trim()}</SelectItem>)}</SelectContent></Select>
-              </label>
+              </label>}
               <label className="space-y-1.5"><span className="text-xs font-medium text-muted-foreground">{t("nav.alerts")}</span>
                 <Select value={eventType} onValueChange={(value) => setEventType(value as ActivityEventType | "all")}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">{copy.allActivities}</SelectItem>{activityTypes.map((type) => <SelectItem key={type} value={type}>{titleForEvent(type)}</SelectItem>)}</SelectContent></Select>
               </label>
