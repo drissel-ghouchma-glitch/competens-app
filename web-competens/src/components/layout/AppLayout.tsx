@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, GraduationCap, Building2, Users, UserCog,
   BookOpen, ClipboardCheck, Bell, Moon, Sun, Menu, X,
-  LogOut, School, UserCheck, ClipboardList, Home, ShieldCheck, CalendarCheck, Languages, Trophy,
+  LogOut, School, UserCheck, ClipboardList, Home, ShieldCheck, CalendarCheck, Languages, Trophy, CircleHelp,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -30,6 +30,7 @@ const navItems = [
   { to: "/principal-classes", icon: Trophy, labelKey: "nav.principalClasses", roles: ["admin", "directeur", "professeur"] },
   { to: "/attendance", icon: CalendarCheck, labelKey: "nav.attendance", roles: ["admin", "directeur", "professeur"] },
   { to: "/alerts", icon: Bell, labelKey: "nav.alerts", roles: ["admin", "directeur", "professeur", "parent"] },
+  { to: "/teacher-guide", icon: CircleHelp, labelKey: "nav.teacherGuide", roles: ["professeur"] },
   { to: "/admin/pending-teachers", icon: UserCheck, labelKey: "nav.registrations", roles: ["admin"] },
   { to: "/admin/requests", icon: ClipboardList, labelKey: "nav.requests", roles: ["admin"], badge: true },
   { to: "/admin/users", icon: ShieldCheck, labelKey: "nav.users", roles: ["admin"] },

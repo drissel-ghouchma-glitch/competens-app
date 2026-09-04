@@ -28,6 +28,7 @@ import UserManagement from "./pages/admin/UserManagement";
 import TeacherEvaluationAnalysis from "./pages/admin/TeacherEvaluationAnalysis";
 import ParentDashboard from "./pages/parent/ParentDashboard";
 import PrincipalClasses from "./pages/PrincipalClasses";
+import TeacherGuide from "./pages/TeacherGuide";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient({
@@ -56,6 +57,7 @@ function AppInner() {
           <Route path="/principal-classes" element={<PrincipalClasses />} />
           <Route path="/attendance" element={<Attendance />} />
           <Route path="/alerts" element={<Alerts />} />
+          <Route path="/teacher-guide" element={<TeacherGuide />} />
           <Route path="/admin/pending-teachers" element={<PendingTeachers />} />
           <Route path="/admin/requests" element={<AdminRequests />} />
           <Route path="/admin/users" element={<UserManagement />} />

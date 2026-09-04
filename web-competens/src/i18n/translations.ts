@@ -116,6 +116,7 @@ export const fr: Dict = {
   "nav.evaluate": "Évaluer",
   "nav.children": "Enfants",
   "nav.principalClasses": "Mes classes principales",
+  "nav.teacherGuide": "Guide d’utilisation",
 
   // ── Principal classes ───────────────────────────────────────
   "principalClasses.title": "Mes classes principales",
@@ -848,6 +849,7 @@ export const ar: Dict = {
   "nav.evaluate": "قيّم",
   "nav.children": "الأبناء",
   "nav.principalClasses": "أقسامي الرئيسية",
+  "nav.teacherGuide": "دليل الاستعمال",
 
   // ── Principal classes ───────────────────────────────────────
   "principalClasses.title": "أقسامي الرئيسية",
