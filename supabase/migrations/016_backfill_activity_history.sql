@@ -16,7 +16,7 @@ INSERT INTO public.activity_events (
 SELECT
   'attendance_registered', register_row.teacher_id, register_row.class_id, NULL, NULL,
   register_row.date,
-  'backfill:attendance-register:' || register_row.teacher_id::text || ':' || register_row.class_id::text || ':' || register_row.date::text || ':' || register_row.period,
+  'backfill:attendance-register:' || register_row.teacher_id::text || ':' || coalesce(register_row.class_id::text, 'no-class') || ':' || register_row.date::text || ':' || register_row.period,
   jsonb_build_object(
     'period', register_row.period,
     'student_count', register_row.student_count,
@@ -80,24 +80,25 @@ INSERT INTO public.activity_events (
 SELECT
   'evaluation_recorded', session_row.teacher_id, session_row.class_id, NULL, session_row.competency_id,
   session_row.date,
-  'backfill:evaluation-session:' || session_row.teacher_id::text || ':' || session_row.class_id::text || ':' || session_row.competency_id::text || ':' || session_row.date::text,
+  'backfill:evaluation-session:' || session_row.teacher_id::text || ':' || coalesce(session_row.class_id::text, 'no-class') || ':' || session_row.competency_id::text || ':' || session_row.date::text,
   jsonb_build_object('student_count', session_row.student_count, 'student_ids', session_row.student_ids, 'is_session', true),
   session_row.created_at
 FROM (
   SELECT
-    teacher_id, class_id, competency_id, date,
+    evaluation.teacher_id, coalesce(evaluation.class_id, student.class_id) AS class_id, evaluation.competency_id, evaluation.date,
     count(*) AS student_count,
-    jsonb_agg(student_id ORDER BY student_id) AS student_ids,
-    min(created_at) AS created_at
-  FROM public.evaluations
-  WHERE teacher_id IS NOT NULL
-  GROUP BY teacher_id, class_id, competency_id, date
+    jsonb_agg(evaluation.student_id ORDER BY evaluation.student_id) AS student_ids,
+    min(evaluation.created_at) AS created_at
+  FROM public.evaluations evaluation
+  LEFT JOIN public.students student ON student.id = evaluation.student_id
+  WHERE evaluation.teacher_id IS NOT NULL
+  GROUP BY evaluation.teacher_id, coalesce(evaluation.class_id, student.class_id), evaluation.competency_id, evaluation.date
 ) AS session_row
 WHERE NOT EXISTS (
   SELECT 1 FROM public.activity_events event_row
   WHERE event_row.event_type = 'evaluation_recorded'
     AND event_row.actor_id = session_row.teacher_id
-    AND event_row.class_id = session_row.class_id
+    AND event_row.class_id IS NOT DISTINCT FROM session_row.class_id
     AND event_row.competency_id = session_row.competency_id
     AND event_row.student_id IS NULL
     AND event_row.event_date = session_row.date
@@ -111,18 +112,19 @@ INSERT INTO public.activity_events (
   event_date, source_key, payload, created_at
 )
 SELECT
-  'evaluation_recorded', evaluation.teacher_id, evaluation.class_id, evaluation.student_id, evaluation.competency_id,
+  'evaluation_recorded', evaluation.teacher_id, coalesce(evaluation.class_id, student.class_id), evaluation.student_id, evaluation.competency_id,
   evaluation.date,
   'backfill:evaluation-penalty:' || evaluation.id::text,
   jsonb_build_object('score_delta', -1, 'is_session', false),
   evaluation.created_at
 FROM public.evaluations evaluation
+LEFT JOIN public.students student ON student.id = evaluation.student_id
 WHERE evaluation.teacher_id IS NOT NULL
   AND NOT EXISTS (
     SELECT 1 FROM public.activity_events event_row
     WHERE event_row.event_type = 'evaluation_recorded'
       AND event_row.actor_id = evaluation.teacher_id
-      AND event_row.class_id = evaluation.class_id
+      AND event_row.class_id IS NOT DISTINCT FROM coalesce(evaluation.class_id, student.class_id)
       AND event_row.student_id = evaluation.student_id
       AND event_row.competency_id = evaluation.competency_id
       AND event_row.event_date = evaluation.date
