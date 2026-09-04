@@ -69,6 +69,17 @@ export default function AlertsPage() {
   const allMyClassesLabel = lang === "ar" ? "كل أقسامي" : "Toutes mes classes";
   const managementMessagesTitle = lang === "ar" ? "إشعارات الإدارة وطلباتي" : "Messages de l’administration et mes demandes";
   const managementMessagesHint = lang === "ar" ? "تأكيد الغياب، حالة الطلبات، وأي متابعة تخص أقسامك." : "Confirmation des présences, état de vos demandes et suivis concernant vos classes.";
+  const alertCardDescriptions = lang === "ar"
+    ? {
+        critical: "حالات تحتاج متابعة سريعة، عادة عندما تنخفض مهارة تلميذ إلى 50% أو أقل.",
+        warning: "إنذار مبكر لمتابعة تراجع مهارة قبل أن تصبح الحالة حرجة.",
+        resolved: "تنبيهات تمت معالجتها أو إغلاقها، وتبقى في السجل للرجوع إليها.",
+      }
+    : {
+        critical: "À suivre rapidement, en général lorsqu’une compétence atteint 50 % ou moins.",
+        warning: "Avertissement précoce à suivre avant que la situation ne devienne critique.",
+        resolved: "Alertes traitées ou clôturées, conservées dans l’historique.",
+      };
   const copy = lang === "ar"
     ? {
         activityTitle: "سجل النشاط", activitySubtitle: "كل العمليات المؤكدة في النظام حسب اليوم.",
@@ -265,10 +276,10 @@ export default function AlertsPage() {
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-        <Card className="border-destructive/30 bg-destructive/5"><CardContent className="p-4 flex items-center gap-3"><Bell className="w-5 h-5 text-destructive" /><div><p className="text-2xl font-bold font-mono text-destructive">{criticalCount}</p><p className="text-xs text-muted-foreground">{t("alerts.critical")}</p></div></CardContent></Card>
-        <Card className="border-warning/30 bg-warning/5"><CardContent className="p-4 flex items-center gap-3"><Bell className="w-5 h-5 text-warning" /><div><p className="text-2xl font-bold font-mono text-warning">{warningCount}</p><p className="text-xs text-muted-foreground">{t("alerts.warning")}</p></div></CardContent></Card>
-        <Card className="col-span-2 sm:col-span-1 border-border/50"><CardContent className="p-4 flex items-center gap-3"><CheckCheck className="w-5 h-5 text-primary" /><div><p className="text-2xl font-bold font-mono">{resolvedAlerts.length}</p><p className="text-xs text-muted-foreground">{t("alerts.resolved")}</p></div></CardContent></Card>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <Card className="border-destructive/30 bg-destructive/5"><CardContent className="p-4"><div className="flex items-center gap-3"><Bell className="w-5 h-5 text-destructive" /><div><p className="text-2xl font-bold font-mono text-destructive">{criticalCount}</p><p className="text-xs text-muted-foreground">{t("alerts.critical")}</p></div></div><p className="mt-2 text-xs leading-relaxed text-muted-foreground">{alertCardDescriptions.critical}</p></CardContent></Card>
+        <Card className="border-warning/30 bg-warning/5"><CardContent className="p-4"><div className="flex items-center gap-3"><Bell className="w-5 h-5 text-warning" /><div><p className="text-2xl font-bold font-mono text-warning">{warningCount}</p><p className="text-xs text-muted-foreground">{t("alerts.warning")}</p></div></div><p className="mt-2 text-xs leading-relaxed text-muted-foreground">{alertCardDescriptions.warning}</p></CardContent></Card>
+        <Card className="border-border/50"><CardContent className="p-4"><div className="flex items-center gap-3"><CheckCheck className="w-5 h-5 text-primary" /><div><p className="text-2xl font-bold font-mono">{resolvedAlerts.length}</p><p className="text-xs text-muted-foreground">{t("alerts.resolved")}</p></div></div><p className="mt-2 text-xs leading-relaxed text-muted-foreground">{alertCardDescriptions.resolved}</p></CardContent></Card>
       </div>
 
       <div>
