@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useAttendance } from "@/hooks/use-attendance";
 import { useAuth } from "@/hooks/use-auth";
 import { useI18n } from "@/i18n";
@@ -7,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CheckCircle, XCircle, Loader2, Save, Users, ClipboardList, ShieldCheck, Sun, Sunset, LockKeyhole } from "lucide-react";
+import { CheckCircle, XCircle, Loader2, Save, Users, ClipboardList, ShieldCheck, Sun, Sunset, LockKeyhole, UserRound } from "lucide-react";
 import type { AttendanceStatus, AttendancePeriod, DailyAttendanceInput, Student } from "@/types";
 import { toast } from "sonner";
 
@@ -22,13 +23,14 @@ export default function AttendancePage() {
   const role = user?.role ?? "professeur";
   const isTeacher = role === "professeur";
   const isAdmin = role === "admin" || role === "directeur";
+  const [searchParams, setSearchParams] = useSearchParams();
   const { syncRevision, operations } = useOfflineSync();
 
   const {
     classes, loading, error,
     getStudentsForClass,
     attendanceMap, confirmedStudentIds, attendanceLoading,
-    loadAttendance, saveAttendance, confirmAttendance,
+    loadAttendance, saveAttendance, confirmAttendance, pendingRegisters,
   } = useAttendance();
 
   const [selectedClassId, setSelectedClassId] = useState<string>("");
@@ -45,6 +47,20 @@ export default function AttendancePage() {
   useEffect(() => {
     if (classes.length > 0 && !selectedClassId) setSelectedClassId(classes[0].id);
   }, [classes, selectedClassId]);
+
+  // A management notification can open the exact class, date and period that
+  // the teacher submitted, without forcing the administrator to search for it.
+  useEffect(() => {
+    const classId = searchParams.get("classId");
+    const date = searchParams.get("date");
+    const requestedPeriod = searchParams.get("period");
+    if (!classId || !classes.some((classe) => classe.id === classId)) return;
+
+    setSelectedClassId(classId);
+    if (date) setSelectedDate(date);
+    if (requestedPeriod === "morning" || requestedPeriod === "afternoon") setPeriod(requestedPeriod);
+    setSearchParams({}, { replace: true });
+  }, [classes, searchParams, setSearchParams]);
 
   useEffect(() => {
     if (!selectedClassId) { setStudents([]); return; }
@@ -141,6 +157,12 @@ export default function AttendancePage() {
     ? new Date(selectedDate + "T00:00:00").toLocaleDateString(locale, { weekday: "long", day: "numeric", month: "long", year: "numeric" })
     : "";
 
+  const openPendingRegister = (register: typeof pendingRegisters[number]) => {
+    setSelectedClassId(register.classId);
+    setSelectedDate(register.date);
+    setPeriod(register.period);
+  };
+
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
 
@@ -151,6 +173,46 @@ export default function AttendancePage() {
           {isTeacher ? t("attendance.subtitleTeacher") : t("attendance.subtitleAdmin")}
         </p>
       </div>
+
+      {isAdmin && (
+        <Card className="border-primary/25 bg-primary/[0.025] overflow-hidden">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base font-semibold flex flex-wrap items-center gap-2">
+              <ClipboardList className="w-4 h-4 text-primary" />
+              {t("attendance.pendingRegistersTitle")}
+              <Badge variant={pendingRegisters.length > 0 ? "default" : "secondary"}>{t("attendance.pendingRegistersCount", { count: pendingRegisters.length })}</Badge>
+            </CardTitle>
+            <p className="text-sm text-muted-foreground">{t("attendance.pendingRegistersHint")}</p>
+          </CardHeader>
+          <CardContent className="pt-0">
+            {pendingRegisters.length === 0 ? (
+              <p className="rounded-xl border border-dashed p-4 text-center text-sm text-muted-foreground">{t("attendance.noPendingRegisters")}</p>
+            ) : (
+              <div className="grid gap-2">
+                {pendingRegisters.map((register) => (
+                  <div key={`${register.classId}:${register.date}:${register.period}:${register.teacherId}`} className="flex flex-col gap-3 rounded-xl border border-border/70 bg-card p-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0 space-y-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="font-semibold text-sm">{register.className}</p>
+                        <Badge variant="secondary" className="font-normal">{register.period === "morning" ? t("attendance.morning") : t("attendance.afternoon")}</Badge>
+                        <span className="text-xs text-muted-foreground">{new Date(`${register.date}T00:00:00`).toLocaleDateString(locale, { weekday: "short", day: "numeric", month: "short", year: "numeric" })}</span>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                        <span className="inline-flex items-center gap-1"><UserRound className="w-3.5 h-3.5" />{t("attendance.recordedBy", { teacher: register.teacherName })}</span>
+                        <span>{t("attendance.registerStudentCount", { count: register.studentCount })}</span>
+                        <span className={register.absentCount > 0 ? "text-red-600 dark:text-red-400" : undefined}>{t("attendance.registerAbsentCount", { count: register.absentCount })}</span>
+                      </div>
+                    </div>
+                    <Button size="sm" variant="outline" className="shrink-0 gap-1.5" onClick={() => openPendingRegister(register)}>
+                      <ShieldCheck className="w-3.5 h-3.5" /> {t("attendance.openRegister")}
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Controls */}
       <Card className="border-border/50">

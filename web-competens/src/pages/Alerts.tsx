@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useAlerts } from "@/hooks/use-alerts";
 import { useActivityFeed } from "@/hooks/use-activity-feed";
 import { useAttendance } from "@/hooks/use-attendance";
@@ -18,6 +18,7 @@ import {
   ClipboardCheck, GraduationCap, Loader2, RefreshCw, Search, UserRound, Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/lib/supabase";
 
 const activityTypes: ActivityEventType[] = [
   "attendance_registered",
@@ -51,6 +52,7 @@ function eventIcon(eventType: ActivityEventType) {
 
 export default function AlertsPage() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const { alerts, notifications, loading, error, refetch, markAlertResolved, markNotificationRead } = useAlerts();
   const { students } = useStudents();
   const { classes, teachers } = useClasses();
@@ -62,6 +64,7 @@ export default function AlertsPage() {
   const [eventType, setEventType] = useState<ActivityEventType | "all">("all");
   const [studentQuery, setStudentQuery] = useState("");
   const isActivityViewer = user?.role === "admin" || user?.role === "directeur" || user?.role === "professeur";
+  const isAdmin = user?.role === "admin" || user?.role === "directeur";
   const isTeacher = user?.role === "professeur";
   const selectableClasses = isTeacher ? attendanceClasses : classes;
   const canResolveAlerts = isActivityViewer;
@@ -91,7 +94,7 @@ export default function AlertsPage() {
         attendanceRegistered: "تم تسجيل الحضور", attendanceConfirmed: "تم تأكيد الحضور", evaluationRecorded: "تم تسجيل تقييم",
         recoveryRecorded: "تم تسجيل جلسة استرجاع", recoveryReview: "طلب مراجعة استرجاع", requestSubmitted: "تم إرسال طلب", requestReviewed: "تمت معالجة طلب", riskAlert: "تنبيه متابعة",
         registeredFor: "سجّل الحضور لـ", confirmedFor: "أكد الحضور لـ", evaluated: "قيّم", students: "تلاميذ", absent: "غائب", on: "في", resetSkill: "جلسة استرجاع مهارة", requestStatus: "حالة الطلب", absenceConfirmed: "تم تأكيد غياب التلميذ",
-        scoreAffected: "تم تسجيل تقييم يخص التلميذ", management: "الإدارة", read: "مقروء", markRead: "وضع كمقروء", markedAbsent: "سجّل غياب",
+        scoreAffected: "تم تسجيل تقييم يخص التلميذ", management: "الإدارة", read: "مقروء", markRead: "وضع كمقروء", markedAbsent: "سجّل غياب", openAttendance: "فتح سجل الحضور للتأكيد",
       }
     : {
         activityTitle: "Journal d’activité", activitySubtitle: "Toutes les opérations validées, par journée.",
@@ -103,7 +106,7 @@ export default function AlertsPage() {
         attendanceRegistered: "Présences enregistrées", attendanceConfirmed: "Présences confirmées", evaluationRecorded: "Évaluation enregistrée",
         recoveryRecorded: "Entretien de récupération enregistré", recoveryReview: "Demande de récupération à examiner", requestSubmitted: "Demande envoyée", requestReviewed: "Demande traitée", riskAlert: "Alerte de suivi",
         registeredFor: "a enregistré les présences de", confirmedFor: "a confirmé les présences de", evaluated: "a évalué", students: "élèves", absent: "absent(s)", on: "le", resetSkill: "entretien de récupération", requestStatus: "Statut de la demande", absenceConfirmed: "Absence confirmée pour l’élève",
-        scoreAffected: "Une évaluation a été enregistrée pour l’élève", management: "Administration", read: "Lu", markRead: "Marquer lu", markedAbsent: "a signalé l’absence de",
+        scoreAffected: "Une évaluation a été enregistrée pour l’élève", management: "Administration", read: "Lu", markRead: "Marquer lu", markedAbsent: "a signalé l’absence de", openAttendance: "Ouvrir le registre de présence à confirmer",
       };
 
   const feed = useActivityFeed({
@@ -184,6 +187,45 @@ export default function AlertsPage() {
 
   const handleRefresh = async () => {
     await Promise.all([refetch(), feed.refetch()]);
+  };
+
+  const canOpenAttendanceRegister = (notification: Notification) => isAdmin
+    && notification.eventType === "attendance_registered"
+    && Boolean(notification.classId);
+
+  const handleNotificationClick = async (notification: Notification) => {
+    if (!canOpenAttendanceRegister(notification) || !notification.classId) return;
+
+    const payloadDate = notification.payload?.event_date ?? notification.payload?.date;
+    let eventDate = typeof payloadDate === "string" ? payloadDate : undefined;
+    let eventPeriod = notification.payload?.period === "morning" || notification.payload?.period === "afternoon"
+      ? notification.payload.period
+      : undefined;
+
+    // Older notifications do not contain the attendance date in their payload.
+    // The immutable event always has it, so historical notifications work too.
+    if (notification.eventId && (!eventDate || !eventPeriod) && supabase) {
+      const { data } = await supabase
+        .from("activity_events")
+        .select("event_date, payload")
+        .eq("id", notification.eventId)
+        .maybeSingle();
+      if (data) {
+        eventDate = eventDate ?? data.event_date;
+        const storedPeriod = data.payload?.period;
+        if (storedPeriod === "morning" || storedPeriod === "afternoon") eventPeriod = storedPeriod;
+      }
+    }
+
+    if (!eventDate || !eventPeriod) return;
+    if (!notification.read) {
+      try {
+        await markNotificationRead(notification.id);
+      } catch {
+        // Opening the register remains possible even if marking it read fails.
+      }
+    }
+    navigate(`/attendance?classId=${encodeURIComponent(notification.classId)}&date=${encodeURIComponent(eventDate)}&period=${eventPeriod}`);
   };
 
   return (
@@ -268,8 +310,9 @@ export default function AlertsPage() {
         <CardContent className="space-y-2 max-h-[400px] overflow-y-auto">
           {notifications.length === 0 ? <p className="text-sm text-muted-foreground text-center py-5">{copy.noNotifications}</p> : notifications.map((notification) => {
             const content = describeNotification(notification);
+            const openableAttendance = canOpenAttendanceRegister(notification);
             return <div key={notification.id} className={cn("flex items-start justify-between gap-3 rounded-xl border p-3", notification.read ? "border-border/50 bg-muted/20 opacity-75" : "border-primary/20 bg-primary/[0.03]")}>
-              <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><p className="text-sm font-medium">{content.title}</p>{!notification.read && <Badge variant="secondary" className="text-[10px]">{copy.pending}</Badge>}</div><p className="text-xs text-muted-foreground mt-0.5">{content.message}</p><p className="text-[11px] text-muted-foreground mt-1">{new Date(notification.createdAt).toLocaleString(locale, { dateStyle: "medium", timeStyle: "short" })}</p></div>
+              <div className={cn("min-w-0", openableAttendance && "cursor-pointer rounded-md text-start transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring")} role={openableAttendance ? "button" : undefined} tabIndex={openableAttendance ? 0 : undefined} title={openableAttendance ? copy.openAttendance : undefined} onClick={openableAttendance ? () => void handleNotificationClick(notification) : undefined} onKeyDown={openableAttendance ? (event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); void handleNotificationClick(notification); } } : undefined}><div className="flex flex-wrap items-center gap-2"><p className="text-sm font-medium">{content.title}</p>{!notification.read && <Badge variant="secondary" className="text-[10px]">{copy.pending}</Badge>}{openableAttendance && <Badge variant="outline" className="text-[10px]">{copy.openAttendance}</Badge>}</div><p className="text-xs text-muted-foreground mt-0.5">{content.message}</p><p className="text-[11px] text-muted-foreground mt-1">{new Date(notification.createdAt).toLocaleString(locale, { dateStyle: "medium", timeStyle: "short" })}</p></div>
               {!notification.read && <Button variant="ghost" size="sm" className="shrink-0" onClick={() => void markNotificationRead(notification.id)}>{copy.markRead}</Button>}
             </div>;
           })}

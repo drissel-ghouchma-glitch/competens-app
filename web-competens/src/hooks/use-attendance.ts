@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useDemoStore } from "@/stores/demo";
 import { useAppStore } from "@/stores/app-store";
 import { useAuth } from "@/hooks/use-auth";
@@ -9,6 +9,64 @@ import type { Classe, Student, AttendanceStatus, AttendancePeriod, DailyAttendan
 
 export interface AttendanceSaveResult {
   queued: boolean;
+}
+
+/** A complete attendance register awaiting a management confirmation. */
+export interface PendingAttendanceRegister {
+  classId: string;
+  className: string;
+  teacherId: string;
+  teacherName: string;
+  date: string;
+  period: AttendancePeriod;
+  studentCount: number;
+  absentCount: number;
+  recordedAt: string;
+}
+
+interface PendingAttendanceRow {
+  classId: string;
+  teacherId: string | null;
+  date: string;
+  period: AttendancePeriod;
+  status: AttendanceStatus;
+  createdAt: string;
+}
+
+function groupPendingRegisters(
+  rows: PendingAttendanceRow[],
+  classNames: Map<string, string>,
+  teacherNames: Map<string, string>,
+): PendingAttendanceRegister[] {
+  const registers = new Map<string, PendingAttendanceRegister>();
+
+  for (const row of rows) {
+    const teacherId = row.teacherId ?? "";
+    const key = `${row.classId}:${row.date}:${row.period}:${teacherId}`;
+    const existing = registers.get(key);
+    if (existing) {
+      existing.studentCount += 1;
+      if (row.status === "absent") existing.absentCount += 1;
+      if (row.createdAt > existing.recordedAt) existing.recordedAt = row.createdAt;
+      continue;
+    }
+    registers.set(key, {
+      classId: row.classId,
+      className: classNames.get(row.classId) ?? "—",
+      teacherId,
+      teacherName: teacherNames.get(teacherId) ?? "—",
+      date: row.date,
+      period: row.period,
+      studentCount: 1,
+      absentCount: row.status === "absent" ? 1 : 0,
+      recordedAt: row.createdAt,
+    });
+  }
+
+  return [...registers.values()].sort((a, b) => {
+    const dateOrder = b.date.localeCompare(a.date);
+    return dateOrder || b.recordedAt.localeCompare(a.recordedAt);
+  });
 }
 
 interface AttendanceContextSnapshot {
@@ -35,6 +93,8 @@ export interface UseAttendanceReturn {
   loadAttendance: (classId: string, date: string, period: AttendancePeriod) => Promise<void>;
   saveAttendance: (classId: string, date: string, period: AttendancePeriod, inputs: DailyAttendanceInput[]) => Promise<AttendanceSaveResult>;
   confirmAttendance: (classId: string, date: string, period: AttendancePeriod) => Promise<void>;
+  /** Registers that have been recorded by a teacher and await management approval. */
+  pendingRegisters: PendingAttendanceRegister[];
 }
 
 export function useAttendance(): UseAttendanceReturn {
@@ -47,12 +107,14 @@ export function useAttendance(): UseAttendanceReturn {
   const storeSchoolYears = useAppStore((s) => s.schoolYears);
   const storeStudents = useAppStore((s) => s.students);
   const storeAttendance = useAppStore((s) => s.attendance);
+  const storeTeachers = useAppStore((s) => s.teachers);
   const storeSaveAttendance = useAppStore((s) => s.saveDemoAttendance);
   const storeAssignments = useAppStore((s) => s.teacherClassAssignments);
 
   // ── Supabase state ────────────────────────────────────────
   const [sbClasses, setSbClasses] = useState<Classe[]>([]);
   const [sbStudents, setSbStudents] = useState<Student[]>([]);
+  const [sbPendingRegisters, setSbPendingRegisters] = useState<PendingAttendanceRegister[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -84,7 +146,7 @@ export function useAttendance(): UseAttendanceReturn {
         .maybeSingle();
       if (activeYearError) throw activeYearError;
       if (!activeYear) {
-        setSbClasses([]); setSbStudents([]); return;
+        setSbClasses([]); setSbStudents([]); setSbPendingRegisters([]); return;
       }
 
       let classIds: string[] = [];
@@ -95,7 +157,7 @@ export function useAttendance(): UseAttendanceReturn {
           .eq("teacher_id", user.id);
         classIds = (asgn ?? []).map((a) => a.class_id);
         if (classIds.length === 0) {
-          setSbClasses([]); setSbStudents([]); setLoading(false); return;
+          setSbClasses([]); setSbStudents([]); setSbPendingRegisters([]); setLoading(false); return;
         }
       }
 
@@ -129,6 +191,48 @@ export function useAttendance(): UseAttendanceReturn {
         }));
       }
       setSbStudents(students);
+
+      if (user?.role === "admin" || user?.role === "directeur") {
+        const classNames = new Map(classes.map((classe) => [classe.id, classe.name]));
+        if (allClassIds.length === 0) {
+          setSbPendingRegisters([]);
+        } else {
+          const { data: pendingData, error: pendingError } = await supabase
+            .from("attendance")
+            .select("class_id, teacher_id, date, period, status, created_at")
+            .in("class_id", allClassIds)
+            .eq("is_confirmed_by_admin", false)
+            .order("date", { ascending: false })
+            .order("created_at", { ascending: false });
+          if (pendingError) throw pendingError;
+
+          const teacherIds = [...new Set((pendingData ?? []).map((row) => row.teacher_id).filter((id): id is string => Boolean(id)))];
+          const teacherNames = new Map<string, string>();
+          if (teacherIds.length > 0) {
+            const { data: profiles, error: profilesError } = await supabase
+              .from("profiles")
+              .select("id, full_name")
+              .in("id", teacherIds);
+            if (profilesError) throw profilesError;
+            for (const profile of profiles ?? []) teacherNames.set(profile.id, profile.full_name ?? "—");
+          }
+
+          setSbPendingRegisters(groupPendingRegisters(
+            (pendingData ?? []).map((row) => ({
+              classId: row.class_id,
+              teacherId: row.teacher_id,
+              date: row.date,
+              period: row.period as AttendancePeriod,
+              status: row.status as AttendanceStatus,
+              createdAt: row.created_at,
+            })),
+            classNames,
+            teacherNames,
+          ));
+        }
+      } else {
+        setSbPendingRegisters([]);
+      }
       if (user?.id) void saveOfflineSnapshot<AttendanceContextSnapshot>(user.id, "attendance-context", { classes, students }).catch(() => undefined);
     } catch (e: unknown) {
       if (user?.id && isNetworkError(e)) {
@@ -270,8 +374,8 @@ export function useAttendance(): UseAttendanceReturn {
       p_period: period,
     });
     if (err) throw new Error(err.message);
-    await loadAttendanceReal(classId, date, period);
-  }, [loadAttendanceReal]);
+    await Promise.all([loadAttendanceReal(classId, date, period), fetchFromSupabase()]);
+  }, [fetchFromSupabase, loadAttendanceReal]);
 
   const confirmAttendanceDemo = useCallback(async (classId: string, date: string, period: AttendancePeriod) => {
     useAppStore.getState().confirmDemoAttendance(classId, date, period);
@@ -304,6 +408,25 @@ export function useAttendance(): UseAttendanceReturn {
     return true;
   });
 
+  const demoPendingRegisters = useMemo(() => {
+    const classNames = new Map(demoClasses.map((classe) => [classe.id, classe.name]));
+    const teacherNames = new Map(storeTeachers.map((teacher) => [teacher.id, `${teacher.firstName} ${teacher.lastName}`.trim()]));
+    return groupPendingRegisters(
+      storeAttendance
+        .filter((record) => !record.isConfirmedByAdmin && classNames.has(record.classId))
+        .map((record) => ({
+          classId: record.classId,
+          teacherId: record.teacherId,
+          date: record.date,
+          period: record.period,
+          status: record.status,
+          createdAt: record.createdAt,
+        })),
+      classNames,
+      teacherNames,
+    );
+  }, [demoClasses, storeAttendance, storeTeachers]);
+
   return {
     classes: isDemo ? demoClasses : sbClasses,
     loading,
@@ -316,5 +439,6 @@ export function useAttendance(): UseAttendanceReturn {
     loadAttendance: isDemo ? loadAttendanceDemo : loadAttendanceReal,
     saveAttendance: isDemo ? saveAttendanceDemo : saveAttendanceReal,
     confirmAttendance: isDemo ? confirmAttendanceDemo : confirmAttendanceReal,
+    pendingRegisters: isDemo ? demoPendingRegisters : sbPendingRegisters,
   };
 }
