@@ -32,6 +32,7 @@ const navItems = [
   { to: "/attendance", icon: CalendarCheck, labelKey: "nav.attendance", roles: ["admin", "directeur", "professeur"] },
   { to: "/alerts", icon: Bell, labelKey: "nav.alerts", roles: ["admin", "directeur", "professeur", "parent"] },
   { to: "/teacher-guide", icon: CircleHelp, labelKey: "nav.teacherGuide", roles: ["professeur"] },
+  { to: "/admin-guide", icon: CircleHelp, labelKey: "nav.adminGuide", roles: ["admin"] },
   { to: "/admin/pending-teachers", icon: UserCheck, labelKey: "nav.registrations", roles: ["admin"] },
   { to: "/admin/requests", icon: ClipboardList, labelKey: "nav.requests", roles: ["admin"], badge: true },
   { to: "/admin/users", icon: ShieldCheck, labelKey: "nav.users", roles: ["admin"] },
