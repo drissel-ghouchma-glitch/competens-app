@@ -16,6 +16,25 @@ export interface DashboardData {
   error: string | null;
 }
 
+interface DashboardSummaryRow {
+  active_year_id: string | null;
+  active_year_name: string | null;
+  active_year_start_date: string | null;
+  active_year_end_date: string | null;
+  total_students: number | string;
+  total_classes: number | string;
+  total_teachers: number | string;
+  total_evaluations: number | string;
+  weekly_activity: unknown;
+  recent_alerts: unknown;
+}
+
+function jsonRows(value: unknown): Record<string, unknown>[] {
+  return Array.isArray(value)
+    ? value.filter((row): row is Record<string, unknown> => Boolean(row) && typeof row === "object")
+    : [];
+}
+
 export function useDashboard(): DashboardData {
   const isDemo = useDemoStore((s) => s.isDemoMode);
 
@@ -80,95 +99,48 @@ export function useDashboard(): DashboardData {
     setLoading(true);
     setError(null);
     try {
-      // Build date range for weekly data (last 7 days)
-      const days: string[] = [];
-      for (let i = 6; i >= 0; i--) {
-        const d = new Date();
-        d.setDate(d.getDate() - i);
-        days.push(d.toISOString().split("T")[0]);
-      }
-      const startDate = days[0];
-      const today = days[6];
+      const { data, error: summaryError } = await supabase
+        .rpc("get_school_dashboard_summary")
+        .single<DashboardSummaryRow>();
+      if (summaryError) throw summaryError;
 
-      const { data: yearData, error: yearError } = await supabase
-        .from("school_years")
-        .select("*")
-        .eq("is_active", true)
-        .eq("is_closed", false)
-        .maybeSingle();
-      if (yearError) throw yearError;
-      const activeYear: SchoolYear | undefined = yearData
+      const activeYear: SchoolYear | undefined = data?.active_year_id
         ? {
-            id: yearData.id, name: yearData.name, startDate: yearData.start_date,
-            endDate: yearData.end_date, isActive: yearData.is_active,
-            isClosed: yearData.is_closed, createdAt: yearData.created_at, updatedAt: yearData.updated_at,
+            id: data.active_year_id,
+            name: data.active_year_name ?? "",
+            startDate: data.active_year_start_date ?? "",
+            endDate: data.active_year_end_date ?? "",
+            isActive: true,
+            isClosed: false,
+            createdAt: "",
+            updatedAt: "",
           }
         : undefined;
-      const { data: activeClasses, error: classesError } = activeYear
-        ? await supabase.from("classes").select("id").eq("school_year_id", activeYear.id).eq("is_archived", false)
-        : { data: [], error: null };
-      if (classesError) throw classesError;
-      const classIds = (activeClasses ?? []).map((classe) => classe.id);
-      const scopedClassIds = classIds.length > 0 ? classIds : ["00000000-0000-0000-0000-000000000000"];
 
-      const [
-        studentsRes,
-        teachersRes,
-        evaluationsCountRes,
-        weeklyEvalsRes,
-        alertsRes,
-      ] = await Promise.all([
-        supabase.from("students").select("*", { count: "exact", head: true }).eq("is_archived", false).in("class_id", scopedClassIds),
-        supabase.from("profiles").select("*", { count: "exact", head: true }).eq("role", "professeur").eq("status", "active"),
-        supabase.from("evaluations").select("*", { count: "exact", head: true }).in("class_id", scopedClassIds),
-        supabase.from("evaluations").select("date").in("class_id", scopedClassIds).gte("date", startDate).lte("date", today),
-        supabase.from("alerts").select("*, students(id, first_name, last_name, class_id)").eq("resolved", false).order("created_at", { ascending: false }).limit(5),
-      ]);
-
-      // Weekly data aggregation
-      const evalsByDay: Record<string, number> = {};
-      for (const e of weeklyEvalsRes.data ?? []) {
-        evalsByDay[e.date] = (evalsByDay[e.date] ?? 0) + 1;
-      }
-      const weeklyData = days.map((d) => ({
-        day: new Date(d + "T00:00:00").toLocaleDateString("fr-FR", { weekday: "short" }),
-        count: evalsByDay[d] ?? 0,
-      }));
-
-      // Alerts with student names
-      const alerts: (Alert & { student?: Student })[] = (alertsRes.data ?? []).filter((a) => {
-        const linkedStudent = a.students as { class_id?: string } | null;
-        return Boolean(linkedStudent?.class_id && classIds.includes(linkedStudent.class_id));
-      }).map((a) => {
-        const s = a.students as { id: string; first_name: string; last_name: string; class_id: string } | null;
+      const weeklyData = jsonRows(data?.weekly_activity).map((entry) => {
+        const date = typeof entry.date === "string" ? entry.date : "";
         return {
-          id: a.id,
-          studentId: a.student_id,
-          level: a.level as "warning" | "critical",
-          cause: a.cause,
-          date: a.date,
-          resolved: a.resolved,
-          resolvedAt: a.resolved_at ?? undefined,
-          createdAt: a.created_at,
-          student: s
-            ? {
-                id: s.id,
-                firstName: s.first_name,
-                lastName: s.last_name,
-                birthDate: "",
-                gender: "M" as const,
-                classId: s.class_id ?? "",
-                createdAt: "",
-              }
-            : undefined,
+          day: date ? new Date(`${date}T00:00:00`).toLocaleDateString("fr-FR", { weekday: "short" }) : "",
+          count: Number(entry.count) || 0,
         };
       });
 
+      // General dashboard alerts intentionally contain no pupil identity.
+      const alerts: (Alert & { student?: Student })[] = jsonRows(data?.recent_alerts).map((entry, index) => ({
+        id: typeof entry.id === "string" ? entry.id : `dashboard-alert-${index}`,
+        studentId: "",
+        level: entry.level === "critical" ? "critical" : "warning",
+        cause: "",
+        date: typeof entry.date === "string" ? entry.date : "",
+        resolved: false,
+        createdAt: "",
+      }));
+
       setSbData({
-        totalStudents: studentsRes.count ?? 0,
-        totalClasses: classIds.length,
-        totalTeachers: teachersRes.count ?? 0,
-        totalEvaluations: evaluationsCountRes.count ?? 0,
+        totalStudents: Number(data?.total_students) || 0,
+        totalClasses: Number(data?.total_classes) || 0,
+        totalTeachers: Number(data?.total_teachers) || 0,
+        totalEvaluations: Number(data?.total_evaluations) || 0,
         activeYear,
         weeklyData,
         alerts,

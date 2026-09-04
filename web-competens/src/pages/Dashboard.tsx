@@ -142,9 +142,9 @@ export default function DashboardPage() {
                   <div className={`w-2 h-2 rounded-full shrink-0 ${a.level === "critical" ? "bg-destructive" : "bg-warning"}`} />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium truncate">
-                      {a.student?.firstName} {a.student?.lastName}
+                      {a.level === "critical" ? t("dashboard.criticalAlert") : t("dashboard.warningAlert")}
                     </p>
-                    <p className="text-xs text-muted-foreground truncate">{a.cause}</p>
+                    {a.date && <p className="text-xs text-muted-foreground">{a.date}</p>}
                   </div>
                 </div>
               ))
