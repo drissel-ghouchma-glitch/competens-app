@@ -4,7 +4,7 @@ import type {
   SchoolYear, Level, Classe, Student, Teacher,
   Competency, Evaluation, EvaluationStatus,
   Alert, Notification, TeacherClassAssignment, DailyEvaluationInput,
-  AttendanceRecord, DailyAttendanceInput, AttendanceStatus, AttendancePeriod,
+  AttendanceRecord, DailyAttendanceInput, AttendanceStatus, AttendancePeriod, AdministrationPresenceInput,
   SkillRecoveryAction, SkillRecoveryRequest, SchoolYearClosureDecisionInput, SchoolYearClosureResult, StudentEnrollment, EnrollmentStatus,
 } from "@/types";
 import { generateDemoData } from "./seed-data";
@@ -82,7 +82,7 @@ interface AppStore {
   addDemoSkillRecoveryRequest: (request: Omit<SkillRecoveryRequest, "id" | "createdAt" | "status">) => void;
   resolveDemoSkillRecoveryRequest: (studentId: string, competencyId: string, classId: string, reviewedBy: string) => void;
   saveDemoAttendance: (classId: string, date: string, period: AttendancePeriod, inputs: DailyAttendanceInput[], teacherId: string) => void;
-  confirmDemoAttendance: (classId: string, date: string, period: AttendancePeriod) => void;
+  confirmDemoAttendance: (classId: string, date: string, period: AttendancePeriod, administrationStudents?: AdministrationPresenceInput[]) => void;
   markAlertResolved: (id: string) => void;
   markNotificationRead: (id: string) => void;
 
@@ -414,11 +414,21 @@ export const useAppStore = create<AppStore>()(
           return { attendance: [...next, ...newRecords] };
         });
       },
-      confirmDemoAttendance(classId, date, period) {
+      confirmDemoAttendance(classId, date, period, administrationStudents = []) {
+        const administrationByStudentId = new Map(
+          administrationStudents.map((student) => [student.studentId, student.reason?.trim() || undefined]),
+        );
         set((s) => ({
           attendance: s.attendance.map((a) =>
             a.classId === classId && a.date === date && a.period === period
-              ? { ...a, isConfirmedByAdmin: true }
+              ? {
+                  ...a,
+                  isConfirmedByAdmin: true,
+                  // The teacher's `status` remains unchanged; this separate
+                  // administrative state is what a parent will see.
+                  adminPresenceStatus: a.status === "absent" && administrationByStudentId.has(a.studentId) ? "in_administration" : undefined,
+                  adminPresenceReason: a.status === "absent" ? administrationByStudentId.get(a.studentId) : undefined,
+                }
               : a
           ),
         }));

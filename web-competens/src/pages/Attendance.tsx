@@ -8,8 +8,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CheckCircle, XCircle, Loader2, Save, Users, ClipboardList, ShieldCheck, Sun, Sunset, LockKeyhole, UserRound } from "lucide-react";
-import type { AttendanceStatus, AttendancePeriod, DailyAttendanceInput, Student } from "@/types";
+import { CheckCircle, XCircle, Loader2, Save, Users, ClipboardList, ShieldCheck, Sun, Sunset, LockKeyhole, UserRound, Building2 } from "lucide-react";
+import type { AttendanceStatus, AttendancePeriod, DailyAttendanceInput, Student, AdministrationPresenceInput } from "@/types";
 import { toast } from "sonner";
 
 function todayStr() {
@@ -29,7 +29,7 @@ export default function AttendancePage() {
   const {
     classes, loading, error,
     getStudentsForClass,
-    attendanceMap, confirmedStudentIds, attendanceLoading,
+    attendanceMap, confirmedStudentIds, administrationPresenceByStudent, attendanceLoading,
     loadAttendance, saveAttendance, confirmAttendance, pendingRegisters,
   } = useAttendance();
 
@@ -38,6 +38,7 @@ export default function AttendancePage() {
   const [period, setPeriod] = useState<AttendancePeriod>("morning");
   const [students, setStudents] = useState<Student[]>([]);
   const [localStatus, setLocalStatus] = useState<Record<string, AttendanceStatus>>({});
+  const [administrationByStudent, setAdministrationByStudent] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [confirming, setConfirming] = useState(false);
 
@@ -106,6 +107,15 @@ export default function AttendancePage() {
     });
   }, [attendanceMap, attendanceLoading, selectedClassId, selectedDate, period]);
 
+  useEffect(() => {
+    if (attendanceLoading) return;
+    const key = `${selectedClassId}:${selectedDate}:${period}`;
+    if (loadedKeyRef.current !== key) return;
+    setAdministrationByStudent(Object.fromEntries(
+      Object.entries(administrationPresenceByStudent).map(([studentId, value]) => [studentId, value.reason ?? ""]),
+    ));
+  }, [administrationPresenceByStudent, attendanceLoading, selectedClassId, selectedDate, period]);
+
   const toggleStatus = useCallback((studentId: string) => {
     if (!isTeacher || Object.keys(attendanceMap).length > 0) return;
     setLocalStatus((prev) => ({
@@ -136,7 +146,10 @@ export default function AttendancePage() {
     if (!selectedClassId) return;
     setConfirming(true);
     try {
-      await confirmAttendance(selectedClassId, selectedDate, period);
+      const administrationStudents: AdministrationPresenceInput[] = Object.entries(administrationByStudent)
+        .filter(([studentId]) => (localStatus[studentId] ?? "present") === "absent")
+        .map(([studentId, reason]) => ({ studentId, reason }));
+      await confirmAttendance(selectedClassId, selectedDate, period, administrationStudents);
       toast.success(t("attendance.confirmSuccess"));
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : t("common.saveError"));
@@ -147,6 +160,7 @@ export default function AttendancePage() {
 
   const presentCount = students.filter((s) => (localStatus[s.id] ?? "present") === "present").length;
   const absentCount  = students.filter((s) => (localStatus[s.id] ?? "present") === "absent").length;
+  const administrationCount = Object.keys(administrationByStudent).filter((studentId) => (localStatus[studentId] ?? "present") === "absent").length;
   const allConfirmed = students.length > 0 && students.every((s) => confirmedStudentIds.has(s.id));
   // A teacher's first saved register is final for this class/date/period.
   // The database migration enforces the same rule against direct API calls.
@@ -161,6 +175,17 @@ export default function AttendancePage() {
     setSelectedClassId(register.classId);
     setSelectedDate(register.date);
     setPeriod(register.period);
+  };
+
+  const toggleAdministrationPresence = (studentId: string) => {
+    if (!isAdmin || allConfirmed || (localStatus[studentId] ?? "present") !== "absent") return;
+    setAdministrationByStudent((previous) => {
+      if (studentId in previous) {
+        const { [studentId]: _removed, ...remaining } = previous;
+        return remaining;
+      }
+      return { ...previous, [studentId]: "" };
+    });
   };
 
   return (
@@ -313,6 +338,12 @@ export default function AttendancePage() {
               <XCircle className="w-3.5 h-3.5 text-red-500" />
               {t("attendance.absent", { count: absentCount })}
             </Badge>
+            {isAdmin && administrationCount > 0 && (
+              <Badge variant="secondary" className="gap-1.5 text-sm px-3 py-1 border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-300">
+                <Building2 className="w-3.5 h-3.5" />
+                {t("attendance.inAdministrationCount", { count: administrationCount })}
+              </Badge>
+            )}
             {/* Confirmation status badge */}
             {Object.keys(attendanceMap).length > 0 && (
               <Badge
@@ -335,6 +366,9 @@ export default function AttendancePage() {
                 {isTeacherRegisterLocked ? t("attendance.lockedHint") : t("attendance.clickHint")}
               </span>
             )}
+            {isAdmin && Object.keys(attendanceMap).length > 0 && !allConfirmed && (
+              <span className="text-xs text-muted-foreground ms-auto hidden sm:block">{t("attendance.inAdministrationHint")}</span>
+            )}
           </div>
 
           {/* Student list */}
@@ -353,11 +387,12 @@ export default function AttendancePage() {
                 const status = localStatus[s.id] ?? "present";
                 const isPresent = status === "present";
                 const isConfirmed = confirmedStudentIds.has(s.id);
+                const isInAdministration = s.id in administrationByStudent;
                 return (
                   <div
                     key={s.id}
                     onClick={() => toggleStatus(s.id)}
-                    className={`flex items-center gap-3 px-4 py-3 rounded-xl border transition-all duration-150 ${
+                    className={`rounded-xl border px-4 py-3 transition-all duration-150 ${
                       isTeacher && !isTeacherRegisterLocked ? "cursor-pointer hover:shadow-sm active:scale-[0.99]" : "cursor-default"
                     } ${
                       isPresent
@@ -365,31 +400,68 @@ export default function AttendancePage() {
                         : "bg-red-500/5 border-red-500/20 hover:bg-red-500/10"
                     }`}
                   >
-                    <div className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
-                      isPresent
-                        ? "bg-green-500/15 text-green-700 dark:text-green-400"
-                        : "bg-red-500/15 text-red-700 dark:text-red-400"
-                    }`}>
-                      {s.firstName[0]}{s.lastName[0]}
+                    <div className="flex items-center gap-3">
+                      <div className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
+                        isPresent
+                          ? "bg-green-500/15 text-green-700 dark:text-green-400"
+                          : "bg-red-500/15 text-red-700 dark:text-red-400"
+                      }`}>
+                        {s.firstName[0]}{s.lastName[0]}
+                      </div>
+
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-sm text-foreground">
+                          {s.lastName} <span className="font-normal">{s.firstName}</span>
+                        </p>
+                      </div>
+
+                      {isAdmin && !isPresent && !allConfirmed && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant={isInAdministration ? "default" : "outline"}
+                          className="shrink-0 gap-1.5"
+                          onClick={() => toggleAdministrationPresence(s.id)}
+                        >
+                          <Building2 className="w-3.5 h-3.5" />
+                          {isInAdministration ? t("attendance.removeInAdministration") : t("attendance.markInAdministration")}
+                        </Button>
+                      )}
+
+                      {isAdmin && isConfirmed && (
+                        <ShieldCheck className="w-4 h-4 text-green-500 shrink-0" />
+                      )}
+
+                      <span className={`text-xs font-semibold hidden sm:block ${isPresent ? "text-green-600" : "text-red-600"}`}>
+                        {isPresent ? t("attendance.presentLabel") : t("attendance.absentLabel")}
+                      </span>
+                      {isPresent
+                        ? <CheckCircle className="w-5 h-5 text-green-500 shrink-0" />
+                        : <XCircle className="w-5 h-5 text-red-500 shrink-0" />}
                     </div>
 
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-sm text-foreground">
-                        {s.lastName} <span className="font-normal">{s.firstName}</span>
-                      </p>
-                    </div>
-
-                    {/* Confirmation indicator for admin */}
-                    {isAdmin && isConfirmed && (
-                      <ShieldCheck className="w-4 h-4 text-green-500 shrink-0" />
+                    {isAdmin && !isPresent && isInAdministration && (
+                      <div className="mt-3 ms-12 rounded-lg border border-blue-500/20 bg-blue-500/5 p-3">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge className="gap-1 border-blue-500/20 bg-blue-500/10 text-blue-700 hover:bg-blue-500/10 dark:text-blue-300"><Building2 className="w-3 h-3" />{t("attendance.inAdministration")}</Badge>
+                          <span className="text-xs text-muted-foreground">{t("attendance.teacherAbsent")}</span>
+                        </div>
+                        {allConfirmed ? (
+                          administrationByStudent[s.id] && <p className="mt-2 text-xs text-muted-foreground">{t("attendance.administrationReason")}: {administrationByStudent[s.id]}</p>
+                        ) : (
+                          <label className="mt-2 block text-xs text-muted-foreground">
+                            {t("attendance.administrationReason")}
+                            <input
+                              value={administrationByStudent[s.id] ?? ""}
+                              maxLength={500}
+                              onChange={(event) => setAdministrationByStudent((previous) => ({ ...previous, [s.id]: event.target.value }))}
+                              placeholder={t("attendance.administrationReasonPlaceholder")}
+                              className="mt-1.5 flex h-9 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            />
+                          </label>
+                        )}
+                      </div>
                     )}
-
-                    <span className={`text-xs font-semibold hidden sm:block ${isPresent ? "text-green-600" : "text-red-600"}`}>
-                      {isPresent ? t("attendance.presentLabel") : t("attendance.absentLabel")}
-                    </span>
-                    {isPresent
-                      ? <CheckCircle className="w-5 h-5 text-green-500 shrink-0" />
-                      : <XCircle className="w-5 h-5 text-red-500 shrink-0" />}
                   </div>
                 );
               })}

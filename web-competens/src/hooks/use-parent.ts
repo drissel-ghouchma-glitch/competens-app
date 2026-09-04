@@ -3,7 +3,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/lib/supabase";
 import { isMissingSkillRecoveryTable } from "@/lib/skill-recovery";
 import { scoreToStatus, buildTimeline, competencyScoreFromLedger, type PenaltyLedgerEvent, type TimelinePoint } from "@/lib/eval-utils";
-import type { Student, Competency, Alert, EvaluationStatus, AttendanceStatus, SkillRecoveryAction } from "@/types";
+import type { Student, Competency, Alert, EvaluationStatus, ReportedAttendanceStatus, SkillRecoveryAction } from "@/types";
 import type { DailyEvalRecord, ClassTeacher } from "@/components/DailyGranularAnalytics";
 
 export type { TimelinePoint, DailyEvalRecord, ClassTeacher };
@@ -51,9 +51,12 @@ export interface ParentChild extends Student {
   alerts: Alert[];
   timeline: TimelinePoint[];
   /** Confirmed morning attendance for today — null = not recorded or not confirmed yet */
-  todayMorning: AttendanceStatus | null;
+  todayMorning: ReportedAttendanceStatus | null;
   /** Confirmed afternoon attendance for today — null = not recorded or not confirmed yet */
-  todayAfternoon: AttendanceStatus | null;
+  todayAfternoon: ReportedAttendanceStatus | null;
+  /** Optional reason provided by management when the child is in administration. */
+  todayMorningAdministrationReason?: string;
+  todayAfternoonAdministrationReason?: string;
   absenceHistory: string[];
   rawEvals: DailyEvalRecord[];
   recoveryActions: SkillRecoveryAction[];
@@ -117,7 +120,7 @@ export function useParent(): UseParentReturn {
         // Only confirmed records are visible to parents
         supabase
           .from("attendance")
-          .select("student_id, class_id, date, period, status")
+          .select("student_id, class_id, date, period, status, admin_presence_status, admin_presence_reason")
           .in("student_id", studentIds)
           .eq("is_confirmed_by_admin", true)
           .order("date", { ascending: false }),
@@ -179,8 +182,8 @@ export function useParent(): UseParentReturn {
       }
 
       // Build per-student maps for today morning/afternoon + absence history
-      const morningMap = new Map<string, AttendanceStatus>();
-      const afternoonMap = new Map<string, AttendanceStatus>();
+      const morningMap = new Map<string, { status: ReportedAttendanceStatus; administrationReason?: string }>();
+      const afternoonMap = new Map<string, { status: ReportedAttendanceStatus; administrationReason?: string }>();
       const absenceMap = new Map<string, string[]>();
       const currentClassByStudent = new Map(students.map((student) => [student.id, student.classId]));
 
@@ -188,14 +191,17 @@ export function useParent(): UseParentReturn {
         const sid = a.student_id as string;
         if ((a.class_id as string) !== currentClassByStudent.get(sid)) continue;
         const period = a.period as string;
-        const status = a.status as AttendanceStatus;
+        const teacherStatus = a.status as "present" | "absent";
+        const isInAdministration = a.admin_presence_status === "in_administration";
+        const reportedStatus: ReportedAttendanceStatus = isInAdministration ? "in_administration" : teacherStatus;
+        const administrationReason = isInAdministration ? a.admin_presence_reason ?? undefined : undefined;
         const date = a.date as string;
 
         if (date === todayDate) {
-          if (period === "morning") morningMap.set(sid, status);
-          else if (period === "afternoon") afternoonMap.set(sid, status);
+          if (period === "morning") morningMap.set(sid, { status: reportedStatus, administrationReason });
+          else if (period === "afternoon") afternoonMap.set(sid, { status: reportedStatus, administrationReason });
         }
-        if (status === "absent") {
+        if (reportedStatus === "absent") {
           const list = absenceMap.get(sid) ?? [];
           if (!list.includes(date)) list.push(date);
           absenceMap.set(sid, list);
@@ -224,8 +230,10 @@ export function useParent(): UseParentReturn {
           stats: computeStats(currentEvals, currentRecoveries, comps, s.id),
           alerts: alertsMap.get(s.id) ?? [],
           timeline: buildTimeline(currentEvals),
-          todayMorning: morningMap.get(s.id) ?? null,
-          todayAfternoon: afternoonMap.get(s.id) ?? null,
+          todayMorning: morningMap.get(s.id)?.status ?? null,
+          todayAfternoon: afternoonMap.get(s.id)?.status ?? null,
+          todayMorningAdministrationReason: morningMap.get(s.id)?.administrationReason,
+          todayAfternoonAdministrationReason: afternoonMap.get(s.id)?.administrationReason,
           absenceHistory: absenceMap.get(s.id) ?? [],
           rawEvals: currentEvals,
           recoveryActions: currentRecoveries,

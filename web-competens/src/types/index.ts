@@ -307,6 +307,13 @@ export interface ParentStudentLink {
 
 export type AttendanceStatus = "present" | "absent";
 export type AttendancePeriod = "morning" | "afternoon";
+/** Status communicated by management to the parent, without changing the teacher's record. */
+export type ReportedAttendanceStatus = AttendanceStatus | "in_administration";
+
+export interface AdministrationPresenceInput {
+  studentId: string;
+  reason?: string;
+}
 
 export interface AttendanceRecord {
   id: string;
@@ -317,6 +324,8 @@ export interface AttendanceRecord {
   period: AttendancePeriod;
   status: AttendanceStatus;
   isConfirmedByAdmin: boolean;
+  adminPresenceStatus?: "in_administration";
+  adminPresenceReason?: string;
   createdAt: string;
 }
 

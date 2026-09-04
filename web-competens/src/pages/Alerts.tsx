@@ -94,7 +94,7 @@ export default function AlertsPage() {
         attendanceRegistered: "تم تسجيل الحضور", attendanceConfirmed: "تم تأكيد الحضور", evaluationRecorded: "تم تسجيل تقييم",
         recoveryRecorded: "تم تسجيل جلسة استرجاع", recoveryReview: "طلب مراجعة استرجاع", requestSubmitted: "تم إرسال طلب", requestReviewed: "تمت معالجة طلب", riskAlert: "تنبيه متابعة",
         registeredFor: "سجّل الحضور لـ", confirmedFor: "أكد الحضور لـ", evaluated: "قيّم", students: "تلاميذ", absent: "غائب", on: "في", resetSkill: "جلسة استرجاع مهارة", requestStatus: "حالة الطلب", absenceConfirmed: "تم تأكيد غياب التلميذ",
-        scoreAffected: "تم تسجيل تقييم يخص التلميذ", management: "الإدارة", read: "مقروء", markRead: "وضع كمقروء", markedAbsent: "سجّل غياب", openAttendance: "فتح سجل الحضور للتأكيد",
+        scoreAffected: "تم تسجيل تقييم يخص التلميذ", management: "الإدارة", read: "مقروء", markRead: "وضع كمقروء", markedAbsent: "سجّل غياب", openAttendance: "فتح سجل الحضور للتأكيد", inAdministration: "في الإدارة", parentInAdministration: "ابنك حاضر في الإدارة",
       }
     : {
         activityTitle: "Journal d’activité", activitySubtitle: "Toutes les opérations validées, par journée.",
@@ -106,7 +106,7 @@ export default function AlertsPage() {
         attendanceRegistered: "Présences enregistrées", attendanceConfirmed: "Présences confirmées", evaluationRecorded: "Évaluation enregistrée",
         recoveryRecorded: "Entretien de récupération enregistré", recoveryReview: "Demande de récupération à examiner", requestSubmitted: "Demande envoyée", requestReviewed: "Demande traitée", riskAlert: "Alerte de suivi",
         registeredFor: "a enregistré les présences de", confirmedFor: "a confirmé les présences de", evaluated: "a évalué", students: "élèves", absent: "absent(s)", on: "le", resetSkill: "entretien de récupération", requestStatus: "Statut de la demande", absenceConfirmed: "Absence confirmée pour l’élève",
-        scoreAffected: "Une évaluation a été enregistrée pour l’élève", management: "Administration", read: "Lu", markRead: "Marquer lu", markedAbsent: "a signalé l’absence de", openAttendance: "Ouvrir le registre de présence à confirmer",
+        scoreAffected: "Une évaluation a été enregistrée pour l’élève", management: "Administration", read: "Lu", markRead: "Marquer lu", markedAbsent: "a signalé l’absence de", openAttendance: "Ouvrir le registre de présence à confirmer", inAdministration: "à l'administration", parentInAdministration: "Votre enfant est présent à l'administration",
       };
 
   const feed = useActivityFeed({
@@ -170,9 +170,27 @@ export default function AlertsPage() {
     const className = notificationClass?.name;
     const eventTitle = notification.eventType ? titleForEvent(notification.eventType) : notification.title;
     let message = notification.message;
-    if (notification.eventType === "attendance_confirmed") message = notification.studentId
-      ? `${copy.absenceConfirmed}${studentName ? `: ${studentName}` : ""}.`
-      : lang === "ar" ? `تم تأكيد الحضور للقسم ${className ?? ""}.` : `Les présences de ${className ?? "la classe"} ont été confirmées.`;
+    if (notification.eventType === "attendance_confirmed") {
+      const administrationStudents = Array.isArray(notification.payload?.in_administration_students)
+        ? notification.payload.in_administration_students.flatMap((value) => {
+            if (!value || typeof value !== "object") return [];
+            const record = value as Record<string, unknown>;
+            if (typeof record.student_name !== "string" || !record.student_name) return [];
+            return [record.student_name];
+          })
+        : [];
+      if (notification.studentId && notification.payload?.status === "in_administration") {
+        const reason = typeof notification.payload?.administration_reason === "string" && notification.payload.administration_reason
+          ? ` · ${notification.payload.administration_reason}`
+          : "";
+        message = `${copy.parentInAdministration}${reason}.`;
+      } else if (notification.studentId) {
+        message = `${copy.absenceConfirmed}${studentName ? `: ${studentName}` : ""}.`;
+      } else {
+        message = lang === "ar" ? `تم تأكيد الحضور للقسم ${className ?? ""}.` : `Les présences de ${className ?? "la classe"} ont été confirmées.`;
+        if (administrationStudents.length > 0) message += ` ${copy.inAdministration}: ${administrationStudents.join(", ")}.`;
+      }
+    }
     if (notification.eventType === "evaluation_recorded" && notification.studentId) message = `${copy.scoreAffected}${studentName ? `: ${studentName}` : ""}.`;
     if (notification.eventType === "admin_request_submitted") message = lang === "ar" ? "تم حفظ طلبك وإرساله إلى الإدارة للمراجعة." : "Votre demande a été enregistrée et transmise à l’administration.";
     if (notification.eventType === "admin_request_reviewed") {

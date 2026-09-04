@@ -5,7 +5,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/lib/supabase";
 import { createOfflineOperation, sendOperation, useOfflineSync } from "@/lib/offline-sync";
 import { isNetworkError, loadOfflineSnapshot, saveOfflineSnapshot } from "@/lib/offline-queue";
-import type { Classe, Student, AttendanceStatus, AttendancePeriod, DailyAttendanceInput } from "@/types";
+import type { Classe, Student, AttendanceStatus, AttendancePeriod, DailyAttendanceInput, AdministrationPresenceInput } from "@/types";
 
 export interface AttendanceSaveResult {
   queued: boolean;
@@ -22,6 +22,11 @@ export interface PendingAttendanceRegister {
   studentCount: number;
   absentCount: number;
   recordedAt: string;
+}
+
+/** Administrative information kept separately from the teacher's status. */
+export interface AdministrationPresence {
+  reason?: string;
 }
 
 interface PendingAttendanceRow {
@@ -77,6 +82,7 @@ interface AttendanceContextSnapshot {
 interface AttendanceRegisterSnapshot {
   attendanceMap: Record<string, AttendanceStatus>;
   confirmedStudentIds: string[];
+  administrationPresenceByStudent: Record<string, AdministrationPresence>;
 }
 
 export interface UseAttendanceReturn {
@@ -89,10 +95,12 @@ export interface UseAttendanceReturn {
   attendanceMap: Record<string, AttendanceStatus>;
   /** Set of studentIds whose record for the current period is confirmed by admin */
   confirmedStudentIds: Set<string>;
+  /** Pupils marked by management as present in the administration. */
+  administrationPresenceByStudent: Record<string, AdministrationPresence>;
   attendanceLoading: boolean;
   loadAttendance: (classId: string, date: string, period: AttendancePeriod) => Promise<void>;
   saveAttendance: (classId: string, date: string, period: AttendancePeriod, inputs: DailyAttendanceInput[]) => Promise<AttendanceSaveResult>;
-  confirmAttendance: (classId: string, date: string, period: AttendancePeriod) => Promise<void>;
+  confirmAttendance: (classId: string, date: string, period: AttendancePeriod, administrationStudents?: AdministrationPresenceInput[]) => Promise<void>;
   /** Registers that have been recorded by a teacher and await management approval. */
   pendingRegisters: PendingAttendanceRegister[];
 }
@@ -120,6 +128,7 @@ export function useAttendance(): UseAttendanceReturn {
 
   const [attendanceMap, setAttendanceMap] = useState<Record<string, AttendanceStatus>>({});
   const [confirmedStudentIds, setConfirmedStudentIds] = useState<Set<string>>(new Set());
+  const [administrationPresenceByStudent, setAdministrationPresenceByStudent] = useState<Record<string, AdministrationPresence>>({});
   const [attendanceLoading, setAttendanceLoading] = useState(false);
 
   const getQueuedAttendance = useCallback((classId: string, date: string, period: AttendancePeriod) => {
@@ -265,10 +274,14 @@ export function useAttendance(): UseAttendanceReturn {
     setAttendanceLoading(true);
     const map: Record<string, AttendanceStatus> = {};
     const confirmed = new Set<string>();
+    const administrationPresence: Record<string, AdministrationPresence> = {};
     try {
+      const isManagement = user?.role === "admin" || user?.role === "directeur";
       const { data, error: err } = await supabase
         .from("attendance")
-        .select("student_id, status, is_confirmed_by_admin")
+        .select(isManagement
+          ? "student_id, status, is_confirmed_by_admin, admin_presence_status, admin_presence_reason"
+          : "student_id, status, is_confirmed_by_admin")
         .eq("class_id", classId)
         .eq("date", date)
         .eq("period", period);
@@ -276,11 +289,15 @@ export function useAttendance(): UseAttendanceReturn {
       for (const row of data ?? []) {
         map[row.student_id] = row.status as AttendanceStatus;
         if (row.is_confirmed_by_admin) confirmed.add(row.student_id);
+        if (isManagement && row.admin_presence_status === "in_administration") {
+          administrationPresence[row.student_id] = { reason: row.admin_presence_reason ?? undefined };
+        }
       }
       if (user?.id) {
         void saveOfflineSnapshot<AttendanceRegisterSnapshot>(user.id, `attendance-register:${classId}:${date}:${period}`, {
           attendanceMap: map,
           confirmedStudentIds: [...confirmed],
+          administrationPresenceByStudent: administrationPresence,
         }).catch(() => undefined);
       }
     } catch {
@@ -290,6 +307,7 @@ export function useAttendance(): UseAttendanceReturn {
           if (cached) {
             Object.assign(map, cached.attendanceMap);
             for (const studentId of cached.confirmedStudentIds) confirmed.add(studentId);
+            Object.assign(administrationPresence, cached.administrationPresenceByStudent ?? {});
           }
         } catch {
           // Saved offline operations are merged below even when no snapshot exists.
@@ -301,21 +319,27 @@ export function useAttendance(): UseAttendanceReturn {
       }
       setAttendanceMap(map);
       setConfirmedStudentIds(confirmed);
+      setAdministrationPresenceByStudent(administrationPresence);
       setAttendanceLoading(false);
     }
-  }, [getQueuedAttendance, user?.id]);
+  }, [getQueuedAttendance, user?.id, user?.role]);
 
   const loadAttendanceDemo = useCallback(async (classId: string, date: string, period: AttendancePeriod) => {
     const map: Record<string, AttendanceStatus> = {};
     const confirmed = new Set<string>();
+    const administrationPresence: Record<string, AdministrationPresence> = {};
     for (const a of storeAttendance) {
       if (a.classId === classId && a.date === date && a.period === period) {
         map[a.studentId] = a.status;
         if (a.isConfirmedByAdmin) confirmed.add(a.studentId);
+        if (a.adminPresenceStatus === "in_administration") {
+          administrationPresence[a.studentId] = { reason: a.adminPresenceReason };
+        }
       }
     }
     setAttendanceMap(map);
     setConfirmedStudentIds(confirmed);
+    setAdministrationPresenceByStudent(administrationPresence);
   }, [storeAttendance]);
 
   // ── Save attendance (upsert) ──────────────────────────────
@@ -366,19 +390,23 @@ export function useAttendance(): UseAttendanceReturn {
 
   // ── Confirm attendance (admin/directeur only) ─────────────
 
-  const confirmAttendanceReal = useCallback(async (classId: string, date: string, period: AttendancePeriod) => {
+  const confirmAttendanceReal = useCallback(async (classId: string, date: string, period: AttendancePeriod, administrationStudents: AdministrationPresenceInput[] = []) => {
     if (!supabase) return;
-    const { error: err } = await supabase.rpc("confirm_attendance_register", {
+    const { error: err } = await supabase.rpc("confirm_attendance_register_with_admin_status", {
       p_class_id: classId,
       p_date: date,
       p_period: period,
+      p_administration_students: administrationStudents.map((student) => ({
+        student_id: student.studentId,
+        reason: student.reason?.trim() || null,
+      })),
     });
     if (err) throw new Error(err.message);
     await Promise.all([loadAttendanceReal(classId, date, period), fetchFromSupabase()]);
   }, [fetchFromSupabase, loadAttendanceReal]);
 
-  const confirmAttendanceDemo = useCallback(async (classId: string, date: string, period: AttendancePeriod) => {
-    useAppStore.getState().confirmDemoAttendance(classId, date, period);
+  const confirmAttendanceDemo = useCallback(async (classId: string, date: string, period: AttendancePeriod, administrationStudents: AdministrationPresenceInput[] = []) => {
+    useAppStore.getState().confirmDemoAttendance(classId, date, period, administrationStudents);
     await loadAttendanceDemo(classId, date, period);
   }, [loadAttendanceDemo]);
 
@@ -435,6 +463,7 @@ export function useAttendance(): UseAttendanceReturn {
     getStudentsForClass: isDemo ? getStudentsForClassDemo : getStudentsForClassReal,
     attendanceMap,
     confirmedStudentIds,
+    administrationPresenceByStudent,
     attendanceLoading,
     loadAttendance: isDemo ? loadAttendanceDemo : loadAttendanceReal,
     saveAttendance: isDemo ? saveAttendanceDemo : saveAttendanceReal,

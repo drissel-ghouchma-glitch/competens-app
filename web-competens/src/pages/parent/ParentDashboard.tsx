@@ -3,14 +3,14 @@ import { useParent, type ParentChild } from "@/hooks/use-parent";
 import { useCelebrationSettings } from "@/hooks/use-celebration-settings";
 import { useI18n } from "@/i18n";
 import { HonorRoll } from "@/components/HonorRoll";
-import type { Competency, AttendanceStatus } from "@/types";
+import type { Competency, ReportedAttendanceStatus } from "@/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   User, Calendar, Bell, TrendingUp,
-  CheckCircle, Clock, XCircle, Loader2, Users, CalendarCheck,
+  CheckCircle, Clock, XCircle, Loader2, Users, CalendarCheck, Building2,
 } from "lucide-react";
 import {
   ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar,
@@ -116,35 +116,42 @@ function TimelineChart({ timeline }: { timeline: TimelinePoint[] }) {
 
 // ── Attendance section ─────────────────────────────────────────
 
-function AttendanceSummary({ todayMorning, todayAfternoon, absenceHistory }: {
-  todayMorning: AttendanceStatus | null;
-  todayAfternoon: AttendanceStatus | null;
+function AttendanceSummary({ todayMorning, todayAfternoon, todayMorningAdministrationReason, todayAfternoonAdministrationReason, absenceHistory }: {
+  todayMorning: ReportedAttendanceStatus | null;
+  todayAfternoon: ReportedAttendanceStatus | null;
+  todayMorningAdministrationReason?: string;
+  todayAfternoonAdministrationReason?: string;
   absenceHistory: string[];
 }) {
   const { t, lang } = useI18n();
   const locale = lang === "ar" ? "ar-MA" : "fr-FR";
 
-  function PeriodRow({ label, status }: { label: string; status: AttendanceStatus | null }) {
+  function PeriodRow({ label, status, administrationReason }: { label: string; status: ReportedAttendanceStatus | null; administrationReason?: string }) {
     const isPresent  = status === "present";
     const isAbsent   = status === "absent";
+    const isInAdministration = status === "in_administration";
     return (
       <div className={`flex items-center gap-3 px-4 py-3 rounded-xl border ${
         isPresent ? "bg-green-500/8 border-green-500/25" :
         isAbsent  ? "bg-red-500/8 border-red-500/25" :
+        isInAdministration ? "bg-blue-500/8 border-blue-500/25" :
                     "bg-muted/30 border-border"
       }`}>
         {isPresent && <CheckCircle className="w-5 h-5 text-green-500 shrink-0" />}
         {isAbsent  && <XCircle     className="w-5 h-5 text-red-500   shrink-0" />}
+        {isInAdministration && <Building2 className="w-5 h-5 text-blue-500 shrink-0" />}
         {!status   && <Clock       className="w-5 h-5 text-muted-foreground shrink-0" />}
         <div className="flex-1 min-w-0">
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{label}</p>
           <p className={`font-semibold text-sm ${
             isPresent ? "text-green-700 dark:text-green-400" :
             isAbsent  ? "text-red-700 dark:text-red-400" :
+            isInAdministration ? "text-blue-700 dark:text-blue-300" :
                         "text-muted-foreground"
           }`}>
-            {isPresent ? t("parent.present") : isAbsent ? t("parent.absent") : t("parent.notRecordedPeriod")}
+            {isPresent ? t("parent.present") : isAbsent ? t("parent.absent") : isInAdministration ? t("parent.inAdministration") : t("parent.notRecordedPeriod")}
           </p>
+          {isInAdministration && administrationReason && <p className="mt-0.5 text-xs text-muted-foreground">{t("parent.inAdministrationReason", { reason: administrationReason })}</p>}
         </div>
       </div>
     );
@@ -163,8 +170,8 @@ function AttendanceSummary({ todayMorning, todayAfternoon, absenceHistory }: {
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="grid grid-cols-2 gap-2">
-          <PeriodRow label={t("parent.attendanceMorning")} status={todayMorning} />
-          <PeriodRow label={t("parent.attendanceAfternoon")} status={todayAfternoon} />
+          <PeriodRow label={t("parent.attendanceMorning")} status={todayMorning} administrationReason={todayMorningAdministrationReason} />
+          <PeriodRow label={t("parent.attendanceAfternoon")} status={todayAfternoon} administrationReason={todayAfternoonAdministrationReason} />
         </div>
 
         {absenceHistory.length > 0 && (
@@ -356,6 +363,8 @@ function ChildAnalytics({ child, competencies }: { child: ParentChild; competenc
       <AttendanceSummary
         todayMorning={child.todayMorning}
         todayAfternoon={child.todayAfternoon}
+        todayMorningAdministrationReason={child.todayMorningAdministrationReason}
+        todayAfternoonAdministrationReason={child.todayAfternoonAdministrationReason}
         absenceHistory={child.absenceHistory}
       />
     </div>
