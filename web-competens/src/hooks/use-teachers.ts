@@ -19,15 +19,15 @@ export interface UseTeachersReturn {
   classes: Classe[];
   /** teacherId → classIds[] — from teacher_class_assignments in real mode */
   teacherAssignedClassIds: Record<string, string[]>;
-  /** teacherId -> classId for the class where the teacher is the principal teacher. */
-  primaryClassByTeacherId: Record<string, string>;
+  /** teacherId → classIds where the teacher is the principal teacher. */
+  primaryClassIdsByTeacherId: Record<string, string[]>;
   loading: boolean;
   error: string | null;
   canAddManually: boolean;
   refetch: () => Promise<void>;
   updateTeacher: (
     id: string,
-    data: { firstName?: string; lastName?: string; phone?: string; assignedClassIds?: string[]; primaryClassId?: string | null }
+    data: { firstName?: string; lastName?: string; phone?: string; assignedClassIds?: string[]; primaryClassIds?: string[] }
   ) => Promise<void>;
   archiveTeacher: (id: string) => Promise<void>;
 }
@@ -56,7 +56,7 @@ export function useTeachers(): UseTeachersReturn {
   const [sbTeachers, setSbTeachers] = useState<Teacher[]>([]);
   const [sbClasses, setSbClasses] = useState<Classe[]>([]);
   const [sbAssignments, setSbAssignments] = useState<Record<string, string[]>>({});
-  const [sbPrimaryClasses, setSbPrimaryClasses] = useState<Record<string, string>>({});
+  const [sbPrimaryClasses, setSbPrimaryClasses] = useState<Record<string, string[]>>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -120,9 +120,9 @@ export function useTeachers(): UseTeachersReturn {
         if (classes.some((classe) => classe.id === row.class_id)) assignmentsMap[row.teacher_id].push(row.class_id);
       }
 
-      const primaryClassesMap: Record<string, string> = {};
+      const primaryClassesMap: Record<string, string[]> = {};
       for (const classe of classes) {
-        if (classe.teacherId) primaryClassesMap[classe.teacherId] = classe.id;
+        if (classe.teacherId) (primaryClassesMap[classe.teacherId] ??= []).push(classe.id);
       }
 
       setSbTeachers(teachers);
@@ -145,7 +145,7 @@ export function useTeachers(): UseTeachersReturn {
   const updateTeacherReal = useCallback(
     async (
       id: string,
-      data: { firstName?: string; lastName?: string; phone?: string; assignedClassIds?: string[]; primaryClassId?: string | null }
+      data: { firstName?: string; lastName?: string; phone?: string; assignedClassIds?: string[]; primaryClassIds?: string[] }
     ) => {
       if (!supabase) return;
 
@@ -183,8 +183,10 @@ export function useTeachers(): UseTeachersReturn {
         }
       }
 
-      // 3. A principal teacher is stored separately on classes.teacher_id.
-      if (data.primaryClassId !== undefined) {
+      // 3. Principal classes are stored on classes.teacher_id. One teacher can
+      // be principal for several classes; every selected class also grants the
+      // normal teacher access required by the rest of the application.
+      if (data.primaryClassIds !== undefined) {
         const activePrincipalClassIds = sbClasses.filter((classe) => classe.teacherId === id).map((classe) => classe.id);
         if (activePrincipalClassIds.length > 0) {
           const { error: clearErr } = await supabase
@@ -194,18 +196,17 @@ export function useTeachers(): UseTeachersReturn {
           if (clearErr) throw new Error(clearErr.message);
         }
 
-        if (data.primaryClassId) {
+        if (data.primaryClassIds.length > 0) {
           const { error: principalErr } = await supabase
             .from("classes")
             .update({ teacher_id: id })
-            .eq("id", data.primaryClassId);
+            .in("id", data.primaryClassIds);
           if (principalErr) throw new Error(principalErr.message);
 
-          // Principal teachers must also have normal access to their class.
           const { error: accessErr } = await supabase
             .from("teacher_class_assignments")
             .upsert(
-              { teacher_id: id, class_id: data.primaryClassId },
+              data.primaryClassIds.map((classId) => ({ teacher_id: id, class_id: classId })),
               { onConflict: "teacher_id,class_id" }
             );
           if (accessErr) throw new Error(accessErr.message);
@@ -256,7 +257,7 @@ export function useTeachers(): UseTeachersReturn {
   const updateTeacherDemo = useCallback(
     async (
       id: string,
-      data: { firstName?: string; lastName?: string; phone?: string; assignedClassIds?: string[]; primaryClassId?: string | null }
+      data: { firstName?: string; lastName?: string; phone?: string; assignedClassIds?: string[]; primaryClassIds?: string[] }
     ) => {
       storeUpdateTeacher(id, { firstName: data.firstName, lastName: data.lastName, phone: data.phone });
       if (data.assignedClassIds !== undefined) {
@@ -265,16 +266,16 @@ export function useTeachers(): UseTeachersReturn {
         current.forEach((a) => storeUnassignTeacherFromClass(id, a.classId));
         data.assignedClassIds.forEach((classId) => storeAssignTeacherToClass(id, classId));
       }
-      if (data.primaryClassId !== undefined) {
+      if (data.primaryClassIds !== undefined) {
         demoClasses.forEach((classe) => {
-          if (classe.teacherId === id && classe.id !== data.primaryClassId) {
+          if (classe.teacherId === id && !data.primaryClassIds?.includes(classe.id)) {
             useAppStore.getState().updateClass(classe.id, { teacherId: undefined });
           }
         });
-        if (data.primaryClassId) {
-          useAppStore.getState().updateClass(data.primaryClassId, { teacherId: id });
-          storeAssignTeacherToClass(id, data.primaryClassId);
-        }
+        data.primaryClassIds.forEach((classId) => {
+          useAppStore.getState().updateClass(classId, { teacherId: id });
+          storeAssignTeacherToClass(id, classId);
+        });
       }
     },
     [storeUpdateTeacher, storeTeacherClassAssignments, storeAssignTeacherToClass, storeUnassignTeacherFromClass, demoClasses]
@@ -291,16 +292,16 @@ export function useTeachers(): UseTeachersReturn {
     if (!demoAssignmentsMap[a.teacherId]) demoAssignmentsMap[a.teacherId] = [];
     demoAssignmentsMap[a.teacherId].push(a.classId);
   }
-  const demoPrimaryClassesMap: Record<string, string> = {};
+  const demoPrimaryClassesMap: Record<string, string[]> = {};
   for (const classe of demoClasses) {
-    if (classe.teacherId) demoPrimaryClassesMap[classe.teacherId] = classe.id;
+    if (classe.teacherId) (demoPrimaryClassesMap[classe.teacherId] ??= []).push(classe.id);
   }
 
   return {
     teachers: isDemo ? storeTeachers : sbTeachers,
     classes: isDemo ? demoClasses : sbClasses,
     teacherAssignedClassIds: isDemo ? demoAssignmentsMap : sbAssignments,
-    primaryClassByTeacherId: isDemo ? demoPrimaryClassesMap : sbPrimaryClasses,
+    primaryClassIdsByTeacherId: isDemo ? demoPrimaryClassesMap : sbPrimaryClasses,
     loading,
     error,
     canAddManually: isDemo,

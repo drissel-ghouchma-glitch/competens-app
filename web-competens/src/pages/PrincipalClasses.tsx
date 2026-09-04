@@ -1,11 +1,12 @@
 import { useMemo, useState } from "react";
-import { CheckCircle2, GraduationCap, Loader2, RefreshCw, ShieldAlert, Trophy, Users } from "lucide-react";
+import { CheckCircle2, GraduationCap, Loader2, RefreshCw, ShieldAlert, Trophy, Users, ClipboardCheck, Building2 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useDemoStore } from "@/stores/demo";
 import { usePrincipalClasses, type Belt } from "@/hooks/use-principal-classes";
 import { useI18n } from "@/i18n";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { SkillRecoveryDialog } from "@/components/SkillRecoveryDialog";
@@ -24,7 +25,7 @@ export default function PrincipalClassesPage() {
   const { t } = useI18n();
   const {
     principalClasses, selectedClass, selectedClassId, setSelectedClassId,
-    competencies, penalties, recoveries, recoveryRequests, studentScores, beltGroups, isManagement, loading, error, createRecoveryAction, refetch,
+    competencies, penalties, recoveries, recoveryRequests, studentScores, managementReviewStudents, beltGroups, isManagement, loading, error, createRecoveryAction, refetch,
   } = usePrincipalClasses();
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
   const [recoveryOpen, setRecoveryOpen] = useState(false);
@@ -84,7 +85,7 @@ export default function PrincipalClassesPage() {
                 <GraduationCap className="w-4 h-4 text-primary" /> {t(isManagement ? "principalClasses.managementSelectClass" : "principalClasses.selectClass")}
               </div>
               <Select value={selectedClassId} onValueChange={setSelectedClassId}>
-                <SelectTrigger className="w-full sm:w-72"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="w-full sm:w-72"><SelectValue placeholder={t("principalClasses.managementSelectClass")} /></SelectTrigger>
                 <SelectContent>
                   {principalClasses.map((classe) => <SelectItem key={classe.id} value={classe.id}>{classe.name}</SelectItem>)}
                 </SelectContent>
@@ -92,6 +93,43 @@ export default function PrincipalClassesPage() {
             </CardContent>
           </Card>
 
+          {isManagement && !selectedClassId ? (
+            <Card className="border-primary/25 overflow-hidden">
+              <CardHeader className="bg-primary/[0.03] pb-3">
+                <CardTitle className="flex flex-wrap items-center gap-2 text-base">
+                  <ClipboardCheck className="h-5 w-5 text-primary" />
+                  {t("principalClasses.reviewQueueTitle")}
+                  <Badge variant="secondary">{t("principalClasses.reviewQueueCount", { count: managementReviewStudents.length })}</Badge>
+                </CardTitle>
+                <CardDescription>{t("principalClasses.reviewQueueDescription")}</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-2 p-4">
+                {managementReviewStudents.length === 0 ? (
+                  <p className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">{t("principalClasses.reviewQueueEmpty")}</p>
+                ) : managementReviewStudents.map((student) => (
+                  <button
+                    key={student.id}
+                    type="button"
+                    onClick={() => setSelectedClassId(student.classId)}
+                    className="flex w-full flex-col gap-2 rounded-xl border border-border/70 bg-card p-3 text-start transition-colors hover:border-primary/40 hover:bg-primary/[0.03] sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <div className="min-w-0">
+                      <p className="font-semibold text-sm">{student.firstName} {student.lastName}</p>
+                      <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground"><Building2 className="h-3.5 w-3.5" />{student.className}</p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+                      <Badge className={student.score < 99 ? "border-red-500/20 bg-red-500/10 text-red-700 hover:bg-red-500/10 dark:text-red-300" : "border-amber-500/20 bg-amber-500/10 text-amber-700 hover:bg-amber-500/10 dark:text-amber-300"}>
+                        {student.score}% {student.score < 99 ? t("principalClasses.reviewLowTotal") : t("principalClasses.reviewWeakSkillOnly")}
+                      </Badge>
+                      {student.weakSkills.map((skill) => (
+                        <Badge key={skill.competencyId} variant="outline" className="border-amber-500/30 text-amber-700 dark:text-amber-300">{skill.competencyCode} {skill.acquisitionRate}%</Badge>
+                      ))}
+                    </div>
+                  </button>
+                ))}
+              </CardContent>
+            </Card>
+          ) : <>
           {selectedClass && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Users className="w-4 h-4" />
@@ -186,6 +224,7 @@ export default function PrincipalClassesPage() {
               <SkillHistoryChart studentId={selectedStudent.id} competencies={competencies} penalties={penalties} recoveries={recoveries} />
             </div>
           )}
+          </>}
         </>
       )}
 

@@ -116,13 +116,14 @@ export const fr: Dict = {
   "nav.evaluate": "Évaluer",
   "nav.children": "Enfants",
   "nav.principalClasses": "Mes classes principales",
+  "nav.evaluationReview": "Revue des évaluations",
   "nav.teacherGuide": "Guide d’utilisation",
 
   // ── Principal classes ───────────────────────────────────────
   "principalClasses.title": "Mes classes principales",
   "principalClasses.description": "Suivez les élèves des classes dont vous êtes professeur principal.",
-  "principalClasses.managementTitle": "Suivi de toutes les classes",
-  "principalClasses.managementDescription": "Consultez les élèves et les demandes de récupération de toutes les classes actives.",
+  "principalClasses.managementTitle": "Revue des évaluations",
+  "principalClasses.managementDescription": "Repérez les élèves à suivre dans toutes les classes actives, puis ouvrez une classe pour examiner ses évaluations.",
   "principalClasses.managementSelectClass": "Choisir une classe",
   "principalClasses.accessDenied": "Accès non autorisé",
   "principalClasses.teacherOnly": "Cette page est réservée aux professeurs.",
@@ -141,6 +142,12 @@ export const fr: Dict = {
   "principalClasses.blue": "Ceinture bleue",
   "principalClasses.blueRange": "De 99% à 100%",
   "principalClasses.selectedStudentHint": "Consultez l'historique de la compétence ou ajoutez une action de récupération.",
+  "principalClasses.reviewQueueTitle": "Élèves à examiner en priorité",
+  "principalClasses.reviewQueueDescription": "Tous les élèves dont la moyenne est inférieure à 99 %, ainsi que ceux ayant une compétence sous 90 % malgré une moyenne d’au moins 99 %.",
+  "principalClasses.reviewQueueCount": "{count} élève(s) à suivre",
+  "principalClasses.reviewQueueEmpty": "Aucun élève ne nécessite de revue pour le moment.",
+  "principalClasses.reviewLowTotal": "moyenne < 99 %",
+  "principalClasses.reviewWeakSkillOnly": "compétence < 90 %",
 
   // Skill recovery and immutable history
   "skillHistory.radarTab": "Radar",
@@ -333,11 +340,14 @@ export const fr: Dict = {
   "teachers.archiveConfirm": "Archiver le professeur « {name} » ? Son compte sera désactivé mais son historique d'évaluations sera conservé.",
   "teachers.archived": "{name} archivé(e).",
   "teachers.principalClass": "Professeur principal d’une classe",
+  "teachers.principalClasses": "Classes principales",
+  "teachers.principalSelectedCount": "{count} classe(s) principale(s) sélectionnée(s)",
   "teachers.selectPrincipalClass": "Choisir une classe",
   "teachers.noPrincipalClass": "Aucune classe principale",
   "teachers.principalClassHint": "Cette classe sera ajoutée automatiquement aux classes accessibles au professeur.",
   "teachers.principalBadge": "Professeur principal · {name}",
   "teachers.assignPrincipalClass": "Définir la classe principale",
+  "teachers.assignPrincipalClasses": "Définir les classes principales",
   "teachers.evaluationAnalysis": "Analyser les évaluations",
 
   // ── Teacher evaluation report ────────────────────────────
@@ -871,13 +881,14 @@ export const ar: Dict = {
   "nav.evaluate": "قيّم",
   "nav.children": "الأبناء",
   "nav.principalClasses": "أقسامي الرئيسية",
+  "nav.evaluationReview": "مراجعة التقييمات",
   "nav.teacherGuide": "دليل الاستعمال",
 
   // ── Principal classes ───────────────────────────────────────
   "principalClasses.title": "أقسامي الرئيسية",
   "principalClasses.description": "تابع تلاميذ الأقسام التي أنت أستاذها الرئيسي.",
-  "principalClasses.managementTitle": "متابعة جميع الأقسام",
-  "principalClasses.managementDescription": "اطلع على تلاميذ وطلبات استرجاع الكفايات في جميع الأقسام النشطة.",
+  "principalClasses.managementTitle": "مراجعة التقييمات",
+  "principalClasses.managementDescription": "تعرّف على التلاميذ الذين يحتاجون متابعة في جميع الأقسام، ثم افتح القسم لمراجعة تقييماته.",
   "principalClasses.managementSelectClass": "اختر قسماً",
   "principalClasses.accessDenied": "وصول غير مسموح",
   "principalClasses.teacherOnly": "هذه الصفحة مخصصة للأساتذة فقط.",
@@ -896,6 +907,12 @@ export const ar: Dict = {
   "principalClasses.blue": "الحزام الأزرق",
   "principalClasses.blueRange": "من 99% إلى 100%",
   "principalClasses.selectedStudentHint": "اعرض تاريخ الكفاية أو أضف إجراء استرجاع.",
+  "principalClasses.reviewQueueTitle": "تلاميذ يحتاجون إلى مراجعة",
+  "principalClasses.reviewQueueDescription": "يشمل كل تلميذ مجموعه أقل من 99%، ومن لديه مهارة أقل من 90% رغم أن مجموعه لا يقل عن 99%.",
+  "principalClasses.reviewQueueCount": "{count} تلميذ يحتاج متابعة",
+  "principalClasses.reviewQueueEmpty": "لا يوجد تلميذ يحتاج إلى مراجعة حالياً.",
+  "principalClasses.reviewLowTotal": "المجموع أقل من 99%",
+  "principalClasses.reviewWeakSkillOnly": "مهارة أقل من 90%",
 
   // Skill recovery and immutable history
   "skillHistory.radarTab": "الرادار",
@@ -1088,11 +1105,14 @@ export const ar: Dict = {
   "teachers.archiveConfirm": "أرشفة الأستاذ «{name}»؟ سيتم تعطيل حسابه مع الاحتفاظ بسجل تقييماته.",
   "teachers.archived": "تمت أرشفة {name}.",
   "teachers.principalClass": "الأستاذ الرئيسي لقسم",
+  "teachers.principalClasses": "الأقسام الرئيسية",
+  "teachers.principalSelectedCount": "تم اختيار {count} قسم رئيسي",
   "teachers.selectPrincipalClass": "اختر قسمًا",
   "teachers.noPrincipalClass": "ليس أستاذًا رئيسيًا لأي قسم",
   "teachers.principalClassHint": "سيُضاف هذا القسم تلقائيًا إلى الأقسام التي يمكن للأستاذ الوصول إليها.",
   "teachers.principalBadge": "الأستاذ الرئيسي · {name}",
   "teachers.assignPrincipalClass": "تحديد القسم الرئيسي",
+  "teachers.assignPrincipalClasses": "تحديد الأقسام الرئيسية",
   "teachers.evaluationAnalysis": "تحليل التقييمات",
 
   // ── Teacher evaluation report ────────────────────────────

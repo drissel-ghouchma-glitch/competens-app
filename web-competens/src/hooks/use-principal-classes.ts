@@ -25,6 +25,12 @@ export interface PrincipalStudent extends Student {
   skills: PrincipalSkillScore[];
 }
 
+/** Cross-class student requiring an administrative evaluation review. */
+export interface ManagementReviewStudent extends PrincipalStudent {
+  className: string;
+  weakSkills: PrincipalSkillScore[];
+}
+
 export type BeltGroups = Record<Belt, PrincipalStudent[]>;
 
 const emptyBeltGroups = (): BeltGroups => ({ white: [], yellow: [], green: [], blue: [] });
@@ -102,6 +108,10 @@ export function usePrincipalClasses() {
   const [sbPenalties, setSbPenalties] = useState<PenaltyLedgerEvent[]>([]);
   const [sbRecoveries, setSbRecoveries] = useState<SkillRecoveryAction[]>([]);
   const [sbRecoveryRequests, setSbRecoveryRequests] = useState<SkillRecoveryRequest[]>([]);
+  const [sbReviewStudents, setSbReviewStudents] = useState<Student[]>([]);
+  const [sbReviewCompetencies, setSbReviewCompetencies] = useState<Competency[]>([]);
+  const [sbReviewPenalties, setSbReviewPenalties] = useState<PenaltyLedgerEvent[]>([]);
+  const [sbReviewRecoveries, setSbReviewRecoveries] = useState<SkillRecoveryAction[]>([]);
   const [selectedClassId, setSelectedClassId] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -121,10 +131,11 @@ export function usePrincipalClasses() {
   }, [demoActiveYearId, demoTeacherId, isDemo, isManagement, sbClasses, storeClasses, user?.id]);
 
   useEffect(() => {
-    setSelectedClassId((current) => current && principalClasses.some((classe) => classe.id === current)
-      ? current
-      : principalClasses[0]?.id ?? "");
-  }, [principalClasses]);
+    setSelectedClassId((current) => {
+      if (isManagement) return current && principalClasses.some((classe) => classe.id === current) ? current : "";
+      return current && principalClasses.some((classe) => classe.id === current) ? current : principalClasses[0]?.id ?? "";
+    });
+  }, [isManagement, principalClasses]);
 
   const fetchFromSupabase = useCallback(async () => {
     if (!supabase || !user || !canUsePage) return;
@@ -142,11 +153,45 @@ export function usePrincipalClasses() {
 
       const { data, error: classesError } = await query;
       if (classesError) throw classesError;
-      setSbClasses((data ?? []).map((classe) => ({
+      const classes = (data ?? []).map((classe) => ({
         id: classe.id, name: classe.name, levelId: classe.level_id ?? "", teacherId: classe.teacher_id ?? undefined,
         capacity: classe.capacity, studentCount: classe.student_count, isArchived: classe.is_archived,
         schoolYearId: classe.school_year_id, createdAt: classe.created_at,
-      })));
+      }));
+      setSbClasses(classes);
+
+      if (isManagement) {
+        const classIds = classes.map((classe) => classe.id);
+        if (classIds.length === 0) {
+          setSbReviewStudents([]); setSbReviewCompetencies([]); setSbReviewPenalties([]); setSbReviewRecoveries([]);
+        } else {
+          const [studentsResult, competenciesResult, evaluationsResult, recoveriesResult] = await Promise.all([
+            supabase.from("students").select("*").in("class_id", classIds).eq("is_archived", false).order("last_name"),
+            supabase.from("competencies").select("*").order("order"),
+            supabase.from("evaluations").select("id, student_id, competency_id, teacher_id, date, created_at, profiles(full_name)").in("class_id", classIds),
+            supabase.from("skill_recovery_actions").select("id, student_id, competency_id, class_id, action_type, previous_score, new_score, meeting_date, student_reason, meeting_notes, created_by, created_at, profiles(full_name)").in("class_id", classIds),
+          ]);
+          if (studentsResult.error) throw studentsResult.error;
+          if (competenciesResult.error) throw competenciesResult.error;
+          if (evaluationsResult.error) throw evaluationsResult.error;
+          if (recoveriesResult.error && !isMissingSkillRecoveryTable(recoveriesResult.error)) throw recoveriesResult.error;
+
+          setSbReviewStudents((studentsResult.data ?? []).map(mapStudent));
+          setSbReviewCompetencies((competenciesResult.data ?? []).map((competency) => ({
+            id: competency.id, code: competency.code, title: competency.title, description: competency.description ?? "",
+            pedagogicalAdvice: competency.pedagogical_advice ?? "", order: competency.order,
+            isArchived: competency.is_archived ?? false, createdAt: competency.created_at,
+          })));
+          setSbReviewPenalties((evaluationsResult.data ?? []).map((evaluation) => ({
+            id: evaluation.id, studentId: evaluation.student_id, competencyId: evaluation.competency_id,
+            date: evaluation.date, createdAt: evaluation.created_at, teacherId: evaluation.teacher_id,
+            teacherName: (evaluation.profiles as { full_name?: string } | null)?.full_name,
+          })));
+          setSbReviewRecoveries(recoveriesResult.error ? [] : (recoveriesResult.data ?? []).map((row) => mapRecovery(row as Parameters<typeof mapRecovery>[0])));
+        }
+      } else {
+        setSbReviewStudents([]); setSbReviewCompetencies([]); setSbReviewPenalties([]); setSbReviewRecoveries([]);
+      }
     } catch (cause: unknown) {
       setError(cause instanceof Error ? cause.message : "Unable to load classes.");
     } finally {
@@ -238,6 +283,45 @@ export function usePrincipalClasses() {
     return { ...student, score, penaltyCount: studentPenalties.length, skills };
   }).sort((left, right) => right.score - left.score || left.lastName.localeCompare(right.lastName)), [competencies, penalties, recoveries, students]);
 
+  const managementReviewStudents = useMemo<ManagementReviewStudent[]>(() => {
+    if (!isManagement) return [];
+    const classNameById = new Map(principalClasses.map((classe) => [classe.id, classe.name]));
+    const reviewStudents = isDemo
+      ? storeStudents.filter((student) => classNameById.has(student.classId))
+      : sbReviewStudents;
+    const reviewCompetencies = isDemo ? storeCompetencies : sbReviewCompetencies;
+    const reviewPenalties = isDemo
+      ? storeEvaluations.filter((evaluation) => classNameById.has(evaluation.classId))
+      : sbReviewPenalties;
+    const reviewRecoveries = isDemo
+      ? storeRecoveries.filter((action) => classNameById.has(action.classId))
+      : sbReviewRecoveries;
+
+    return reviewStudents.map((student) => {
+      const studentPenalties = reviewPenalties.filter((penalty) => penalty.studentId === student.id);
+      const skills = reviewCompetencies.map((competency) => ({
+        competencyId: competency.id,
+        competencyCode: competency.code,
+        competencyTitle: competency.title,
+        acquisitionRate: competencyScoreFromLedger(reviewPenalties, reviewRecoveries, student.id, competency.id),
+        totalEvaluations: studentPenalties.filter((penalty) => penalty.competencyId === competency.id).length,
+        isArchived: competency.isArchived,
+      }));
+      const activeSkills = skills.filter((skill) => !skill.isArchived);
+      const score = activeSkills.length === 0 ? 0 : Math.round(activeSkills.reduce((sum, skill) => sum + skill.acquisitionRate, 0) / activeSkills.length);
+      const weakSkills = activeSkills.filter((skill) => skill.acquisitionRate < 90);
+      return {
+        ...student,
+        score,
+        penaltyCount: studentPenalties.length,
+        skills,
+        weakSkills,
+        className: classNameById.get(student.classId) ?? "—",
+      };
+    }).filter((student) => student.score < 99 || (student.score >= 99 && student.weakSkills.length > 0))
+      .sort((left, right) => left.score - right.score || left.lastName.localeCompare(right.lastName));
+  }, [isDemo, isManagement, principalClasses, sbReviewCompetencies, sbReviewPenalties, sbReviewRecoveries, sbReviewStudents, storeCompetencies, storeEvaluations, storeRecoveries, storeStudents]);
+
   const beltGroups = useMemo<BeltGroups>(() => {
     const groups = emptyBeltGroups();
     for (const student of studentScores) groups[beltForScore(student.score)].push(student);
@@ -299,7 +383,7 @@ export function usePrincipalClasses() {
 
   return {
     principalClasses, selectedClass, selectedClassId, setSelectedClassId, students, competencies,
-    penalties, recoveries, recoveryRequests, studentScores, beltGroups, isManagement,
+    penalties, recoveries, recoveryRequests, studentScores, managementReviewStudents, beltGroups, isManagement,
     loading, error, createRecoveryAction, refetch,
   };
 }

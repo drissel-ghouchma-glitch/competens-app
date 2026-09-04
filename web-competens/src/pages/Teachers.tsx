@@ -12,7 +12,6 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   UserCog, Plus, Mail, Phone, Edit, Archive, Building2, Search, Info, Loader2, Trophy, BarChart3,
 } from "lucide-react";
@@ -24,7 +23,7 @@ import type { Teacher } from "@/types";
 import { cn } from "@/lib/utils";
 
 export default function TeachersPage() {
-  const { teachers, classes, teacherAssignedClassIds, primaryClassByTeacherId, loading, error, canAddManually, updateTeacher, archiveTeacher } = useTeachers();
+  const { teachers, classes, teacherAssignedClassIds, primaryClassIdsByTeacherId, loading, error, canAddManually, updateTeacher, archiveTeacher } = useTeachers();
   const { user } = useAuth();
   const { t } = useI18n();
   const navigate = useNavigate();
@@ -43,7 +42,7 @@ export default function TeachersPage() {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [selectedClassIds, setSelectedClassIds] = useState<string[]>([]);
-  const [primaryClassId, setPrimaryClassId] = useState("none");
+  const [primaryClassIds, setPrimaryClassIds] = useState<string[]>([]);
   const [search, setSearch] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
@@ -79,7 +78,7 @@ export default function TeachersPage() {
       if (editId) {
         await updateTeacher(editId, {
           firstName, lastName, phone, assignedClassIds: selectedClassIds,
-          ...(user?.role === "admin" ? { primaryClassId: primaryClassId === "none" ? null : primaryClassId } : {}),
+          ...(user?.role === "admin" ? { primaryClassIds } : {}),
         });
       } else if (canAddManually) {
         storeAddTeacher({ firstName, lastName, email, phone });
@@ -99,7 +98,7 @@ export default function TeachersPage() {
     setEmail(teacher.email);
     setPhone(teacher.phone ?? "");
     setSelectedClassIds(teacherAssignedClassIds[teacher.id] ?? []);
-    setPrimaryClassId(primaryClassByTeacherId[teacher.id] ?? "none");
+    setPrimaryClassIds(primaryClassIdsByTeacherId[teacher.id] ?? []);
     setSaveError("");
     setOpen(true);
   };
@@ -112,7 +111,7 @@ export default function TeachersPage() {
     setEmail("");
     setPhone("");
     setSelectedClassIds([]);
-    setPrimaryClassId("none");
+    setPrimaryClassIds([]);
     setSaveError("");
   };
 
@@ -120,6 +119,12 @@ export default function TeachersPage() {
     setSelectedClassIds((prev) =>
       prev.includes(classId) ? prev.filter((id) => id !== classId) : [...prev, classId]
     );
+  };
+
+  const togglePrimaryClass = (classId: string) => {
+    setPrimaryClassIds((previous) => previous.includes(classId)
+      ? previous.filter((id) => id !== classId)
+      : [...previous, classId]);
   };
 
   return (
@@ -182,7 +187,7 @@ export default function TeachersPage() {
                   />
                 )}
                 {editId && user?.role === "admin" && (
-                  <PrincipalClassSelector classes={classes} value={primaryClassId} onChange={setPrimaryClassId} />
+                  <PrincipalClassSelector classes={classes} selectedIds={primaryClassIds} onToggle={togglePrimaryClass} />
                 )}
                 <Button
                   onClick={handleSubmit}
@@ -229,7 +234,7 @@ export default function TeachersPage() {
           {filteredTeachers.map((teacher) => {
             const assignedClassIds = teacherAssignedClassIds[teacher.id] ?? [];
             const assignedClasses = classes.filter((c) => assignedClassIds.includes(c.id));
-            const primaryClass = classes.find((c) => c.id === primaryClassByTeacherId[teacher.id]);
+            const primaryClasses = classes.filter((classe) => (primaryClassIdsByTeacherId[teacher.id] ?? []).includes(classe.id));
             return (
               <Card key={teacher.id} className="border-border/50 group">
                 <CardContent className="p-4">
@@ -293,10 +298,14 @@ export default function TeachersPage() {
                   ) : (
                     <p className="text-xs text-muted-foreground italic">{t("teachers.noClassAssigned")}</p>
                   )}
-                  {primaryClass && (
-                    <Badge className="mt-2 bg-amber-500/10 text-amber-700 border-amber-500/20 hover:bg-amber-500/10">
-                      {t("teachers.principalBadge", { name: primaryClass.name })}
-                    </Badge>
+                  {primaryClasses.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {primaryClasses.map((classe) => (
+                        <Badge key={classe.id} className="bg-amber-500/10 text-amber-700 border-amber-500/20 hover:bg-amber-500/10">
+                          <Trophy className="me-1 h-3 w-3" /> {t("teachers.principalBadge", { name: classe.name })}
+                        </Badge>
+                      ))}
+                    </div>
                   )}
                   {canAssignPrincipal && (
                     <Button
@@ -306,7 +315,7 @@ export default function TeachersPage() {
                       onClick={() => handleEdit(teacher)}
                     >
                       <Trophy className="w-4 h-4 text-amber-500" />
-                      {t("teachers.assignPrincipalClass")}
+                      {t("teachers.assignPrincipalClasses")}
                     </Button>
                   )}
                 </CardContent>
@@ -364,7 +373,7 @@ export default function TeachersPage() {
               />
 
               {user?.role === "admin" && (
-                <PrincipalClassSelector classes={classes} value={primaryClassId} onChange={setPrimaryClassId} />
+                <PrincipalClassSelector classes={classes} selectedIds={primaryClassIds} onToggle={togglePrimaryClass} />
               )}
 
               <Button onClick={handleSubmit} className="w-full" disabled={saving || !firstName}>
@@ -383,24 +392,26 @@ export default function TeachersPage() {
 
 interface PrincipalClassSelectorProps {
   classes: Array<{ id: string; name: string }>;
-  value: string;
-  onChange: (id: string) => void;
+  selectedIds: string[];
+  onToggle: (id: string) => void;
 }
 
-function PrincipalClassSelector({ classes, value, onChange }: PrincipalClassSelectorProps) {
+function PrincipalClassSelector({ classes, selectedIds, onToggle }: PrincipalClassSelectorProps) {
   const { t } = useI18n();
   return (
     <div className="space-y-2 rounded-lg border border-amber-500/20 bg-amber-500/5 p-3">
-      <Label>{t("teachers.principalClass")}</Label>
-      <Select value={value} onValueChange={onChange}>
-        <SelectTrigger><SelectValue placeholder={t("teachers.selectPrincipalClass")} /></SelectTrigger>
-        <SelectContent>
-          <SelectItem value="none">{t("teachers.noPrincipalClass")}</SelectItem>
+      <Label className="flex items-center gap-1.5"><Trophy className="h-4 w-4 text-amber-500" />{t("teachers.principalClasses")}</Label>
+      <ScrollArea className="h-36 rounded-lg border border-amber-500/20 bg-background/70">
+        <div className="space-y-1 p-2">
           {classes.map((classe) => (
-            <SelectItem key={classe.id} value={classe.id}>{classe.name}</SelectItem>
+            <div key={classe.id} className="flex cursor-pointer items-center gap-3 rounded-lg px-2 py-2 hover:bg-muted/50" onClick={() => onToggle(classe.id)}>
+              <Checkbox checked={selectedIds.includes(classe.id)} onClick={(event) => event.stopPropagation()} onCheckedChange={() => onToggle(classe.id)} id={`principal-edit-${classe.id}`} />
+              <span className="flex-1 text-sm font-medium">{classe.name}</span>
+            </div>
           ))}
-        </SelectContent>
-      </Select>
+        </div>
+      </ScrollArea>
+      {selectedIds.length > 0 && <p className="text-xs font-medium text-amber-700 dark:text-amber-300">{t("teachers.principalSelectedCount", { count: selectedIds.length })}</p>}
       <p className="text-xs text-muted-foreground">{t("teachers.principalClassHint")}</p>
     </div>
   );
@@ -444,15 +455,11 @@ function ClassSelector({ classes, selectedIds, onToggle }: ClassSelectorProps) {
             >
               <Checkbox
                 checked={selectedIds.includes(cls.id)}
+                onClick={(event) => event.stopPropagation()}
                 onCheckedChange={() => onToggle(cls.id)}
                 id={`cls-edit-${cls.id}`}
               />
-              <label
-                htmlFor={`cls-edit-${cls.id}`}
-                className="text-sm font-medium cursor-pointer select-none flex-1"
-              >
-                {cls.name}
-              </label>
+              <span className="text-sm font-medium select-none flex-1">{cls.name}</span>
             </div>
           ))}
         </div>

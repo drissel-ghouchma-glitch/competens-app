@@ -5,6 +5,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useDemoStore } from "@/stores/demo";
 import { useRequests } from "@/hooks/use-requests";
 import { useNotificationBadge } from "@/hooks/use-notification-badge";
+import { usePendingAttendanceBadge } from "@/hooks/use-pending-attendance-badge";
 import { useI18n } from "@/i18n";
 import { cn } from "@/lib/utils";
 import {
@@ -77,11 +78,16 @@ export default function AppLayout() {
   const initDemo = useAppStore((s) => s.initDemoData);
   const initialized = useAppStore((s) => s.initialized);
   const unreadCount = useNotificationBadge();
+  const pendingAttendanceCount = usePendingAttendanceBadge();
   const { user, isLoading: authLoading, logout } = useAuth();
   const isDemo = useDemoStore((s) => s.isDemoMode);
   const disableDemo = useDemoStore((s) => s.disableDemo);
   const role = user?.role ?? "admin";
   const { pendingCount } = useRequests();
+
+  const labelKeyFor = (item: { to: string; labelKey: string }) => (
+    item.to === "/principal-classes" && role !== "professeur" ? "nav.evaluationReview" : item.labelKey
+  );
 
   const toggleLang = () => setLang(lang === "ar" ? "fr" : "ar");
 
@@ -150,6 +156,7 @@ export default function AppLayout() {
             {filteredNav.map((item) => {
               const itemBadgeCount = item.to === "/alerts"
                 ? unreadCount
+                : item.to === "/attendance" ? pendingAttendanceCount
                 : ("badge" in item && item.badge ? pendingCount : 0);
               return (
               <NavLink
@@ -164,7 +171,7 @@ export default function AppLayout() {
                 )}
               >
                 <item.icon className="w-5 h-5 shrink-0" />
-                <span className="truncate flex-1">{t(item.labelKey)}</span>
+                <span className="truncate flex-1">{t(labelKeyFor(item))}</span>
                 {!isDemo && itemBadgeCount > 0 && (
                   <span className="ms-auto w-5 h-5 rounded-full bg-destructive flex items-center justify-center text-[10px] font-bold text-destructive-foreground shrink-0">
                     {itemBadgeCount > 9 ? "9+" : itemBadgeCount}
@@ -264,6 +271,7 @@ export default function AppLayout() {
                 {filteredNav.map((item) => {
                   const itemBadgeCount = item.to === "/alerts"
                     ? unreadCount
+                    : item.to === "/attendance" ? pendingAttendanceCount
                     : ("badge" in item && item.badge ? pendingCount : 0);
                   return (
                   <NavLink
@@ -276,7 +284,7 @@ export default function AppLayout() {
                     )}
                   >
                     <item.icon className="w-5 h-5" />
-                    <span className="flex-1">{t(item.labelKey)}</span>
+                    <span className="flex-1">{t(labelKeyFor(item))}</span>
                     {!isDemo && itemBadgeCount > 0 && (
                       <span className="w-5 h-5 rounded-full bg-destructive flex items-center justify-center text-[10px] font-bold text-destructive-foreground shrink-0">
                         {itemBadgeCount > 9 ? "9+" : itemBadgeCount}
@@ -325,7 +333,7 @@ export default function AppLayout() {
                   </span>
                 )}
               </div>
-              <span className="text-[10px] font-medium">{t(item.labelKey)}</span>
+              <span className="text-[10px] font-medium">{t(labelKeyFor(item))}</span>
             </NavLink>
           ))}
         </div>
