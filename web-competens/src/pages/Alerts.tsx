@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAlerts } from "@/hooks/use-alerts";
 import { useActivityFeed } from "@/hooks/use-activity-feed";
+import { useAttendance } from "@/hooks/use-attendance";
 import { useAuth } from "@/hooks/use-auth";
 import { useClasses } from "@/hooks/use-classes";
 import { useStudents } from "@/hooks/use-students";
@@ -53,6 +54,7 @@ export default function AlertsPage() {
   const { alerts, notifications, loading, error, refetch, markAlertResolved, markNotificationRead } = useAlerts();
   const { students } = useStudents();
   const { classes, teachers } = useClasses();
+  const { classes: attendanceClasses } = useAttendance();
   const { t, lang } = useI18n();
   const [date, setDate] = useState(todayLocal);
   const [classId, setClassId] = useState("all");
@@ -61,6 +63,7 @@ export default function AlertsPage() {
   const [studentQuery, setStudentQuery] = useState("");
   const isActivityViewer = user?.role === "admin" || user?.role === "directeur" || user?.role === "professeur";
   const isTeacher = user?.role === "professeur";
+  const selectableClasses = isTeacher ? attendanceClasses : classes;
   const canResolveAlerts = isActivityViewer;
   const locale = lang === "ar" ? "ar-MA" : "fr-FR";
   const allMyClassesLabel = lang === "ar" ? "كل أقسامي" : "Toutes mes classes";
@@ -95,7 +98,7 @@ export default function AlertsPage() {
   const feed = useActivityFeed({
     date,
     classId: classId === "all" ? undefined : classId,
-    actorId: actorId === "all" ? undefined : actorId,
+    actorId: isTeacher ? user?.id : actorId === "all" ? undefined : actorId,
     eventType,
     studentQuery,
   });
@@ -149,7 +152,7 @@ export default function AlertsPage() {
   const describeNotification = (notification: Notification) => {
     const student = students.find((candidate) => candidate.id === notification.studentId);
     const studentName = student ? `${student.firstName} ${student.lastName}` : "";
-    const notificationClass = classes.find((candidate) => candidate.id === notification.classId);
+    const notificationClass = selectableClasses.find((candidate) => candidate.id === notification.classId);
     const className = notificationClass?.name;
     const eventTitle = notification.eventType ? titleForEvent(notification.eventType) : notification.title;
     let message = notification.message;
@@ -214,7 +217,7 @@ export default function AlertsPage() {
             <div className={cn("grid gap-3 sm:grid-cols-2", isTeacher ? "lg:grid-cols-4" : "lg:grid-cols-5")}>
               <label className="space-y-1.5"><span className="text-xs font-medium text-muted-foreground">{copy.date}</span><Input type="date" value={date} onChange={(event) => setDate(event.target.value)} /></label>
               <label className="space-y-1.5"><span className="text-xs font-medium text-muted-foreground">{copy.class}</span>
-                <Select value={classId} onValueChange={setClassId}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">{isTeacher ? allMyClassesLabel : copy.allClasses}</SelectItem>{classes.map((classe) => <SelectItem key={classe.id} value={classe.id}>{classe.name}</SelectItem>)}</SelectContent></Select>
+                <Select value={classId} onValueChange={setClassId}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">{isTeacher ? allMyClassesLabel : copy.allClasses}</SelectItem>{selectableClasses.map((classe) => <SelectItem key={classe.id} value={classe.id}>{classe.name}</SelectItem>)}</SelectContent></Select>
               </label>
               {!isTeacher && <label className="space-y-1.5"><span className="text-xs font-medium text-muted-foreground">{copy.teacher}</span>
                 <Select value={actorId} onValueChange={setActorId}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">{copy.allTeachers}</SelectItem>{teachers.map((teacher) => <SelectItem key={teacher.id} value={teacher.id}>{`${teacher.firstName} ${teacher.lastName}`.trim()}</SelectItem>)}</SelectContent></Select>
