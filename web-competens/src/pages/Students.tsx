@@ -29,6 +29,7 @@ export default function StudentsPage() {
 
   const isTeacherReal = !isDemo && user?.role === "professeur";
   const isTeacher = user?.role === "professeur";
+  const canManage = user?.role === "admin" || user?.role === "directeur";
   const canImport = user?.role === "admin";
 
   const [archiving, setArchiving] = useState<string | null>(null);
