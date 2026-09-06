@@ -362,6 +362,7 @@ export default function StudentDetailPage() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [editFirstName, setEditFirstName] = useState("");
   const [editLastName, setEditLastName] = useState("");
+  const [editMassarCode, setEditMassarCode] = useState("");
   const [editBirthDate, setEditBirthDate] = useState("");
   const [editGender, setEditGender] = useState<"M" | "F">("M");
   const [editClassId, setEditClassId] = useState("");
@@ -379,6 +380,7 @@ export default function StudentDetailPage() {
     if (!student) return;
     setEditFirstName(student.firstName);
     setEditLastName(student.lastName);
+    setEditMassarCode(student.massarCode ?? "");
     setEditBirthDate(student.birthDate);
     setEditGender(student.gender);
     setEditClassId(student.classId);
@@ -395,6 +397,7 @@ export default function StudentDetailPage() {
       await updateStudent({
         firstName: editFirstName,
         lastName: editLastName,
+        massarCode: editMassarCode,
         birthDate: editBirthDate,
         gender: editGender,
         classId: editClassId,
@@ -520,6 +523,10 @@ export default function StudentDetailPage() {
                   <Input value={editLastName} onChange={(e) => setEditLastName(e.target.value)} className="h-8" />
                 </div>
               </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Code Massar</Label>
+                <Input value={editMassarCode} onChange={(e) => setEditMassarCode(e.target.value)} className="h-8" />
+              </div>
               <div className="grid grid-cols-2 gap-2">
                 <div className="space-y-1">
                   <Label className="text-xs">{t("studentDetail.birthDate")}</Label>
@@ -563,6 +570,7 @@ export default function StudentDetailPage() {
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h1 className="text-2xl font-bold tracking-tight">{student.firstName} {student.lastName}</h1>
+                  {student.massarCode && <p className="mt-1 text-xs text-muted-foreground">Code Massar: {student.massarCode}</p>}
                   <div className="flex flex-wrap items-center gap-3 mt-2 text-sm text-muted-foreground">
                     <span className="flex items-center gap-1"><GraduationCap className="w-4 h-4" />{classe?.name ?? "—"}</span>
                     <span className="flex items-center gap-1"><User className="w-4 h-4" />{student.gender === "M" ? t("studentDetail.boy") : t("studentDetail.girl")}</span>

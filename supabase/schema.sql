@@ -92,12 +92,17 @@ create table if not exists public.students (
   id          uuid primary key default gen_random_uuid(),
   first_name  text not null,
   last_name   text not null,
+  massar_code text,
   birth_date  date,
   gender      text check (gender in ('M', 'F')),
   class_id    uuid references public.classes(id) on delete set null,
   photo_url   text,
   created_at  timestamptz not null default now()
 );
+
+create unique index if not exists idx_students_massar_code_unique
+  on public.students (massar_code)
+  where massar_code is not null and trim(massar_code) <> '';
 
 -- ──────────────────────────────────────────────────────────
 -- 6. COMPETENCIES

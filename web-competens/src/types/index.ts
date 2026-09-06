@@ -108,6 +108,7 @@ export interface Student {
   id: string;
   firstName: string;
   lastName: string;
+  massarCode?: string;
   birthDate: string;
   gender: "M" | "F";
   classId: string;
@@ -340,4 +341,13 @@ export interface ImportRow {
   "Date de naissance": string;
   Sexe: string;
   Classe: string;
+}
+
+export interface StudentImportRow {
+  firstName: string;
+  lastName: string;
+  massarCode: string;
+  birthDate: string;
+  gender: "M" | "F";
+  classId: string;
 }

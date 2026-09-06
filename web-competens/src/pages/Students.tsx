@@ -1,6 +1,7 @@
 import { useState, useMemo, useRef } from "react";
 import { Link } from "react-router-dom";
 import { useStudents } from "@/hooks/use-students";
+import { useLevels } from "@/hooks/use-levels";
 import { useRequests } from "@/hooks/use-requests";
 import { useAuth } from "@/hooks/use-auth";
 import { useDemoStore } from "@/stores/demo";
@@ -14,11 +15,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Search, Upload, UserPlus, Users, ChevronRight, AlertCircle, Loader2, Info, Send, Archive } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import * as XLSX from "xlsx";
-import type { ImportRow } from "@/types";
+import type { StudentImportRow } from "@/types";
+import { parseMinistryStudentImport } from "@/lib/ministry-student-import";
 import { toast } from "sonner";
 
 export default function StudentsPage() {
   const { students, classes, loading, error, addStudent, importStudents, archiveStudent } = useStudents();
+  const { levels } = useLevels();
   const { submitRequest } = useRequests();
   const { user } = useAuth();
   const { t } = useI18n();
@@ -26,7 +29,7 @@ export default function StudentsPage() {
 
   const isTeacherReal = !isDemo && user?.role === "professeur";
   const isTeacher = user?.role === "professeur";
-  const canManage = user?.role === "admin" || user?.role === "directeur";
+  const canImport = user?.role === "admin";
 
   const [archiving, setArchiving] = useState<string | null>(null);
 
@@ -35,12 +38,13 @@ export default function StudentsPage() {
   const [openAdd, setOpenAdd] = useState(false);
   const [openImport, setOpenImport] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
-  const [importPreview, setImportPreview] = useState<Array<{ firstName: string; lastName: string; birthDate: string; gender: "M" | "F"; classId: string }>>([]);
+  const [importPreview, setImportPreview] = useState<StudentImportRow[]>([]);
   const [importError, setImportError] = useState("");
   const [importing, setImporting] = useState(false);
 
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
+  const [massarCode, setMassarCode] = useState("");
   const [birthDate, setBirthDate] = useState("");
   const [gender, setGender] = useState<"M" | "F">("M");
   const [studentClass, setStudentClass] = useState("");
@@ -58,7 +62,7 @@ export default function StudentsPage() {
   }, [students, search, classFilter]);
 
   const resetAddForm = () => {
-    setFirstName(""); setLastName(""); setBirthDate(""); setGender("M"); setStudentClass("");
+    setFirstName(""); setLastName(""); setMassarCode(""); setBirthDate(""); setGender("M"); setStudentClass("");
     setAddError("");
   };
 
@@ -74,7 +78,7 @@ export default function StudentsPage() {
         resetAddForm();
         setOpenAdd(false);
       } else {
-        await addStudent({ firstName, lastName, birthDate, gender, classId: studentClass });
+        await addStudent({ firstName, lastName, massarCode, birthDate, gender, classId: studentClass });
         resetAddForm();
         setOpenAdd(false);
       }
@@ -94,44 +98,12 @@ export default function StudentsPage() {
       try {
         const wb = XLSX.read(ev.target?.result, { type: "binary" });
         const ws = wb.Sheets[wb.SheetNames[0]];
-        const rows = XLSX.utils.sheet_to_json<ImportRow>(ws);
-        const classMap = new Map(classes.map((c) => [c.name.toLowerCase(), c.id]));
-
-        const parseDate = (raw: unknown): string => {
-          if (!raw) return "";
-          // XLSX sometimes gives a JS serial number for date cells
-          if (typeof raw === "number") {
-            const d = XLSX.SSF.parse_date_code(raw);
-            if (d) return `${d.y}-${String(d.m).padStart(2, "0")}-${String(d.d).padStart(2, "0")}`;
-          }
-          const str = String(raw).trim();
-          // DD/MM/YYYY or DD-MM-YYYY
-          const dmyMatch = str.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
-          if (dmyMatch) return `${dmyMatch[3]}-${dmyMatch[2].padStart(2, "0")}-${dmyMatch[1].padStart(2, "0")}`;
-          // Already YYYY-MM-DD
-          if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str;
-          return "";
-        };
-
-        const mapped = rows.map((r) => {
-          let classId = "";
-          const rawClasse = r.Classe?.toString().toLowerCase().trim() ?? "";
-          for (const [cName, cId] of classMap) {
-            if (rawClasse === cName || rawClasse.includes(cName) || cName.includes(rawClasse)) {
-              classId = cId; break;
-            }
-          }
-          return {
-            firstName: r["Prénom"]?.toString().trim() ?? "",
-            lastName: r["Nom"]?.toString().trim() ?? "",
-            birthDate: parseDate(r["Date de naissance"]),
-            gender: (r["Sexe"]?.toString().toUpperCase().startsWith("F") ? "F" : "M") as "M" | "F",
-            classId,
-          };
-        }).filter((r) => r.firstName && r.lastName);
-        setImportPreview(mapped);
-      } catch {
-        setImportError(t("students.importInvalid"));
+        if (!ws) throw new Error(t("students.importInvalid"));
+        const parsed = parseMinistryStudentImport(ws, classes, levels);
+        setImportPreview(parsed.rows);
+      } catch (error: unknown) {
+        setImportPreview([]);
+        setImportError(error instanceof Error ? error.message : t("students.importInvalid"));
       }
     };
     reader.readAsBinaryString(file);
@@ -190,8 +162,8 @@ export default function StudentsPage() {
           </p>
         </div>
         <div className="flex gap-2">
-          {/* Import Excel — admin/directeur only */}
-          {!isTeacherReal && (
+          {/* Ministry import is restricted to administrators. */}
+          {canImport && (
             <Dialog open={openImport} onOpenChange={setOpenImport}>
               <DialogTrigger asChild>
                 <Button variant="outline" size="sm" className="gap-2">
@@ -225,7 +197,7 @@ export default function StudentsPage() {
                       <div className="max-h-40 overflow-auto border rounded-lg">
                         {importPreview.slice(0, 5).map((s, i) => (
                           <div key={i} className="px-3 py-2 text-sm border-b last:border-0 flex justify-between">
-                            <span>{s.firstName} {s.lastName}</span>
+                            <span>{s.firstName} {s.lastName} <span className="text-xs text-muted-foreground">({s.massarCode})</span></span>
                             <Badge variant="secondary">{classes.find((c) => c.id === s.classId)?.name ?? "?"}</Badge>
                           </div>
                         ))}
@@ -279,6 +251,12 @@ export default function StudentsPage() {
                     <Input value={lastName} onChange={(e) => setLastName(e.target.value)} placeholder="Ndiaye" />
                   </div>
                 </div>
+                {!isTeacherReal && (
+                  <div className="space-y-2">
+                    <Label>Code Massar</Label>
+                    <Input value={massarCode} onChange={(e) => setMassarCode(e.target.value)} />
+                  </div>
+                )}
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-2">
                     <Label>{t("students.birthDate")}</Label>

@@ -6,10 +6,9 @@ import { useDemoStore } from "@/stores/demo";
 import { useAppStore } from "@/stores/app-store";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/lib/supabase";
-import type { Student, Classe } from "@/types";
+import type { Student, Classe, StudentImportRow } from "@/types";
 
 type AddStudentInput = Omit<Student, "id" | "createdAt">;
-type ImportRow = { firstName: string; lastName: string; birthDate: string; gender: "M" | "F"; classId: string };
 
 export interface ImportResult {
   succeeded: number;
@@ -23,7 +22,7 @@ export interface UseStudentsReturn {
   error: string | null;
   refetch: () => Promise<void>;
   addStudent: (data: AddStudentInput) => Promise<void>;
-  importStudents: (rows: ImportRow[]) => Promise<ImportResult>;
+  importStudents: (rows: StudentImportRow[]) => Promise<ImportResult>;
   archiveStudent: (id: string) => Promise<void>;
 }
 
@@ -136,6 +135,7 @@ export function useStudents(): UseStudentsReturn {
         id: s.id,
         firstName: s.first_name,
         lastName: s.last_name,
+        massarCode: s.massar_code ?? undefined,
         birthDate: s.birth_date ?? "",
         gender: (s.gender ?? "M") as "M" | "F",
         classId: s.class_id ?? "",
@@ -164,6 +164,7 @@ export function useStudents(): UseStudentsReturn {
       const { error: err } = await supabase.from("students").insert({
         first_name: data.firstName,
         last_name: data.lastName,
+        massar_code: data.massarCode?.trim() || null,
         birth_date: data.birthDate || null,
         gender: data.gender,
         class_id: data.classId || null,
@@ -176,7 +177,7 @@ export function useStudents(): UseStudentsReturn {
   );
 
   const importStudentsReal = useCallback(
-    async (rows: ImportRow[]): Promise<ImportResult> => {
+    async (rows: StudentImportRow[]): Promise<ImportResult> => {
       if (!supabase || rows.length === 0) return { succeeded: 0, failed: [] };
 
       const result: ImportResult = { succeeded: 0, failed: [] };
@@ -185,6 +186,7 @@ export function useStudents(): UseStudentsReturn {
         const { error: err } = await supabase.from("students").insert({
           first_name: r.firstName,
           last_name: r.lastName,
+          massar_code: r.massarCode.trim() || null,
           birth_date: r.birthDate || null,
           gender: r.gender,
           class_id: r.classId || null,
@@ -231,7 +233,7 @@ export function useStudents(): UseStudentsReturn {
   );
 
   const importStudentsDemo = useCallback(
-    async (rows: ImportRow[]): Promise<ImportResult> => {
+    async (rows: StudentImportRow[]): Promise<ImportResult> => {
       storeImportStudents(rows);
       return { succeeded: rows.length, failed: [] };
     },

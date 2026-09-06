@@ -65,7 +65,7 @@ interface AppStore {
   addStudent: (s: Omit<Student, "id" | "createdAt">) => void;
   updateStudent: (id: string, data: Partial<Student>) => void;
   deleteStudent: (id: string) => void;
-  importStudents: (rows: Array<{ firstName: string; lastName: string; birthDate: string; gender: "M" | "F"; classId: string }>) => void;
+  importStudents: (rows: Array<{ firstName: string; lastName: string; massarCode: string; birthDate: string; gender: "M" | "F"; classId: string }>) => void;
 
   addTeacher: (t: Omit<Teacher, "id" | "createdAt">) => void;
   updateTeacher: (id: string, data: Partial<Teacher>) => void;

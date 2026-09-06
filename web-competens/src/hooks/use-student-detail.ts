@@ -79,7 +79,7 @@ export interface UseStudentDetailReturn {
   academicHistory: AcademicHistoryItem[];
   loading: boolean;
   error: string | null;
-  updateStudent: (data: Partial<Pick<Student, "firstName" | "lastName" | "birthDate" | "gender" | "classId">>) => Promise<void>;
+  updateStudent: (data: Partial<Pick<Student, "firstName" | "lastName" | "massarCode" | "birthDate" | "gender" | "classId">>) => Promise<void>;
   createRecoveryAction: (submission: RecoverySubmission) => Promise<RecoverySubmissionResult>;
   refetch: () => Promise<void>;
 }
@@ -286,6 +286,7 @@ export function useStudentDetail(studentId: string | undefined): UseStudentDetai
 
       const student: Student = {
         id: stuData.id, firstName: stuData.first_name, lastName: stuData.last_name,
+        massarCode: stuData.massar_code ?? undefined,
         birthDate: stuData.birth_date ?? "", gender: (stuData.gender ?? "M") as "M" | "F",
         classId: stuData.class_id ?? "", photoUrl: stuData.photo_url ?? undefined,
         createdAt: stuData.created_at,
@@ -434,11 +435,12 @@ export function useStudentDetail(studentId: string | undefined): UseStudentDetai
   }, [isDemo, fetchFromSupabase]);
 
   const updateStudentReal = useCallback(
-    async (data: Partial<Pick<Student, "firstName" | "lastName" | "birthDate" | "gender" | "classId">>) => {
+    async (data: Partial<Pick<Student, "firstName" | "lastName" | "massarCode" | "birthDate" | "gender" | "classId">>) => {
       if (!supabase || !studentId) return;
       const update: Record<string, unknown> = {};
       if (data.firstName !== undefined) update.first_name = data.firstName;
       if (data.lastName !== undefined) update.last_name = data.lastName;
+      if (data.massarCode !== undefined) update.massar_code = data.massarCode.trim() || null;
       if (data.birthDate !== undefined) update.birth_date = data.birthDate || null;
       if (data.gender !== undefined) update.gender = data.gender;
       if (data.classId !== undefined) update.class_id = data.classId || null;
@@ -450,7 +452,7 @@ export function useStudentDetail(studentId: string | undefined): UseStudentDetai
   );
 
   const updateStudentDemo = useCallback(
-    async (data: Partial<Pick<Student, "firstName" | "lastName" | "birthDate" | "gender" | "classId">>) => {
+    async (data: Partial<Pick<Student, "firstName" | "lastName" | "massarCode" | "birthDate" | "gender" | "classId">>) => {
       if (studentId) storeUpdateStudent(studentId, data);
     },
     [studentId, storeUpdateStudent]
