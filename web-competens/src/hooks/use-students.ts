@@ -23,6 +23,7 @@ export interface UseStudentsReturn {
   refetch: () => Promise<void>;
   addStudent: (data: AddStudentInput) => Promise<void>;
   importStudents: (rows: StudentImportRow[]) => Promise<ImportResult>;
+  moveStudents: (studentIds: string[], targetClassId: string) => Promise<void>;
   archiveStudent: (id: string) => Promise<void>;
 }
 
@@ -50,6 +51,7 @@ export function useStudents(): UseStudentsReturn {
   const storeSchoolYears = useAppStore((s) => s.schoolYears);
   const storeAddStudent = useAppStore((s) => s.addStudent);
   const storeImportStudents = useAppStore((s) => s.importStudents);
+  const storeUpdateStudent = useAppStore((s) => s.updateStudent);
   const storeDeleteStudent = useAppStore((s) => s.deleteStudent);
   const demoActiveYearId = useMemo(
     () => storeSchoolYears.find((year) => year.isActive && !year.isClosed)?.id,
@@ -225,6 +227,29 @@ export function useStudents(): UseStudentsReturn {
     [sbStudents, fetchFromSupabase]
   );
 
+  const moveStudentsReal = useCallback(
+    async (studentIds: string[], targetClassId: string) => {
+      if (!supabase || !targetClassId) throw new Error("La classe de destination est requise.");
+      const ids = [...new Set(studentIds)].filter((id) => sbStudents.some((student) => student.id === id));
+      if (ids.length === 0) return;
+
+      const sourceClassIds = sbStudents
+        .filter((student) => ids.includes(student.id) && student.classId !== targetClassId)
+        .map((student) => student.classId)
+        .filter(Boolean);
+      const { error: err } = await supabase
+        .from("students")
+        .update({ class_id: targetClassId })
+        .in("id", ids)
+        .eq("is_archived", false);
+      if (err) throw new Error(err.message);
+
+      await Promise.all([...new Set([...sourceClassIds, targetClassId])].map(syncClassStudentCount));
+      await fetchFromSupabase();
+    },
+    [sbStudents, fetchFromSupabase]
+  );
+
   // ── Demo wrappers ────────────────────────────────────────
 
   const addStudentDemo = useCallback(
@@ -245,6 +270,13 @@ export function useStudents(): UseStudentsReturn {
     [storeDeleteStudent]
   );
 
+  const moveStudentsDemo = useCallback(
+    async (studentIds: string[], targetClassId: string) => {
+      for (const id of new Set(studentIds)) storeUpdateStudent(id, { classId: targetClassId });
+    },
+    [storeUpdateStudent]
+  );
+
   return {
     students: isDemo ? demoStudents : sbStudents,
     classes: isDemo ? demoClasses : sbClasses,
@@ -253,6 +285,7 @@ export function useStudents(): UseStudentsReturn {
     refetch: fetchFromSupabase,
     addStudent: isDemo ? addStudentDemo : addStudentReal,
     importStudents: isDemo ? importStudentsDemo : importStudentsReal,
+    moveStudents: isDemo ? moveStudentsDemo : moveStudentsReal,
     archiveStudent: isDemo ? archiveStudentDemo : archiveStudentReal,
   };
 }

@@ -11,8 +11,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, Upload, UserPlus, Users, ChevronRight, AlertCircle, Loader2, Info, Send, Archive } from "lucide-react";
+import { Search, Upload, UserPlus, Users, ChevronRight, AlertCircle, Loader2, Info, Send, Archive, ArrowRightLeft } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import * as XLSX from "xlsx";
 import type { StudentImportRow } from "@/types";
@@ -20,7 +21,7 @@ import { parseMinistryStudentImport } from "@/lib/ministry-student-import";
 import { toast } from "sonner";
 
 export default function StudentsPage() {
-  const { students, classes, loading, error, addStudent, importStudents, archiveStudent } = useStudents();
+  const { students, classes, loading, error, addStudent, importStudents, moveStudents, archiveStudent } = useStudents();
   const { levels } = useLevels();
   const { submitRequest } = useRequests();
   const { user } = useAuth();
@@ -31,8 +32,12 @@ export default function StudentsPage() {
   const isTeacher = user?.role === "professeur";
   const canManage = user?.role === "admin" || user?.role === "directeur";
   const canImport = user?.role === "admin";
+  const canTransfer = user?.role === "admin";
 
   const [archiving, setArchiving] = useState<string | null>(null);
+  const [selectedStudentIds, setSelectedStudentIds] = useState<Set<string>>(new Set());
+  const [targetClassId, setTargetClassId] = useState("");
+  const [movingStudents, setMovingStudents] = useState(false);
 
   const [search, setSearch] = useState("");
   const [classFilter, setClassFilter] = useState("all");
@@ -61,6 +66,9 @@ export default function StudentsPage() {
     if (classFilter !== "all") list = list.filter((s) => s.classId === classFilter);
     return list;
   }, [students, search, classFilter]);
+
+  const selectedCount = selectedStudentIds.size;
+  const allFilteredSelected = filteredStudents.length > 0 && filteredStudents.every((student) => selectedStudentIds.has(student.id));
 
   const resetAddForm = () => {
     setFirstName(""); setLastName(""); setMassarCode(""); setBirthDate(""); setGender("M"); setStudentClass("");
@@ -145,6 +153,38 @@ export default function StudentsPage() {
       toast.error(e instanceof Error ? e.message : t("common.archiveError"));
     } finally {
       setArchiving(null);
+    }
+  };
+
+  const toggleStudentSelection = (studentId: string) => {
+    setSelectedStudentIds((current) => {
+      const next = new Set(current);
+      if (next.has(studentId)) next.delete(studentId); else next.add(studentId);
+      return next;
+    });
+  };
+
+  const toggleFilteredSelection = () => {
+    setSelectedStudentIds((current) => {
+      const next = new Set(current);
+      if (allFilteredSelected) filteredStudents.forEach((student) => next.delete(student.id));
+      else filteredStudents.forEach((student) => next.add(student.id));
+      return next;
+    });
+  };
+
+  const handleMoveStudents = async () => {
+    if (!targetClassId || selectedCount === 0) return;
+    setMovingStudents(true);
+    try {
+      await moveStudents([...selectedStudentIds], targetClassId);
+      toast.success(t("students.moveSuccess", { count: selectedCount }));
+      setSelectedStudentIds(new Set());
+      setTargetClassId("");
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : t("common.opError"));
+    } finally {
+      setMovingStudents(false);
     }
   };
 
@@ -321,6 +361,30 @@ export default function StudentsPage() {
         </Select>
       </div>
 
+      {canTransfer && filteredStudents.length > 0 && (
+        <div className="flex flex-col gap-3 border-y border-border py-3 sm:flex-row sm:items-center">
+          <div className="flex items-center gap-2">
+            <Checkbox id="select-filtered-students" checked={allFilteredSelected} onCheckedChange={toggleFilteredSelection} />
+            <Label htmlFor="select-filtered-students" className="cursor-pointer text-sm">{t("students.selectAll")}</Label>
+            <span className="text-sm text-muted-foreground">{t("students.selected", { count: selectedCount })}</span>
+          </div>
+          <div className="flex flex-1 flex-col gap-2 sm:flex-row sm:justify-end">
+            <Select value={targetClassId} onValueChange={setTargetClassId}>
+              <SelectTrigger className="sm:w-56"><SelectValue placeholder={t("students.moveToClass")} /></SelectTrigger>
+              <SelectContent>
+                {classes.filter((classe) => !classe.isArchived).map((classe) => (
+                  <SelectItem key={classe.id} value={classe.id}>{classe.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button onClick={handleMoveStudents} disabled={!targetClassId || selectedCount === 0 || movingStudents} className="gap-2">
+              {movingStudents ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowRightLeft className="w-4 h-4" />}
+              {t("students.moveSelected", { count: selectedCount })}
+            </Button>
+          </div>
+        </div>
+      )}
+
       {loading ? (
         <div className="flex items-center justify-center py-16">
           <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
@@ -333,7 +397,7 @@ export default function StudentsPage() {
               return (
                 <div key={s.id} className="relative group">
                   <Link to={`/students/${s.id}`}>
-                    <Card className="border-border/50 hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-pointer h-full">
+                    <Card className={`border-border/50 hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-pointer h-full ${selectedStudentIds.has(s.id) ? "ring-2 ring-primary" : ""}`}>
                       <CardContent className="p-4">
                         <div className="flex items-center gap-3">
                           <div className="w-11 h-11 rounded-xl bg-primary/10 flex items-center justify-center text-primary font-bold text-sm shrink-0">
@@ -348,6 +412,11 @@ export default function StudentsPage() {
                       </CardContent>
                     </Card>
                   </Link>
+                  {canTransfer && (
+                    <div className="absolute start-2 top-2 z-10" onClick={(event) => { event.preventDefault(); event.stopPropagation(); }}>
+                      <Checkbox checked={selectedStudentIds.has(s.id)} onCheckedChange={() => toggleStudentSelection(s.id)} aria-label={`${t("students.selectStudent")} ${s.firstName} ${s.lastName}`} />
+                    </div>
+                  )}
                   {canManage && (
                     <Button
                       variant="ghost"

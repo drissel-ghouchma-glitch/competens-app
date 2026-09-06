@@ -274,6 +274,12 @@ export const fr: Dict = {
   "students.importPartial": "{ok} importé(s), {fail} échoué(s) : {names}",
   "students.archiveConfirm": "Archiver l'élève « {name} » ? Son historique d'évaluations sera conservé.",
   "students.archived": "{name} archivé(e).",
+  "students.selectAll": "Tout sélectionner",
+  "students.selected": "{count} sélectionné(s)",
+  "students.selectStudent": "Sélectionner",
+  "students.moveToClass": "Déplacer vers une classe",
+  "students.moveSelected": "Déplacer {count} élève(s)",
+  "students.moveSuccess": "{count} élève(s) déplacé(s) avec succès.",
 
   // ── Classes ─────────────────────────────────────────────
   "classes.title": "Classes",
@@ -1040,6 +1046,12 @@ export const ar: Dict = {
   "students.importPartial": "{ok} مستورد، {fail} فشل: {names}",
   "students.archiveConfirm": "أرشفة التلميذ «{name}»؟ سيتم الاحتفاظ بسجل تقييماته.",
   "students.archived": "تمت أرشفة {name}.",
+  "students.selectAll": "تحديد الكل",
+  "students.selected": "{count} محدد",
+  "students.selectStudent": "تحديد",
+  "students.moveToClass": "النقل إلى قسم",
+  "students.moveSelected": "نقل {count} تلميذ",
+  "students.moveSuccess": "تم نقل {count} تلميذ بنجاح.",
 
   // ── Classes ─────────────────────────────────────────────
   "classes.title": "الأقسام",
